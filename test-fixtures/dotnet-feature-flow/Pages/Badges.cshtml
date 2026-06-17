@@ -1,0 +1,7 @@
+@page
+@model DotnetFeatureFlow.Pages.BadgesModel
+
+<form id="badge-form" asp-page-handler="SaveLocationBadge" method="post">
+  <input id="badge-title" name="Title" value="@Model.BadgeInput.Title" />
+  <button id="save-location-badge" type="submit">Save badge</button>
+</form>

@@ -1,0 +1,226 @@
+{
+  "name": "kraken-atlas",
+  "displayName": "Kraken Atlas",
+  "description": "Maps C#/.NET Core, vanilla JavaScript, and HTML/Razor codebases into local queryable code facts for AI context reduction.",
+  "version": "0.1.10",
+  "icon": "images/icon.png",
+  "galleryBanner": {
+    "color": "#06172f",
+    "theme": "dark"
+  },
+  "publisher": "codekraken",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "ai",
+    "ai-agent",
+    "agent",
+    "code-map",
+    "code-analysis",
+    "context-reduction",
+    "token-reduction",
+    "workspace-index",
+    "relationships",
+    "feature-flow",
+    "where-to-add",
+    "csharp",
+    "dotnet",
+    "aspnetcore",
+    "razor",
+    "javascript",
+    "html"
+  ],
+  "activationEvents": [
+    "onCommand:krakenAtlas.rebuildIndex",
+    "onCommand:krakenAtlas.updateIndex",
+    "onCommand:krakenAtlas.doctor",
+    "onCommand:krakenAtlas.showProject",
+    "onCommand:krakenAtlas.queryFlow",
+    "onCommand:krakenAtlas.querySymbol",
+    "onCommand:krakenAtlas.queryReferences",
+    "onCommand:krakenAtlas.queryRelationships",
+    "onCommand:krakenAtlas.queryPattern",
+    "onCommand:krakenAtlas.whereToAdd",
+    "onCommand:krakenAtlas.searchMap",
+    "onCommand:krakenAtlas.exportContextPack",
+    "onCommand:krakenAtlas.installAgentInstructions",
+    "onCommand:krakenAtlas.installWorkspaceCli",
+    "onCommand:krakenAtlas.openMapFolder",
+    "workspaceContains:.kraken-atlas/manifest.json"
+  ],
+  "main": "./dist/extension.js",
+  "bin": {
+    "kraken-atlas": "./dist/cli.js"
+  },
+  "files": [
+    "dist/**",
+    "node_modules/sql.js/package.json",
+    "node_modules/sql.js/dist/sql-wasm.js",
+    "node_modules/sql.js/dist/sql-wasm.wasm",
+    "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/*.csproj",
+    "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/*.cs",
+    "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish/**",
+    "images/**",
+    "AGENT_SKILL.md",
+    "README.md",
+    "GETTING_STARTED.md",
+    "package.json"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "krakenAtlas.rebuildIndex",
+        "title": "Kraken Atlas: Rebuild Map From Workspace"
+      },
+      {
+        "command": "krakenAtlas.updateIndex",
+        "title": "Kraken Atlas: Update Map For Changed Files"
+      },
+      {
+        "command": "krakenAtlas.doctor",
+        "title": "Kraken Atlas: Check Map Health"
+      },
+      {
+        "command": "krakenAtlas.showProject",
+        "title": "Kraken Atlas: Show Project Summary"
+      },
+      {
+        "command": "krakenAtlas.queryFlow",
+        "title": "Kraken Atlas: Trace Feature Flow"
+      },
+      {
+        "command": "krakenAtlas.querySymbol",
+        "title": "Kraken Atlas: Find Symbol"
+      },
+      {
+        "command": "krakenAtlas.queryReferences",
+        "title": "Kraken Atlas: Find References"
+      },
+      {
+        "command": "krakenAtlas.queryRelationships",
+        "title": "Kraken Atlas: Show Relationships"
+      },
+      {
+        "command": "krakenAtlas.queryPattern",
+        "title": "Kraken Atlas: Show Detected Pattern"
+      },
+      {
+        "command": "krakenAtlas.whereToAdd",
+        "title": "Kraken Atlas: Suggest Where To Add Code"
+      },
+      {
+        "command": "krakenAtlas.searchMap",
+        "title": "Kraken Atlas: Search Map"
+      },
+      {
+        "command": "krakenAtlas.exportContextPack",
+        "title": "Kraken Atlas: Export Context Pack"
+      },
+      {
+        "command": "krakenAtlas.installAgentInstructions",
+        "title": "Kraken Atlas: Install Agent Instructions"
+      },
+      {
+        "command": "krakenAtlas.installWorkspaceCli",
+        "title": "Kraken Atlas: Install CLI For Workspace Terminals"
+      },
+      {
+        "command": "krakenAtlas.openMapFolder",
+        "title": "Kraken Atlas: Open Map Folder"
+      }
+    ],
+    "configuration": {
+      "title": "Kraken Atlas",
+      "properties": {
+        "krakenAtlas.outputFolder": {
+          "type": "string",
+          "default": ".kraken-atlas",
+          "description": "Workspace-relative folder where Kraken Atlas outputs are written."
+        },
+        "krakenAtlas.maxFileSizeBytes": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Maximum file size to index."
+        },
+        "krakenAtlas.updateOnSave": {
+          "type": "boolean",
+          "default": false,
+          "description": "Update Kraken Atlas after saving supported C#/.NET, vanilla JavaScript, HTML, or Razor files."
+        },
+        "krakenAtlas.excludeDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional directory names to exclude from indexing."
+        },
+        "krakenAtlas.excludeGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional workspace-relative glob patterns to exclude from indexing."
+        },
+        "krakenAtlas.excludeExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional file extensions to exclude from indexing, such as .bak or .tmp."
+        },
+        "krakenAtlas.excludeFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional file names or workspace-relative file paths to exclude from indexing."
+        },
+        "krakenAtlas.includeGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Workspace-relative glob patterns to include even when a broader ignore rule would exclude them."
+        },
+        "krakenAtlas.ignoreFile": {
+          "type": "string",
+          "default": ".kraken-atlas-ignore",
+          "description": "Workspace-relative ignore file used for Kraken Atlas scan rules."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "compile:test": "tsc -p ./tsconfig.test.json",
+    "publish:analyzer": "dotnet publish analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/KrakenAtlas.RoslynAnalyzer.csproj -c Release -o analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish",
+    "pack:dry": "npm pack --dry-run",
+    "package:vsix": "node scripts/vsce-package.cjs package --out ../pack-artifacts/kraken-atlas-0.1.10.vsix --no-rewrite-relative-links --allow-missing-repository --skip-license",
+    "check:vsix": "npm run compile && npm run publish:analyzer && npm run package:vsix",
+    "check:package": "npm run compile && npm run publish:analyzer && npm pack --dry-run",
+    "test": "npm run compile && npm run compile:test && node --test dist-test/test",
+    "vscode:prepublish": "node -e \"\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^2.32.0",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@types/sql.js": "^1.4.11",
+    "sql.js": "^1.14.1"
+  }
+}

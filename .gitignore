@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-test/
+bin/
+obj/
+.kraken-atlas/
+pack-artifacts/
+analyzers/**/publish/
+*.vsix
+*.tgz
