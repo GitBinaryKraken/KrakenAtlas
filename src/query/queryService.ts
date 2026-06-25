@@ -492,8 +492,12 @@ export class QueryService {
     return this.findCodeHealthFindings("duplicate-code-block", query);
   }
 
-  private findCodeHealthFindings(kind: "orphan-callable" | "duplicate-code-block", query: string): QueryResponse {
-    const queryType = kind === "orphan-callable" ? "orphans" : "duplicates";
+  public findDrift(query = ""): QueryResponse {
+    return this.findCodeHealthFindings("pattern-drift", query);
+  }
+
+  private findCodeHealthFindings(kind: "orphan-callable" | "duplicate-code-block" | "pattern-drift", query: string): QueryResponse {
+    const queryType = kind === "orphan-callable" ? "orphans" : kind === "duplicate-code-block" ? "duplicates" : "drift";
     const ambiguity = this.ambiguousContextResponse(queryType, query || "all");
     if (ambiguity) {
       return ambiguity;
@@ -515,7 +519,7 @@ export class QueryService {
       .filter((row): row is Record<string, unknown> => Boolean(row))
       .slice(0, 50);
     const locations = rows.flatMap((row) => Array.isArray(row.locations) ? row.locations as Array<Record<string, unknown>> : []);
-    const label = kind === "orphan-callable" ? "orphan callable candidate" : "duplicate code group";
+    const label = kind === "orphan-callable" ? "orphan callable candidate" : kind === "duplicate-code-block" ? "duplicate code group" : "pattern drift candidate";
 
     return compactResponse({
       query: term || queryType,
@@ -528,7 +532,9 @@ export class QueryService {
           count: rows.length,
           message: kind === "orphan-callable"
             ? "Candidates have no mapped incoming static evidence after conservative exclusions; verify dynamic and external use before deletion."
-            : "Groups have exact normalized callable bodies; verify intent and ownership before consolidation."
+            : kind === "duplicate-code-block"
+              ? "Groups have exact normalized callable bodies; verify intent and ownership before consolidation."
+              : "Candidates appear to diverge from detected local patterns; verify intent and nearby examples before changing architecture."
         },
         ...rows
       ],

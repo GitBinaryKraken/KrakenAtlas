@@ -11,11 +11,12 @@ export interface CodeHealthDetectionInput {
 }
 
 export async function detectCodeHealthFindings(input: CodeHealthDetectionInput): Promise<FindingRecord[]> {
-  const [orphans, duplicates] = await Promise.all([
+  const [orphans, duplicates, drift] = await Promise.all([
     detectOrphanCallables(input),
-    detectDuplicateCodeBlocks(input.workspaceRoot, input.symbols)
+    detectDuplicateCodeBlocks(input.workspaceRoot, input.symbols),
+    detectPatternDrift(input.relationships)
   ]);
-  return [...orphans, ...duplicates].sort((left, right) => left.id.localeCompare(right.id));
+  return [...orphans, ...duplicates, ...drift].sort((left, right) => left.id.localeCompare(right.id));
 }
 
 async function detectOrphanCallables(input: CodeHealthDetectionInput): Promise<FindingRecord[]> {
@@ -127,6 +128,56 @@ async function detectDuplicateCodeBlocks(workspaceRoot: string, symbols: SymbolR
         fingerprint
       };
     });
+}
+
+async function detectPatternDrift(relationships: RelationshipRecord[]): Promise<FindingRecord[]> {
+  if (!hasControllerServiceFlow(relationships)) {
+    return [];
+  }
+
+  const directDataTypes = new Set(["CALLS_REPOSITORY", "USES_DBSET", "QUERIES", "WRITES"]);
+  const candidates = relationships.filter((relationship) =>
+    directDataTypes.has(relationship.type) &&
+    isControllerEndpoint(relationship.from, relationship.file)
+  );
+
+  return candidates.map((relationship) => ({
+    recordType: "finding" as const,
+    id: `finding:drift:controller-data-access:${stableFindingKey(relationship)}`,
+    kind: "pattern-drift" as const,
+    title: "Controller bypasses service-layer pattern",
+    severity: "warning" as const,
+    confidence: relationship.type === "CALLS_REPOSITORY" || relationship.type === "USES_DBSET" ? 0.82 : 0.72,
+    summary: `A controller relationship directly uses ${relationship.type}. The map also shows controller-service delegation elsewhere, so this may drift from the local pattern.`,
+    locations: [{ symbolId: relationship.from, file: relationship.file ?? "", range: relationship.range ?? firstLineRange() }],
+    evidence: [
+      "pattern=controller-service-flow",
+      `edgeType=${relationship.type}`,
+      `from=${relationship.from}`,
+      `to=${relationship.to}`
+    ],
+    caveats: ["Candidate only. Some small endpoints intentionally query repositories or data contexts directly. Verify local ownership and existing nearby examples before refactoring."]
+  })).filter((finding) => finding.locations[0].file);
+}
+
+function hasControllerServiceFlow(relationships: RelationshipRecord[]): boolean {
+  return relationships.some((relationship) =>
+    (relationship.type === "CALLS" || relationship.type === "INJECTS") &&
+    isControllerEndpoint(relationship.from, relationship.file) &&
+    /(?:^|[.:])I?[A-Z][A-Za-z0-9_]*Service(?:[.:]|$)/u.test(relationship.to)
+  );
+}
+
+function isControllerEndpoint(symbolId: string, file: string | undefined): boolean {
+  return /Controller(?:[.:]|$)/u.test(symbolId) || /(^|\/)Controllers\/.+Controller\.cs$/iu.test((file ?? "").replace(/\\/g, "/"));
+}
+
+function stableFindingKey(relationship: RelationshipRecord): string {
+  return crypto.createHash("sha1").update([relationship.id, relationship.from, relationship.to, relationship.type, relationship.file ?? ""].join("|")).digest("hex").slice(0, 16);
+}
+
+function firstLineRange(): { startLine: number; startColumn: number; endLine: number; endColumn: number } {
+  return { startLine: 1, startColumn: 1, endLine: 1, endColumn: 1 };
 }
 
 function isOrphanCandidate(symbol: SymbolRecord): boolean {

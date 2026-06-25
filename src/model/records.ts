@@ -84,7 +84,7 @@ export interface FindingLocation {
 export interface FindingRecord {
   recordType: "finding";
   id: string;
-  kind: "orphan-callable" | "duplicate-code-block";
+  kind: "orphan-callable" | "duplicate-code-block" | "pattern-drift";
   title: string;
   severity: "info" | "warning";
   confidence: number;

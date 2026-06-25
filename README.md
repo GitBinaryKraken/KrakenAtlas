@@ -237,6 +237,7 @@ Examples:
 kraken-atlas query search "ConfigJson carousel" --workspace . --context WebUI --format agent
 kraken-atlas query orphans "legacy" --workspace . --context WebUI --format agent
 kraken-atlas query duplicates --workspace . --context WebUI --format agent
+kraken-atlas query drift --workspace . --context WebUI --format agent
 kraken-atlas query symbol "ComposableEditorPartViewModel" --workspace . --context WebUI --format agent
 kraken-atlas query references "ComposableEditorPartViewModel" --workspace . --context WebUI --format agent
 kraken-atlas query references "ITranslationDictionaryService" --workspace . --context WebUI --format agent
@@ -382,6 +383,7 @@ Open `Ctrl+Shift+P` and run:
 | `Kraken Atlas: Show Architecture Hotspots` | Finding central shared files to inspect carefully before cross-cutting edits. |
 | `Kraken Atlas: Find Orphaned Code Candidates` | Reviewing private/internal C# methods with no mapped incoming static evidence. |
 | `Kraken Atlas: Find Duplicate Code Blocks` | Reviewing exact normalized duplicate C# method bodies. |
+| `Kraken Atlas: Find Pattern Drift Candidates` | Reviewing places that may diverge from detected local architecture patterns. |
 | `Kraken Atlas: Trace Feature Flow` | Following behavior through UI, route, service, repository, and related code. |
 | `Kraken Atlas: Suggest Where To Add Code` | Getting likely edit locations for a requested change. |
 | `Kraken Atlas: Search Map` | Searching indexed map text before opening files. |

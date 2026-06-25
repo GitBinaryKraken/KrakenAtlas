@@ -10,7 +10,7 @@ The `main` branch has a clean committed checkpoint at:
 1434700 Add pattern-aware Atlas querying
 ```
 
-After that commit, we continued with two feature slices: making `where-to-add` show explicit pattern-fit guidance, and adding a cautious architecture-hotspots query inspired by the Graphify/NetworkX competitor review.
+After that commit, we continued with three feature slices: making `where-to-add` show explicit pattern-fit guidance, adding a cautious architecture-hotspots query inspired by the Graphify/NetworkX competitor review, and adding the first pattern-drift candidate.
 
 ## Uncommitted Work In Progress
 
@@ -23,6 +23,8 @@ Files currently changed:
 - `src/cli.ts`
 - `src/extension.ts`
 - `package.json`
+- `src/findings/codeHealthDetector.ts`
+- `src/model/records.ts`
 - `README.md`
 - `GETTING_STARTED.md`
 - `CHANGELOG.md`
@@ -33,14 +35,15 @@ What changed:
 - Agent output renders this as a compact `Pattern fit` line near the top of the evidence section.
 - `query hotspots` now ranks architecture hotspot candidates from relationship volume, relationship-type diversity, and shared graph endpoints.
 - Hotspot output is cautious by design: central files are shared context and risk surfaces, not default edit targets.
-- The CLI, Command Palette, VS Code language-model tool manifest, README, getting-started guide, and changelog all expose the hotspot query.
+- `query drift` now reports the first pattern-drift candidate: controllers directly accessing repository/data relationships when controller-service delegation is already detected.
+- The CLI, Command Palette, VS Code language-model tool manifest, README, getting-started guide, and changelog expose the hotspot and drift queries.
 - Tests verify raw query evidence, compact rendered output, package contributions, and CLI help.
 
 Verification:
 
 ```text
 npm test
-62/62 passing
+64/64 passing
 ```
 
 ## Why This Slice Matters
@@ -72,12 +75,12 @@ Atlas implications:
 
 ## Recommended Next Steps
 
-1. Commit the current pattern-fit and hotspot slices as a clean checkpoint.
+1. Commit the current drift slice as a clean checkpoint.
 2. Run a CLI smoke test against a real mapped workspace:
    - `kraken-atlas query hotspots --workspace . --context WebUI --format agent`
+   - `kraken-atlas query drift --workspace . --context WebUI --format agent`
    - `kraken-atlas query where-to-add "requested change" --workspace . --context WebUI --format agent`
-3. Start the first cautious pattern-drift candidate:
-   - controller bypasses service layer
+3. Add the next cautious pattern-drift candidates:
    - service writes directly to `DbContext` where repository usage is the norm
    - form post or endpoint exists without nearby validation
 4. Add pattern-specific feedback prompts to `ALPHA_FEEDBACK.md`.

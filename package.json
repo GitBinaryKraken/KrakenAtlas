@@ -51,6 +51,7 @@
     "onCommand:krakenAtlas.queryHotspots",
     "onCommand:krakenAtlas.findOrphans",
     "onCommand:krakenAtlas.findDuplicates",
+    "onCommand:krakenAtlas.findDrift",
     "onCommand:krakenAtlas.whereToAdd",
     "onCommand:krakenAtlas.searchMap",
     "onCommand:krakenAtlas.exportContextPack",
@@ -135,6 +136,10 @@
         "title": "Kraken Atlas: Find Duplicate Code Blocks"
       },
       {
+        "command": "krakenAtlas.findDrift",
+        "title": "Kraken Atlas: Find Pattern Drift Candidates"
+      },
+      {
         "command": "krakenAtlas.whereToAdd",
         "title": "Kraken Atlas: Suggest Where To Add Code"
       },
@@ -176,7 +181,7 @@
       {
         "name": "kraken_atlas_query",
         "displayName": "Kraken Atlas: Query Code Map",
-        "modelDescription": "Query the local Kraken Atlas code map before opening source files. Use queryType where-to-add for planned edits, flow for existing behavior, pattern-map for an architecture pattern overview, hotspots for central shared files, relationships for a known file or symbol, orphans for unreferenced callable candidates, duplicates for exact duplicate callable bodies, search for fallback discovery, symbol or references for known names, pattern for detected conventions, and project for a summary.",
+        "modelDescription": "Query the local Kraken Atlas code map before opening source files. Use queryType where-to-add for planned edits, flow for existing behavior, pattern-map for an architecture pattern overview, hotspots for central shared files, drift for pattern drift candidates, relationships for a known file or symbol, orphans for unreferenced callable candidates, duplicates for exact duplicate callable bodies, search for fallback discovery, symbol or references for known names, pattern for detected conventions, and project for a summary.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -194,9 +199,10 @@
                 "references",
                 "pattern",
                 "pattern-map",
-                "hotspots"
+                "hotspots",
+                "drift"
               ],
-              "description": "The kind of map query to run. Use pattern-map for an overview of detected architecture patterns, hotspots for central shared files, and pattern for a specific convention."
+              "description": "The kind of map query to run. Use pattern-map for an overview of detected architecture patterns, hotspots for central shared files, drift for possible local-pattern violations, and pattern for a specific convention."
             },
             "query": {
               "type": "string",
@@ -231,6 +237,7 @@
                 "pattern",
                 "pattern-map",
                 "hotspots",
+                "drift",
                 "orphans",
                 "duplicates",
                 "project"

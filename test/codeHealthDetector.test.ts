@@ -57,21 +57,58 @@ test("code-health detector finds conservative orphans and exact duplicate method
   assert.match(duplicate?.evidence.join(" ") ?? "", /comparison=exact-normalized-body/);
 });
 
+test("code-health detector flags controller data access when service delegation is established", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-drift-"));
+  const relationships: RelationshipRecord[] = [
+    relationship(
+      "relationship:calls:controller-service",
+      "symbol:csharp:Web.Controllers.UserController.Get()",
+      "symbol:csharp:Web.Services.IUserService.GetUser()",
+      "CALLS",
+      "Web/Controllers/UserController.cs"
+    ),
+    relationship(
+      "relationship:calls:controller-repository",
+      "symbol:csharp:Web.Controllers.AdminController.Save()",
+      "symbol:csharp:Web.Repositories.IUserRepository.Save()",
+      "CALLS_REPOSITORY",
+      "Web/Controllers/AdminController.cs"
+    )
+  ];
+
+  const findings = await detectCodeHealthFindings({
+    workspaceRoot: root,
+    symbols: [],
+    references: [],
+    relationships
+  });
+
+  const drift = findings.find((finding) => finding.kind === "pattern-drift");
+  assert.ok(drift);
+  assert.match(drift.title, /Controller bypasses service-layer pattern/);
+  assert.strictEqual(drift.locations[0].file, "Web/Controllers/AdminController.cs");
+  assert.match(drift.evidence.join(" "), /edgeType=CALLS_REPOSITORY/);
+});
+
 test("finding queries return scoped compact records from SQLite", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-finding-query-"));
   const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
   const orphan = finding("finding:orphan:web", "orphan-callable", "Web/Service.cs", 12);
   const duplicate = finding("finding:duplicate:web", "duplicate-code-block", "Web/Other.cs", 30);
+  const drift = finding("finding:drift:web", "pattern-drift", "Web/Controllers/AdminController.cs", 42);
   const outside = finding("finding:orphan:admin", "orphan-callable", "Admin/Tool.cs", 8);
-  await rebuildSqliteIndex(indexPath, { files: [], symbols: [], references: [], relationships: [], patterns: [], findings: [orphan, duplicate, outside] });
+  await rebuildSqliteIndex(indexPath, { files: [], symbols: [], references: [], relationships: [], patterns: [], findings: [orphan, duplicate, drift, outside] });
   const database = await openSqliteIndex(indexPath);
   try {
     const service = new QueryService(database, { projectContext: "Web" });
     const orphans = service.findOrphans();
     const duplicates = service.findDuplicates();
+    const driftResult = service.findDrift();
     assert.deepStrictEqual(orphans.files, ["Web/Service.cs"]);
     assert.ok(orphans.evidence.some((item) => item.recordType === "findingSummary"));
     assert.deepStrictEqual(duplicates.files, ["Web/Other.cs"]);
+    assert.deepStrictEqual(driftResult.files, ["Web/Controllers/AdminController.cs"]);
+    assert.ok(driftResult.evidence.some((item) => item.recordType === "findingSummary" && item.kind === "pattern-drift"));
   } finally {
     database.close();
   }
@@ -81,6 +118,12 @@ function methodSymbol(id: string, name: string, file: string, modifier: string, 
   return {
     recordType: "symbol", id, name, fullyQualifiedName: id.slice("symbol:csharp:".length), kind: "method",
     language: "csharp", file, range: range(1, endLine), modifiers: [modifier], confidence: 1
+  };
+}
+
+function relationship(id: string, from: string, to: string, type: string, file: string): RelationshipRecord {
+  return {
+    recordType: "relationship", id, from, to, type, file, range: range(5, 5), confidence: 0.9
   };
 }
 

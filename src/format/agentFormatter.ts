@@ -256,7 +256,7 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
       const range = location.range && typeof location.range === "object" ? location.range as { startLine?: unknown } : {};
       return `${stringValue(location.file)}${typeof range.startLine === "number" ? `:${range.startLine}` : ""}`;
     }).join(", ");
-    const prefix = item.kind === "orphan-callable" ? "Candidate" : "Duplicate";
+    const prefix = item.kind === "orphan-callable" ? "Candidate" : item.kind === "duplicate-code-block" ? "Duplicate" : "Drift";
     const expansion = typeof item.crossContextLocationCount === "number" && item.crossContextLocationCount > 0
       ? ` ${item.contextLocationCount} in context; ${item.crossContextLocationCount} directly matching duplicate(s) outside context.`
       : "";

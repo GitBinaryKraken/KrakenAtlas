@@ -345,6 +345,26 @@ test("renderAgentResponse labels code-health findings as review candidates", () 
   assert.doesNotMatch(output, /\{"recordType":"finding"/);
 });
 
+test("renderAgentResponse labels pattern drift findings separately", () => {
+  const output = renderAgentResponse({
+    query: "drift", answer: "Found 1 pattern drift candidate(s).", confidence: 0.8,
+    files: ["Web/Controllers/AdminController.cs"], symbols: [], relationships: [], patterns: [], flow: [], nextQueries: [],
+    evidence: [
+      { recordType: "findingSummary", kind: "pattern-drift", message: "Candidates appear to diverge from detected local patterns." },
+      {
+        recordType: "finding", kind: "pattern-drift", title: "Controller bypasses service-layer pattern",
+        summary: "A controller relationship directly uses CALLS_REPOSITORY.",
+        locations: [{ file: "Web/Controllers/AdminController.cs", range: { startLine: 42 } }],
+        caveats: ["Candidate only."]
+      }
+    ],
+    estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
+  } satisfies QueryResponse);
+
+  assert.match(output, /Drift: Controller bypasses service-layer pattern/);
+  assert.doesNotMatch(output, /Duplicate: Controller bypasses/);
+});
+
 test("renderAgentResponse compacts C# method signatures in relationship evidence", () => {
   const output = renderAgentResponse({
     query: "FormsController",
