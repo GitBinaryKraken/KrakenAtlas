@@ -13,15 +13,15 @@ Instead of asking an agent to scan the whole repository, ask Kraken Atlas first:
 
 Kraken Atlas is currently an **alpha feedback build** focused first on **C#/.NET Core**, **ASP.NET Core**, **Razor/HTML**, and **vanilla JavaScript** projects. Its code atlas prioritizes fast command and CLI queries that help agents find the right files, understand relationships, and work with focused context before making changes.
 
-## What's New In 0.1.26
+## What's New In 0.1.27
 
-- Query conservative orphaned C# method candidates with file and line evidence.
-- Find exact normalized duplicate C# method bodies across files and projects.
-- Inspect findings through the CLI, Command Palette, or VS Code agent tools.
-- Keep cleanup decisions safe with explicit dynamic/framework/external-use caveats.
-- Preserve project context while labeling directly matching duplicate instances in connected projects.
+- Plan implementation work with `query plan-change`, which combines likely edit files, local pattern fit, hotspot/drift risk checks, and a bounded context-pack command.
+- Inspect detected architecture patterns with `query pattern-map` before choosing which local convention an agent should copy.
+- Find central shared files with `query hotspots` so agents know what to avoid unless the task is cross-cutting.
+- Review cautious `query drift` candidates for controller/service/repository pattern deviations.
+- Keep lower-level `where-to-add`, `flow`, `relationships`, `references`, `orphans`, and `duplicates` available for focused follow-up queries.
 
-Version `0.1.26` is a public alpha intended for real-project feedback. It has 59 automated tests and has been validated against a large multi-project ASP.NET Core/Razor workspace.
+Version `0.1.27` is a public alpha intended for real-project feedback. It has 66 automated tests and has been validated against a large multi-project ASP.NET Core/Razor workspace.
 
 ---
 
@@ -563,7 +563,7 @@ This section is for contributors building the extension from source. Normal exte
 npm install
 npm test
 npm run check:vsix
-code --install-extension ..\pack-artifacts\kraken-atlas-0.1.26.vsix --force
+code --install-extension ..\pack-artifacts\kraken-atlas-0.1.27.vsix --force
 ```
 
 Development commands without linking:

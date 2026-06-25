@@ -26,7 +26,7 @@ test("CLI help and version are discoverable", async () => {
   assert.match(help.stdout, /pattern-map\|hotspots\|flow/);
   assert.match(help.stdout, /duplicates\|drift/);
   assert.match(help.stdout, /kraken-atlas context \[flow\|where-to-add\|plan-change\|search/);
-  assert.match(help.stdout, /kraken-atlas context where-to-add "requested change"/);
+  assert.match(help.stdout, /kraken-atlas context plan-change "requested change"/);
   assert.match(help.stdout, /json\|info\|md\|agent/);
   assert.match(help.stdout, /Use agent for compact token-saving output; info\/md for richer human-readable output/);
   assert.match(help.stdout, /Agent loop:/);

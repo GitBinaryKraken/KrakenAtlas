@@ -3,7 +3,7 @@ import * as path from "path";
 
 const beginMarker = "<!-- kraken-atlas:start -->";
 const endMarker = "<!-- kraken-atlas:end -->";
-const defaultSkillVersion = "0.1.26";
+const defaultSkillVersion = "0.1.27";
 
 export interface InstallAgentInstructionsResult {
   filePath: string;

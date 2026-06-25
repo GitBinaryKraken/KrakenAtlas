@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.27
+
 - Added `query plan-change` plus Command Palette and language-model tool support for one-step implementation planning that combines likely edit files, pattern-fit guidance, hotspot/drift risk checks, and a context-pack command.
 - Added `query pattern-map` plus Command Palette and language-model tool support for architecture pattern overviews grouped by detected area.
 - Added explicit pattern-fit evidence to `where-to-add` so agents see which local convention to copy before opening files.

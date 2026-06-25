@@ -31,7 +31,7 @@ async function main(): Promise<number> {
   const positional = args.filter((arg, index) => !isOptionArg(args, index));
 
   if (args.includes("--version") || positional[0] === "version") {
-    console.log("kraken-atlas 0.1.26");
+    console.log("kraken-atlas 0.1.27");
     return 0;
   }
 
@@ -481,7 +481,7 @@ function toMarkdown(response: any): string {
 }
 
 function printUsage(error: boolean): void {
-  const output = `Kraken Atlas 0.1.26
+  const output = `Kraken Atlas 0.1.27
 
 Usage:
   kraken-atlas rebuild [--workspace <path>] [--format json|info|md|agent] [--quiet]
@@ -503,7 +503,7 @@ Agent loop:
   kraken-atlas query orphans --workspace . --context WebUI --format agent
   kraken-atlas query duplicates --workspace . --context WebUI --format agent
   kraken-atlas query drift --workspace . --context WebUI --format agent
-  kraken-atlas context where-to-add "requested change" --workspace . --context WebApp --format md
+  kraken-atlas context plan-change "requested change" --workspace . --context WebApp --format md
 
 Options:
   --workspace <path>  Workspace root. Defaults to current directory.
