@@ -4,6 +4,7 @@ import { Database } from "sql.js";
 import {
   CodeMapIndexRecords,
   FileRecord,
+  FindingRecord,
   PatternRecord,
   ReferenceRecord,
   RelationshipRecord,
@@ -118,6 +119,21 @@ function createSchema(database: Database): void {
     CREATE INDEX idx_patterns_name ON patterns(name);
     CREATE INDEX idx_patterns_category ON patterns(category);
     CREATE INDEX idx_patterns_language ON patterns(language);
+
+    CREATE TABLE findings (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      title TEXT NOT NULL,
+      confidence REAL,
+      file TEXT,
+      start_line INTEGER,
+      fingerprint TEXT,
+      json TEXT NOT NULL
+    );
+
+    CREATE INDEX idx_findings_kind ON findings(kind);
+    CREATE INDEX idx_findings_file ON findings(file);
+    CREATE INDEX idx_findings_fingerprint ON findings(fingerprint);
   `);
 
   createSearchTable(database);
@@ -177,6 +193,10 @@ function insertRecords(database: Database, records: CodeMapIndexRecords): void {
 
     for (const pattern of records.patterns ?? []) {
       insertPattern(database, pattern);
+    }
+
+    for (const finding of records.findings ?? []) {
+      insertFinding(database, finding);
     }
 
     database.run("COMMIT;");
@@ -284,6 +304,33 @@ function insertPattern(database: Database, pattern: PatternRecord): void {
   );
 
   insertSearchRecord(database, pattern.id, "pattern", pattern.name, [pattern.category, pattern.language, pattern.rulesObserved.join(" "), pattern.agentGuidance].filter(Boolean).join(" "), "");
+}
+
+function insertFinding(database: Database, finding: FindingRecord): void {
+  const primary = finding.locations[0];
+  database.run(
+    `INSERT INTO findings (id, kind, title, confidence, file, start_line, fingerprint, json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+    [
+      finding.id,
+      finding.kind,
+      finding.title,
+      finding.confidence,
+      primary?.file ?? null,
+      primary?.range.startLine ?? null,
+      finding.fingerprint ?? null,
+      JSON.stringify(finding)
+    ]
+  );
+
+  insertSearchRecord(
+    database,
+    finding.id,
+    "finding",
+    finding.title,
+    [finding.kind, finding.summary, ...finding.evidence, ...finding.caveats].join(" "),
+    primary?.file ?? ""
+  );
 }
 
 function insertSearchRecord(database: Database, recordId: string, recordType: string, title: string, body: string, filePath: string): void {

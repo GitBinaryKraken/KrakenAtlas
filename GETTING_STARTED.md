@@ -26,7 +26,7 @@ From this repository:
 ```powershell
 npm install
 npm run check:vsix
-code --install-extension ..\pack-artifacts\kraken-atlas-0.1.10.vsix --force
+code --install-extension ..\pack-artifacts\kraken-atlas-0.1.26.vsix --force
 code --list-extensions --show-versions | Select-String kraken-atlas
 ```
 
@@ -47,10 +47,11 @@ Kraken Atlas: Search Map
 Kraken Atlas: Export Context Pack
 Kraken Atlas: Install Agent Instructions
 Kraken Atlas: Install CLI For Workspace Terminals
+Kraken Atlas: Install AI Agent Setup
 Kraken Atlas: Open Map Folder
 ```
 
-`Check Map Health`, `Show Project Summary`, `Find Symbol`, `Find References`, `Show Relationships`, `Show Detected Pattern`, `Trace Feature Flow`, `Suggest Where To Add Code`, `Search Map`, and `Export Context Pack` write their results to the `Kraken Atlas` output channel. This is the easiest way to inspect what map data the extension is working with without installing a global CLI.
+`Check Map Health`, `Show Project Summary`, `Find Symbol`, `Find References`, `Show Relationships`, `Show Detected Pattern`, `Find Orphaned Code Candidates`, `Find Duplicate Code Blocks`, `Trace Feature Flow`, `Suggest Where To Add Code`, `Search Map`, and `Export Context Pack` write their results to the `Kraken Atlas` output channel. This is the easiest way to inspect what map data the extension is working with without installing a global CLI.
 
 ## Using Where To Add
 
@@ -91,18 +92,75 @@ Use this sequence when an AI agent is trying to reduce context before editing:
 5. Use `Export Context Pack` only after the target files are narrowed, or use `kraken-atlas context where-to-add "requested change" --workspace . --context ProjectOrFolderName --format md` from the terminal.
 6. Stop expanding once `Open These Files` and `Evidence` answer the immediate task.
 
+If the agent already knows an anchor such as a property, class, method, route, selector, file, config key, or graph id, query the map directly instead of asking a broad recommendation question first.
+
 Good starting commands after installing the workspace terminal CLI:
 
 ```powershell
 kraken-atlas doctor --workspace . --format agent
+kraken-atlas query project --workspace . --format agent
 kraken-atlas query where-to-add "requested change" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query flow "feature or behavior" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query relationships "FileOrSymbolName" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query relationships "PropertyOrSymbolName" --workspace . --context ProjectOrFolderName --edge WRITES_FIELD --limit 20 --format agent
+kraken-atlas query references "SymbolOrMethodName" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query symbol "ClassOrMethodName" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query search "natural language terms" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query orphans "optional method or file filter" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query duplicates "optional method or file filter" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas context where-to-add "requested change" --workspace . --context ProjectOrFolderName --format md
 ```
 
-The package includes `AGENT_SKILL.md` as a compact skill-style guide for AI agents. It summarizes the query loop, token-saving rules, command playbooks, and stop conditions.
+Direct map-query loop:
+
+1. Run `project` to choose the right context.
+2. Run `search` or `symbol` to find a concrete anchor.
+3. Run `relationships` around that anchor, optionally with `--edge` and `--limit`.
+4. Run `references` when semantic usage matters.
+5. Export `context` only after the useful source slice is clear.
+
+The package includes `AGENT_SKILL.md` as a compact skill-style guide for AI agents. It summarizes the query loop, token-saving rules, task playbooks, and stop conditions.
+
+For alpha feedback, use `ALPHA_FEEDBACK.md` in this repository. The most helpful reports include the exact query, `--context` value, `doctor --format agent` output, the returned `Open These Files` / `Evidence` / `Next Commands`, and what you expected instead.
+
+Terminal-based AI agents need the `kraken-atlas` command to be available in the VS Code integrated terminal. Run `Kraken Atlas: Install AI Agent Setup` from `Ctrl+Shift+P`. This installs `AGENTS.md`, `.agents/skills/kraken-atlas/SKILL.md`, `.agents/skills/kraken-atlas/references/query-playbooks.md`, and the workspace CLI shim. Close old terminals, then open a new terminal and verify:
+
+```powershell
+kraken-atlas --help
+```
+
+Some agent terminals do not inherit VS Code's integrated-terminal PATH settings. If a normal VS Code terminal works but the agent still cannot find `kraken-atlas`, use the direct workspace shim:
+
+```powershell
+.\.kraken-atlas\bin\kraken-atlas.cmd --help
+.\.kraken-atlas\bin\kraken-atlas.cmd doctor --workspace . --format agent
+.\.kraken-atlas\bin\kraken-atlas.cmd query where-to-add "requested change" --workspace . --context ProjectOrFolderName --format agent
+```
+
+Workspace shims are refreshed by the extension when VS Code activates and resolve the newest installed Kraken Atlas extension at runtime. If a shim still reports a missing CLI target after an extension upgrade, rerun `Kraken Atlas: Install CLI For Workspace Terminals`.
+
+Ask the user to rerun setup only when the `.kraken-atlas/bin` shim files are missing.
+
+Kraken Atlas also contributes native VS Code language-model tools for agent surfaces that support extension tools:
+
+- `kraken_atlas_doctor`
+- `kraken_atlas_query`
+- `kraken_atlas_context_pack`
+
+Those tools are read-only and return compact map answers. The terminal CLI remains the universal fallback path for agents.
+
+Useful first playbooks:
+
+- Add/change field: `kraken-atlas query where-to-add "add field-name to feature-name" --workspace . --context ProjectOrFolderName --format agent`
+- Add validation/auth: `kraken-atlas query where-to-add "add validation for request-name" --workspace . --context ProjectOrFolderName --format agent`
+- Add endpoint/handler: `kraken-atlas query where-to-add "add endpoint for feature-name" --workspace . --context ProjectOrFolderName --format agent`
+- Add setting/option: `kraken-atlas query where-to-add "add setting for feature-name" --workspace . --context ProjectOrFolderName --format agent`
+- Trace bug: `kraken-atlas query flow "bug symptom or behavior" --workspace . --context ProjectOrFolderName --format agent`
+- Find UI post: `kraken-atlas query flow "button or form action name" --workspace . --context ProjectOrFolderName --format agent`
+- Find callers: `kraken-atlas query relationships "ServiceOrMethodName" --workspace . --context ProjectOrFolderName --format agent`
+- Find persistence: `kraken-atlas query where-to-add "persist field-or-entity-name" --workspace . --context ProjectOrFolderName --format agent`
+- Review orphan candidates: `kraken-atlas query orphans --workspace . --context ProjectOrFolderName --format agent`
+- Review exact duplicate methods: `kraken-atlas query duplicates --workspace . --context ProjectOrFolderName --format agent`
 
 ## VS Code Command Guide
 
@@ -113,26 +171,34 @@ The package includes `AGENT_SKILL.md` as a compact skill-style guide for AI agen
 | `Check Map Health` | You want to know whether query results are trustworthy. | Reports ready/stale/missing/degraded status and analyzer diagnostics. |
 | `Show Project Summary` | You want to see what was indexed. | Shows project metadata, language counts, analyzer runs, and follow-up actions. |
 | `Find Symbol` | You know a class, method, interface, or file name. | Finds matching symbols and source locations. |
-| `Find References` | You want to see where a known symbol or method appears. | Shows reference records and source locations. |
+| `Find References` | You want to see where a known symbol or method appears. | Shows semantic reference records. If none are found, shows coverage caveats and bounded map-search fallbacks. |
 | `Show Relationships` | You want dependencies, callers, implementations, routes, config usage, or project references. | Shows graph edges for the entered symbol, file, type, or graph id. |
 | `Show Detected Pattern` | You want examples of a convention. | Shows repeated patterns such as controller-service, options/config, validation/auth, middleware, or repository data flow. |
+| `Show Pattern Map` | You want the repo's architecture patterns before planning a change. | Groups detected conventions by architecture area and points to follow-up pattern or relationship queries. |
+| `Find Orphaned Code Candidates` | You want conservative unused-method leads. | Shows private/internal C# methods with no mapped incoming static evidence and warns you to verify dynamic use. |
+| `Find Duplicate Code Blocks` | You want exact duplication leads. | Shows grouped exact normalized C# method bodies with file and line locations. |
 | `Trace Feature Flow` | You want context for a behavior like login or image storage. | Returns a compact path through related UI/backend/data files. |
 | `Suggest Where To Add Code` | You are planning a change. | Ranks likely edit files with reasons, related patterns, and caveats. |
 | `Search Map` | You have a broad text term. | Searches indexed file, symbol, relationship, and pattern text. |
-| `Export Context Pack` | You want a bounded markdown context bundle. | Writes `.kraken-atlas/context-pack.md`. Terminal use can source the pack from `flow`, `where-to-add`, `search`, `relationships`, `symbol`, `references`, `pattern`, or `project`. |
+| `Export Context Pack` | You want a bounded markdown context bundle. | Writes `.kraken-atlas/context-pack.md`. Terminal use can source the pack from `flow`, `where-to-add`, `search`, `relationships`, `symbol`, `references`, `pattern`, `pattern-map`, or `project`. |
 | `Install Agent Instructions` | You want workspace guidance for AI coding agents. | Creates or updates `AGENTS.md` with query-first instructions. |
 | `Install CLI For Workspace Terminals` | You want `kraken-atlas` to work in VS Code terminals for this workspace. | Creates `.kraken-atlas/bin` shims and updates `.vscode/settings.json`; open a new terminal afterward. |
+| `Install AI Agent Setup` | You want agent instructions and terminal CLI setup in one step. | Updates `AGENTS.md`, installs `.agents/skills/kraken-atlas`, creates workspace CLI shims, and updates terminal PATH settings. |
 | `Open Map Folder` | You want raw generated files. | Opens `.kraken-atlas/` in the OS file explorer. |
+
+`Find References` is strongest for semantic analyzer records. Empty results do not prove a symbol is unused because Razor markup, model binding, generated code, string-based conventions, reflection, and dynamic framework usage may not appear as semantic references. Follow the returned fallback search or relationship commands before deciding a symbol has no usage.
+
+The same caution applies to `orphans`: it is a conservative candidate query, not an automatic deletion list. `duplicates` currently reports exact normalized callable bodies only; near-duplicate and arbitrary block similarity are planned later.
 
 ## CLI Package Testing
 
-The VS Code extension does not modify your global shell `PATH`. Use `Kraken Atlas: Install CLI For Workspace Terminals` for workspace-local terminal access, or use the Command Palette commands above for normal extension testing. The commands below are only for local npm-package testing.
+The VS Code extension does not modify your global shell `PATH`. Use `Kraken Atlas: Install CLI For Workspace Terminals` for workspace-local terminal access, or use the Command Palette commands above for normal extension testing. External agent terminals may not inherit the VS Code integrated-terminal PATH; in that case, call `.\.kraken-atlas\bin\kraken-atlas.cmd` directly from the workspace root. The commands below are only for local npm-package testing.
 
 From a temporary test workspace:
 
 ```powershell
 npm init -y
-npm install ..\kraken-atlas\kraken-atlas-0.1.10.tgz
+npm install ..\kraken-atlas\kraken-atlas-0.1.26.tgz
 ```
 
 For a project copied into the temp workspace as `.\AdminTools`, run:

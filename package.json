@@ -2,13 +2,13 @@
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
   "description": "Maps C#/.NET Core, vanilla JavaScript, and HTML/Razor codebases into local queryable code facts for AI context reduction.",
-  "version": "0.1.10",
+  "version": "0.1.26",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
     "theme": "dark"
   },
-  "publisher": "codekraken",
+  "publisher": "BinaryKraken",
   "license": "UNLICENSED",
   "engines": {
     "vscode": "^1.90.0"
@@ -47,11 +47,15 @@
     "onCommand:krakenAtlas.queryReferences",
     "onCommand:krakenAtlas.queryRelationships",
     "onCommand:krakenAtlas.queryPattern",
+    "onCommand:krakenAtlas.queryPatternMap",
+    "onCommand:krakenAtlas.findOrphans",
+    "onCommand:krakenAtlas.findDuplicates",
     "onCommand:krakenAtlas.whereToAdd",
     "onCommand:krakenAtlas.searchMap",
     "onCommand:krakenAtlas.exportContextPack",
     "onCommand:krakenAtlas.installAgentInstructions",
     "onCommand:krakenAtlas.installWorkspaceCli",
+    "onCommand:krakenAtlas.installAiAgentSetup",
     "onCommand:krakenAtlas.openMapFolder",
     "workspaceContains:.kraken-atlas/manifest.json"
   ],
@@ -69,7 +73,9 @@
     "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish/**",
     "images/**",
     "AGENT_SKILL.md",
+    "ALPHA_FEEDBACK.md",
     "README.md",
+    "CHANGELOG.md",
     "GETTING_STARTED.md",
     "package.json"
   ],
@@ -112,6 +118,18 @@
         "title": "Kraken Atlas: Show Detected Pattern"
       },
       {
+        "command": "krakenAtlas.queryPatternMap",
+        "title": "Kraken Atlas: Show Pattern Map"
+      },
+      {
+        "command": "krakenAtlas.findOrphans",
+        "title": "Kraken Atlas: Find Orphaned Code Candidates"
+      },
+      {
+        "command": "krakenAtlas.findDuplicates",
+        "title": "Kraken Atlas: Find Duplicate Code Blocks"
+      },
+      {
         "command": "krakenAtlas.whereToAdd",
         "title": "Kraken Atlas: Suggest Where To Add Code"
       },
@@ -132,8 +150,99 @@
         "title": "Kraken Atlas: Install CLI For Workspace Terminals"
       },
       {
+        "command": "krakenAtlas.installAiAgentSetup",
+        "title": "Kraken Atlas: Install AI Agent Setup"
+      },
+      {
         "command": "krakenAtlas.openMapFolder",
         "title": "Kraken Atlas: Open Map Folder"
+      }
+    ],
+    "languageModelTools": [
+      {
+        "name": "kraken_atlas_doctor",
+        "displayName": "Kraken Atlas: Check Map Health",
+        "modelDescription": "Check whether the local Kraken Atlas code map is ready, stale, missing, or degraded before reading source files.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "kraken_atlas_query",
+        "displayName": "Kraken Atlas: Query Code Map",
+        "modelDescription": "Query the local Kraken Atlas code map before opening source files. Use queryType where-to-add for planned edits, flow for existing behavior, pattern-map for an architecture pattern overview, relationships for a known file or symbol, orphans for unreferenced callable candidates, duplicates for exact duplicate callable bodies, search for fallback discovery, symbol or references for known names, pattern for detected conventions, and project for a summary.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "queryType": {
+              "type": "string",
+              "enum": [
+                "project",
+                "where-to-add",
+                "orphans",
+                "duplicates",
+                "flow",
+                "relationships",
+                "search",
+                "symbol",
+                "references",
+                "pattern",
+                "pattern-map"
+              ],
+              "description": "The kind of map query to run. Use pattern-map for an overview of detected architecture patterns and pattern for a specific convention."
+            },
+            "query": {
+              "type": "string",
+              "description": "Natural-language task, symbol name, file path, route, pattern, or search text."
+            },
+            "context": {
+              "type": "string",
+              "description": "Optional project or folder context for multi-project workspaces, such as WebUI or AdminTools."
+            }
+          },
+          "required": [
+            "queryType"
+          ]
+        }
+      },
+      {
+        "name": "kraken_atlas_context_pack",
+        "displayName": "Kraken Atlas: Export Context Pack",
+        "modelDescription": "Create a compact markdown context pack from a narrowed Kraken Atlas query after likely edit files have been identified.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "queryType": {
+              "type": "string",
+              "enum": [
+                "where-to-add",
+                "flow",
+                "relationships",
+                "search",
+                "symbol",
+                "references",
+                "pattern",
+                "pattern-map",
+                "orphans",
+                "duplicates",
+                "project"
+              ],
+              "description": "The source query type for the context pack."
+            },
+            "query": {
+              "type": "string",
+              "description": "Natural-language task, symbol name, file path, route, pattern, or search text."
+            },
+            "context": {
+              "type": "string",
+              "description": "Optional project or folder context for multi-project workspaces."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
       }
     ],
     "configuration": {
@@ -207,10 +316,10 @@
     "compile:test": "tsc -p ./tsconfig.test.json",
     "publish:analyzer": "dotnet publish analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/KrakenAtlas.RoslynAnalyzer.csproj -c Release -o analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish",
     "pack:dry": "npm pack --dry-run",
-    "package:vsix": "node scripts/vsce-package.cjs package --out ../pack-artifacts/kraken-atlas-0.1.10.vsix --no-rewrite-relative-links --allow-missing-repository --skip-license",
+    "package:vsix": "node scripts/vsce-package.cjs package --out ../pack-artifacts/kraken-atlas-0.1.26.vsix --no-rewrite-relative-links --allow-missing-repository --skip-license",
     "check:vsix": "npm run compile && npm run publish:analyzer && npm run package:vsix",
     "check:package": "npm run compile && npm run publish:analyzer && npm pack --dry-run",
-    "test": "npm run compile && npm run compile:test && node --test dist-test/test",
+    "test": "npm run compile && npm run compile:test && node --test --test-concurrency=1 \"dist-test/test/**/*.js\"",
     "vscode:prepublish": "node -e \"\""
   },
   "devDependencies": {

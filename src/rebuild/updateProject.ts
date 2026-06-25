@@ -1,12 +1,15 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { analyzeAspNetConventions } from "../analyzers/aspnetConventionAnalyzer";
 import { analyzeDotnetProjects } from "../analyzers/dotnetProjectAnalyzer";
 import { analyzeVanillaWeb } from "../analyzers/webAnalyzer";
 import { defaultMaxFileSizeBytes, defaultOutputFolder } from "../config/defaults";
 import { renderAgentReadme } from "../context/agentContext";
+import { detectCodeHealthFindings } from "../findings/codeHealthDetector";
 import { diffFiles } from "../doctor/mapDoctor";
 import {
   FileRecord,
+  FindingRecord,
   PatternRecord,
   ProjectAnalyzerRun,
   ReferenceRecord,
@@ -50,6 +53,9 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
   if (previousFiles.length === 0) {
     return fullRebuild(options, "No existing files.jsonl map was found.");
   }
+  if (!(await pathExists(path.join(outputFolder, "findings.jsonl")))) {
+    return fullRebuild(options, "The existing map predates code-health findings and requires a schema rebuild.");
+  }
 
   const diff = diffFiles(previousFiles, currentFiles);
   if (diff.addedFiles.length === 0 && diff.changedFiles.length === 0 && diff.deletedFiles.length === 0) {
@@ -60,6 +66,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
       referenceCount: (await readJsonl<ReferenceRecord>(path.join(outputFolder, "references.jsonl"))).length,
       relationshipCount: (await readJsonl<RelationshipRecord>(path.join(outputFolder, "relationships.jsonl"))).length,
       patternCount: (await readJsonl<PatternRecord>(path.join(outputFolder, "patterns.jsonl"))).length,
+      findingCount: (await readJsonl<FindingRecord>(path.join(outputFolder, "findings.jsonl"))).length,
       analyzerRuns: await readAnalyzerRuns(outputFolder),
       scanSummary: scanResult.summary,
       mode: "skipped",
@@ -78,7 +85,8 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
   const existingRelationships = await readJsonl<RelationshipRecord>(path.join(outputFolder, "relationships.jsonl"));
 
   progress("Refreshing vanilla web graph records");
-  const webResult = await analyzeVanillaWeb(options.workspaceRoot, currentFiles);
+  const existingCSharpSymbols = existingSymbols.filter((symbol) => symbol.language === "csharp");
+  const webResult = await analyzeVanillaWeb(options.workspaceRoot, currentFiles, existingCSharpSymbols);
   const dotnetProjectResult = await analyzeDotnetProjects(options.workspaceRoot, currentFiles);
   const symbols = [
     ...existingSymbols.filter((record) => !isWebSymbol(record) && record.kind !== "project"),
@@ -86,12 +94,15 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     ...dotnetProjectResult.symbols
   ].sort(byId);
   const references = [...existingReferences.filter((record) => !isWebFile(record.file)), ...webResult.references].sort(byId);
-  const relationships = [
-    ...existingRelationships.filter((record) => !isWebRelationship(record) && record.type !== "PROJECT_REFERENCES"),
+  const conventionResult = analyzeAspNetConventions(currentFiles, symbols);
+  const relationships = uniqueById([
+    ...existingRelationships.filter((record) => !isWebRelationship(record) && record.type !== "PROJECT_REFERENCES" && !isAspNetConventionRelationship(record)),
     ...webResult.relationships,
-    ...dotnetProjectResult.relationships
-  ].sort(byId);
+    ...dotnetProjectResult.relationships,
+    ...conventionResult.relationships
+  ]).sort(byId);
   const patterns = detectPatterns({ symbols, relationships });
+  const findings = await detectCodeHealthFindings({ workspaceRoot: options.workspaceRoot, symbols, references, relationships });
 
   progress("Writing updated graph files");
   await fs.mkdir(outputFolder, { recursive: true });
@@ -100,6 +111,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
   await writeJsonl(path.join(outputFolder, "references.jsonl"), references);
   await writeJsonl(path.join(outputFolder, "relationships.jsonl"), relationships);
   await writeJsonl(path.join(outputFolder, "patterns.jsonl"), patterns);
+  await writeJsonl(path.join(outputFolder, "findings.jsonl"), findings);
   await fs.writeFile(path.join(outputFolder, "conventions.md"), renderConventionsMarkdown(patterns), "utf8");
 
   const analyzerRuns: ProjectAnalyzerRun[] = [
@@ -132,6 +144,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     references,
     relationships,
     patternsCount: patterns.length,
+    findingsCount: findings.length,
     analyzerRuns
   });
 
@@ -144,6 +157,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     references,
     relationships,
     patterns,
+    findings,
     project: projectMetadata
   });
   await writeManifest(
@@ -152,7 +166,8 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
       fileCount: currentFiles.length,
       symbolCount: symbols.length,
       relationshipCount: relationships.length,
-      patternCount: patterns.length
+      patternCount: patterns.length,
+      findingCount: findings.length
     })
   );
 
@@ -163,6 +178,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     referenceCount: references.length,
     relationshipCount: relationships.length,
     patternCount: patterns.length,
+    findingCount: findings.length,
     analyzerRuns,
     scanSummary: scanResult.summary,
     mode: "partial",
@@ -224,6 +240,30 @@ function isWebFile(filePath: string): boolean {
   return webExtensions.has(path.extname(filePath).toLowerCase());
 }
 
+function isAspNetConventionRelationship(relationship: RelationshipRecord): boolean {
+  return relationship.id.startsWith("relationship:aspnet:view-component-renders:");
+}
+
 function byId<T extends { id: string }>(left: T, right: T): number {
   return left.id.localeCompare(right.id);
+}
+
+function uniqueById<T extends { id: string }>(records: T[]): T[] {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    if (seen.has(record.id)) {
+      return false;
+    }
+    seen.add(record.id);
+    return true;
+  });
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
 }

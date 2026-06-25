@@ -5,16 +5,19 @@ import type { UpdateProjectResult } from "../rebuild/updateProject";
 export function renderAgentResponse(response: QueryResponse): string {
   let evidence = selectEvidence(response);
   const isWhereToAdd = evidence.some((item) => item.recordType === "fileRecommendation");
-  const fileLimit = isWhereToAdd ? 6 : 8;
-  const evidenceLimit = isWhereToAdd ? 6 : 10;
-  const nextCommandLimit = 5;
-  const files = response.files.slice(0, fileLimit);
+  const isJavaScriptInteractionFlow = response.flow.some((item) => ["EMITS_EVENT", "SUBSCRIBES_EVENT", "UPDATES_ELEMENT_STATE"].includes(stringValue(item.type)));
+  const fileLimit = isWhereToAdd ? 4 : 8;
+  const evidenceLimit = isWhereToAdd ? 4 : isJavaScriptInteractionFlow ? 11 : response.flow.length ? 9 : 6;
+  const nextCommandLimit = 3;
+  const responseFiles = response.flow.length ? visibleEvidenceFiles(evidence, evidenceLimit) : response.files;
+  const files = responseFiles.slice(0, fileLimit);
+  const fileNumbers = new Map(files.map((file, index) => [file, index + 1]));
   if (isWhereToAdd) {
     const fileSet = new Set(files);
-    evidence = evidence.filter((item) =>
-      (item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file))) ||
-      item.recordType === "caveat"
-    );
+    const fileEvidence = evidence.filter((item) => item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file)));
+    const caveats = evidence.filter((item) => item.recordType === "caveat");
+    const capability = evidence.filter((item) => item.recordType === "capabilityAssessment");
+    evidence = [...caveats, ...capability, ...fileEvidence];
   }
   const lines = [
     "Answer",
@@ -24,14 +27,14 @@ export function renderAgentResponse(response: QueryResponse): string {
   ];
 
   if (files.length) {
-    lines.push(...files.map((file) => `- ${file}`));
+    lines.push(...files.map((file, index) => `${index + 1}. ${file}`));
   } else {
-    lines.push("- No source files identified. Run a narrower query or use a next command below.");
+    lines.push("- None. Narrow the query or run a next command.");
   }
 
   lines.push("", "Evidence");
   if (evidence.length) {
-    lines.push(...evidence.slice(0, evidenceLimit).map(formatEvidence));
+    lines.push(...evidence.slice(0, evidenceLimit).map((item) => formatEvidence(item, fileNumbers)));
   } else {
     lines.push("- No evidence records returned.");
   }
@@ -46,7 +49,7 @@ export function renderAgentResponse(response: QueryResponse): string {
   lines.push(
     "",
     "Stop Condition",
-    "- Stop expanding once the listed files and evidence answer the immediate task. Open only the cited files and line ranges needed for the edit."
+    "- Stop when the files above answer the task; avoid broad reads."
   );
 
   return `${lines.join("\n").trimEnd()}\n`;
@@ -66,6 +69,7 @@ export function renderAgentBuildResult(result: UpdateProjectResult): string {
     `- References: ${result.referenceCount}`,
     `- Relationships: ${result.relationshipCount}`,
     `- Patterns: ${result.patternCount}`,
+    `- Findings: ${result.findingCount}`,
     ...(result.scanSummary ? [`- Excluded files/folders: ${result.scanSummary.excludedFiles}`] : []),
     `- Added files: ${result.addedFiles.length}`,
     `- Changed files: ${result.changedFiles.length}`,
@@ -125,11 +129,13 @@ function doctorRemediationCommands(result: DoctorResult): string[] {
 }
 
 function selectEvidence(response: QueryResponse): Array<Record<string, unknown>> {
-  if (response.evidence.some((item) => item.recordType === "fileRecommendation" || item.recordType === "caveat")) {
-    return response.evidence;
-  }
   if (response.flow.length) {
-    return response.flow;
+    const summaries = response.evidence.filter((item) => ["flowCoverage", "caveat", "capabilityAssessment", "contextExpansion"].includes(stringValue(item.recordType)));
+    const anchors = response.evidence.filter((item) => item.recordType === "strongAnchor");
+    return [...summaries, ...response.flow, ...anchors];
+  }
+  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "reference", "referenceSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
+    return response.evidence;
   }
   if (response.relationships.length) {
     return response.relationships;
@@ -140,27 +146,140 @@ function selectEvidence(response: QueryResponse): Array<Record<string, unknown>>
   return response.evidence;
 }
 
-function formatEvidence(item: Record<string, unknown>): string {
+function visibleEvidenceFiles(evidence: Array<Record<string, unknown>>, evidenceLimit: number): string[] {
+  return uniqueStrings(evidence.slice(0, evidenceLimit).flatMap((item) => {
+    const files = [stringValue(item.file)];
+    for (const endpoint of [stringValue(item.from), stringValue(item.to)]) {
+      if (endpoint.startsWith("file:")) {
+        files.push(endpoint.slice("file:".length));
+      }
+    }
+    return files.filter(Boolean);
+  }));
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, number>): string {
   if (item.recordType === "fileRecommendation") {
     const reasons = Array.isArray(item.reasons) ? item.reasons.filter((reason): reason is string => typeof reason === "string") : [];
-    const suffix = reasons.slice(0, 2).join(" ");
-    return `- ${stringValue(item.file)}: ${truncate(suffix, 150)}`;
+    const file = stringValue(item.file);
+    const prefix = fileNumbers.has(file) ? `${fileNumbers.get(file)}.` : `- ${file}:`;
+    const relationship = firstRecord(item.relationshipDetails);
+    const anchor = firstRecord(item.anchorDetails);
+    if (relationship) {
+      return `${prefix} ${stringValue(relationship.type)}: ${compactId(stringValue(relationship.from))} -> ${compactId(stringValue(relationship.to))}${formatLocation(relationship)}`;
+    }
+    if (anchor) {
+      return `${prefix} anchor: ${compactId(stringValue(anchor.name) || stringValue(anchor.id))}${formatLocation(anchor)}`;
+    }
+    return `${prefix} ${compactReason(reasons[0] ?? "ranked text match")}`;
   }
 
   if (item.recordType === "caveat") {
-    return `- Caveat: ${truncate(stringValue(item.message), 220)}`;
+    return `- Caveat: ${truncate(stringValue(item.message), 160)}`;
+  }
+
+  if (item.recordType === "contextCandidate") {
+    return `- Context: ${stringValue(item.context)} (${truncate(stringValue(item.message), 100)})`;
+  }
+
+  if (item.recordType === "flowCoverage") {
+    const scores = item.scores && typeof item.scores === "object" ? item.scores as Record<string, unknown> : {};
+    return `- Coverage: ${truncate(stringValue(item.message), 100)} Similarity ${formatDecimal(scores.textSimilarity)}, connectivity ${formatDecimal(scores.graphConnectivity)}, feature ${formatDecimal(scores.featureCoverage)}.`;
+  }
+
+  if (item.recordType === "relationshipFilter") {
+    const edgeTypes = Array.isArray(item.edgeTypes) ? item.edgeTypes.filter((value): value is string => typeof value === "string") : [];
+    return `- Filter: ${edgeTypes.join(", ") || truncate(stringValue(item.message), 120)}`;
+  }
+
+  if (item.recordType === "contextExpansion") {
+    return `- Context expansion: ${truncate(stringValue(item.message), 170)}`;
+  }
+
+  if (item.recordType === "searchSummary") {
+    return `- Sampling: ${truncate(stringValue(item.message), 150)}`;
+  }
+
+  if (item.recordType === "exactFileSearch") {
+    return item.found
+      ? `- Exact file: ${stringValue(item.file)}${item.language ? ` (${stringValue(item.language)})` : ""}`
+      : `- Exact file check: ${stringValue(item.requestedPath)} is not indexed.`;
+  }
+
+  if (item.recordType === "projectSummary") {
+    const counts = item.recordCounts && typeof item.recordCounts === "object" ? item.recordCounts as Record<string, unknown> : {};
+    const languages = Array.isArray(item.languages)
+      ? item.languages.map((language) => {
+        const row = language as Record<string, unknown>;
+        return `${stringValue(row.language)} ${row.fileCount ?? 0}`;
+      }).join(", ")
+      : "unknown";
+    const projects = Array.isArray(item.projects) ? item.projects.filter((value): value is string => typeof value === "string") : [];
+    return [
+      `- Workspace: ${stringValue(item.workspaceName)}; schema ${stringValue(item.schemaVersion)}; generated ${stringValue(item.generatedAt)}.`,
+      `- Records: ${counts.files ?? 0} files, ${counts.symbols ?? 0} symbols, ${counts.relationships ?? 0} relationships, ${counts.references ?? 0} references, ${counts.patterns ?? 0} patterns, ${counts.findings ?? 0} findings.`,
+      `- Languages: ${languages}.`,
+      `- Projects: ${projects.length ? projects.join(", ") : "no .csproj files indexed"}.`
+    ].join("\n");
+  }
+
+  if (item.recordType === "patternMapArea") {
+    const patterns = Array.isArray(item.patterns) ? item.patterns.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
+    const names = patterns.slice(0, 3).map((pattern) => `${stringValue(pattern.name)} (${pattern.frequency ?? 0})`).join(", ");
+    return `- Pattern area: ${stringValue(item.category)}; ${item.patternCount ?? 0} pattern(s), ${item.totalFrequency ?? 0} observed edge(s), avg confidence ${formatDecimal(item.averageConfidence)}.${names ? ` Top: ${names}.` : ""}`;
+  }
+
+  if (item.recordType === "findingSummary") {
+    return `- Scope: ${truncate(stringValue(item.message), 190)}`;
+  }
+
+  if (item.recordType === "finding") {
+    const locations = Array.isArray(item.locations) ? item.locations.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
+    const locationText = locations.slice(0, 4).map((location) => {
+      const range = location.range && typeof location.range === "object" ? location.range as { startLine?: unknown } : {};
+      return `${stringValue(location.file)}${typeof range.startLine === "number" ? `:${range.startLine}` : ""}`;
+    }).join(", ");
+    const prefix = item.kind === "orphan-callable" ? "Candidate" : "Duplicate";
+    const expansion = typeof item.crossContextLocationCount === "number" && item.crossContextLocationCount > 0
+      ? ` ${item.contextLocationCount} in context; ${item.crossContextLocationCount} directly matching duplicate(s) outside context.`
+      : "";
+    return `- ${prefix}: ${stringValue(item.title)}${locationText ? ` [${locationText}]` : ""}. ${truncate(stringValue(item.summary), 150)}${expansion}`;
+  }
+
+  if (item.recordType === "capabilityAssessment") {
+    return `- Capability: ${truncate(stringValue(item.message), 160)}`;
+  }
+
+  if (item.recordType === "referenceSummary") {
+    return `- Breakdown: source ${formatCounts(item.sourceReferenceKinds)}; edges ${formatCounts(item.relationshipTypes)}; anchors ${item.resolvedAnchorCount ?? 0}. Evidence is sampled; exact single-ID follow-ups may differ.`;
+  }
+
+  if (item.recordType === "reference" && !item.recordId) {
+    return `- Reference: ${stringValue(item.symbolName)} -> ${compactId(stringValue(item.resolvedSymbolId))}${formatLocation(item)}${item.context ? ` [${item.context}]` : ""}`;
+  }
+
+  if (item.recordType === "strongAnchor") {
+    const concepts = Array.isArray(item.matchedConcepts) ? item.matchedConcepts.filter((value): value is string => typeof value === "string") : [];
+    return `- Strong${item.crossContext ? " cross-project" : ""} anchor: ${compactId(stringValue(item.id))}${formatLocation(item)}${concepts.length ? `; matches ${concepts.join(", ")}` : ""}`;
   }
 
   if (typeof item.type === "string" && (item.from || item.to)) {
-    return `- ${item.type}: ${stringValue(item.from)} -> ${stringValue(item.to)}${formatLocation(item)}${formatSnippet(item.evidence)}`;
+    return `- ${item.type}: ${compactId(stringValue(item.from))} -> ${compactId(stringValue(item.to))}${formatLocation(item)}${formatEndpointLocations(item)}${formatSnippet(item.evidence)}`;
   }
 
   if (typeof item.id === "string" && typeof item.name === "string") {
-    return `- ${item.id}: ${item.name}${formatLocation(item)}${formatSnippet(item.agentGuidance)}`;
+    return `- ${compactId(item.id)}: ${item.name}${formatLocation(item)}${formatSnippet(item.agentGuidance)}`;
   }
 
   if (typeof item.recordId === "string") {
-    return `- ${item.recordType ?? "record"}: ${item.recordId}${item.path ? ` (${item.path})` : ""}`;
+    const location = item.path ? ` (${item.path}${typeof item.line === "number" ? `:${item.line}` : ""})` : "";
+    const title = stringValue(item.title) || compactId(item.recordId);
+    const kind = stringValue(item.matchKind) || stringValue(item.recordType) || "record";
+    return `- ${kind}: ${title}${location}${formatSnippet(item.snippet)}`;
   }
 
   return `- ${truncate(JSON.stringify(item), 220)}`;
@@ -170,6 +289,75 @@ function compactAnswer(answer: string): string {
   return answer
     .replace(/^Likely edit locations for "(.+)" ranked by text matches, feature-flow edges, and detected project patterns\.$/u, "Likely edit locations for \"$1\".")
     .replace(/^Feature-flow slice for "(.+)" with \d+ connected edge\(s\)\.$/u, "Feature-flow slice for \"$1\".");
+}
+
+function compactReason(reason: string): string {
+  return reason
+    .replace(/^Search match in (record|symbol) /u, "match: ")
+    .replace(/^Participates in ([A-Z_]+) feature-flow evidence\.$/u, "$1 edge")
+    .replace(/^Follows detected pattern: (.+)\.$/u, "pattern: $1")
+    .replace(
+      /^Composition root; inspect only when the request is about startup, DI, routing, middleware, or config\.$/u,
+      "composition root; only for startup/DI/routing/config"
+    )
+    .replace(/^Likely test file; use for validation unless the requested change is test-specific\.$/u, "test file; use for validation");
+}
+
+function firstRecord(value: unknown): Record<string, unknown> | undefined {
+  return Array.isArray(value) && value[0] && typeof value[0] === "object"
+    ? value[0] as Record<string, unknown>
+    : undefined;
+}
+
+function compactId(value: string): string {
+  const csharpSymbol = /^symbol:csharp:(.+)$/u.exec(value);
+  if (csharpSymbol) {
+    return truncate(compactCSharpSymbol(csharpSymbol[1]), 70);
+  }
+
+  const razorElement = /^symbol:razor:.+:(form|button|input|anchor|element):([^:]+)$/u.exec(value);
+  if (razorElement) {
+    return `${razorElement[1]}:${razorElement[2]}`;
+  }
+
+  const jsEvent = /^symbol:javascript:.+:event:([^:]+):([^:]+)$/u.exec(value);
+  if (jsEvent) {
+    return `js:${jsEvent[1]}:${jsEvent[2]}`;
+  }
+
+  const jsSelector = /^symbol:javascript:.+:selector:([^:]+)$/u.exec(value);
+  if (jsSelector) {
+    return `js:selector:${jsSelector[1]}`;
+  }
+
+  const route = /^route:(?:web|csharp):(.+)$/u.exec(value);
+  if (route) {
+    return `route:${route[1]}`;
+  }
+
+  return truncate(value
+    .replace(/^symbol:javascript:/u, "js:")
+    .replace(/^symbol:razor:/u, "razor:")
+    .replace(/^symbol:dotnet-project:/u, "project:")
+    .replace(/^file:/u, ""), 70);
+}
+
+function compactCSharpSymbol(value: string): string {
+  const paren = value.indexOf("(");
+  if (paren < 0) {
+    return value;
+  }
+
+  const methodPrefix = value.slice(0, paren);
+  const lastDot = methodPrefix.lastIndexOf(".");
+  if (lastDot < 0) {
+    return `${methodPrefix}(...)`;
+  }
+
+  const typeDot = methodPrefix.lastIndexOf(".", lastDot - 1);
+  const owner = typeDot >= 0 ? methodPrefix.slice(typeDot + 1, lastDot) : methodPrefix.slice(0, lastDot);
+  const method = methodPrefix.slice(lastDot + 1);
+  return `${owner}.${method}(...)`;
 }
 
 function formatLocation(item: Record<string, unknown>): string {
@@ -186,9 +374,38 @@ function formatLocation(item: Record<string, unknown>): string {
   return ` (${file})`;
 }
 
+function formatEndpointLocations(item: Record<string, unknown>): string {
+  const from = formatEndpointLocation(item.fromLocation);
+  const to = formatEndpointLocation(item.toLocation);
+  if (!from && !to) {
+    return "";
+  }
+
+  return ` [nodes: ${from || "?"} -> ${to || "?"}]`;
+}
+
+function formatEndpointLocation(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const location = value as { file?: unknown; range?: unknown };
+  const file = stringValue(location.file);
+  if (!file) {
+    return "";
+  }
+
+  const range = location.range;
+  if (range && typeof range === "object" && typeof (range as { startLine?: unknown }).startLine === "number") {
+    return `${file}:${(range as { startLine: number }).startLine}`;
+  }
+
+  return file;
+}
+
 function formatSnippet(value: unknown): string {
   const text = stringValue(value);
-  return text ? ` Evidence: ${truncate(text, 140)}` : "";
+  return text ? `; ${truncate(text, 80)}` : "";
 }
 
 function stringValue(value: unknown): string {
@@ -197,6 +414,20 @@ function stringValue(value: unknown): string {
 
 function formatScore(value: unknown): string {
   return typeof value === "number" ? value.toFixed(1).replace(/\.0$/, "") : "0";
+}
+
+function formatDecimal(value: unknown): string {
+  return typeof value === "number" ? value.toFixed(2).replace(/0+$/u, "").replace(/\.$/u, "") : "0";
+}
+
+function formatCounts(value: unknown): string {
+  if (!value || typeof value !== "object") {
+    return "none";
+  }
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return entries.length ? entries.map(([key, count]) => `${key}=${count}`).join(", ") : "none";
 }
 
 function truncate(value: string, maxLength: number): string {

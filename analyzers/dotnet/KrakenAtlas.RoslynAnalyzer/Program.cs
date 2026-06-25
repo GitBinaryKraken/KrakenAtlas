@@ -156,6 +156,11 @@ internal sealed class CSharpWorkspaceAnalyzer
         {
             AddDbSetUsageRelationship(document, memberAccess, dbSetProperties, semanticModel, result);
         }
+
+        foreach (var assignment in document.Root.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+        {
+            AddPropertyCopyRelationship(document, assignment, semanticModel, result);
+        }
     }
 
     private void AddTypeSymbol(CSharpDocument document, BaseTypeDeclarationSyntax type, SemanticModel semanticModel, AnalysisResult result)
@@ -400,9 +405,12 @@ internal sealed class CSharpWorkspaceAnalyzer
         }
 
         var fromType = generic.TypeArgumentList.Arguments[0];
+        var factoryImplementation = generic.TypeArgumentList.Arguments.Count == 1
+            ? invocation.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().LastOrDefault()?.Type
+            : null;
         var toType = generic.TypeArgumentList.Arguments.Count > 1
             ? generic.TypeArgumentList.Arguments[1]
-            : fromType;
+            : factoryImplementation ?? fromType;
         var fromName = fromType.ToString();
         var toName = toType.ToString();
         var fromSymbol = semanticModel.GetTypeInfo(fromType).Type;
@@ -856,6 +864,53 @@ internal sealed class CSharpWorkspaceAnalyzer
                 invocation.ToString(),
                 0.9));
         }
+    }
+
+    private void AddPropertyCopyRelationship(
+        CSharpDocument document,
+        AssignmentExpressionSyntax assignment,
+        SemanticModel semanticModel,
+        AnalysisResult result)
+    {
+        if (!assignment.IsKind(SyntaxKind.SimpleAssignmentExpression))
+        {
+            return;
+        }
+
+        var targetSymbol = semanticModel.GetSymbolInfo(assignment.Left).Symbol as IPropertySymbol;
+        var sourceSymbol = semanticModel.GetSymbolInfo(assignment.Right).Symbol as IPropertySymbol;
+        if (targetSymbol is null || sourceSymbol is null || SymbolEqualityComparer.Default.Equals(targetSymbol, sourceSymbol))
+        {
+            return;
+        }
+
+        var containingMethod = assignment.FirstAncestorOrSelf<BaseMethodDeclarationSyntax>();
+        var mapperSymbol = containingMethod is null ? null : semanticModel.GetDeclaredSymbol(containingMethod);
+        var sourceName = GetSymbolDisplayName(sourceSymbol);
+        var targetName = GetSymbolDisplayName(targetSymbol);
+        var mapperName = mapperSymbol is null ? document.RelativePath : GetSymbolDisplayName(mapperSymbol);
+
+        result.Relationships.Add(new RelationshipRecord(
+            "relationship",
+            RelationshipId("maps_property", sourceName, targetName),
+            SymbolId(sourceName),
+            SymbolId(targetName),
+            "MAPS_PROPERTY",
+            document.RelativePath,
+            Range.FromNode(document.Tree, assignment),
+            assignment.ToString(),
+            0.82));
+
+        result.Relationships.Add(new RelationshipRecord(
+            "relationship",
+            RelationshipId("maps_property_in", mapperName, targetName),
+            SymbolId(mapperName),
+            SymbolId(targetName),
+            "MAPS_PROPERTY",
+            document.RelativePath,
+            Range.FromNode(document.Tree, assignment),
+            assignment.ToString(),
+            0.72));
     }
 
     private void AddValidatorTargetRelationship(

@@ -43,6 +43,7 @@ const requiredOutputs = [
   "references.jsonl",
   "relationships.jsonl",
   "patterns.jsonl",
+  "findings.jsonl",
   "agent-readme.md",
   "index.sqlite"
 ];

@@ -7,6 +7,7 @@ export interface ManifestStats {
   symbolCount?: number;
   relationshipCount?: number;
   patternCount?: number;
+  findingCount?: number;
 }
 
 export function createManifest(workspaceRoot: string, stats: ManifestStats, generatedAt = new Date()): Manifest {
@@ -27,6 +28,7 @@ export function createManifest(workspaceRoot: string, stats: ManifestStats, gene
       references: "references.jsonl",
       relationships: "relationships.jsonl",
       patterns: "patterns.jsonl",
+      findings: "findings.jsonl",
       project: "project.json",
       sqlite: "index.sqlite"
     },
@@ -34,7 +36,8 @@ export function createManifest(workspaceRoot: string, stats: ManifestStats, gene
       fileCount: stats.fileCount,
       symbolCount: stats.symbolCount ?? 0,
       relationshipCount: stats.relationshipCount ?? 0,
-      patternCount: stats.patternCount ?? 0
+      patternCount: stats.patternCount ?? 0,
+      findingCount: stats.findingCount ?? 0
     }
   };
 }

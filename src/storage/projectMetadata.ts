@@ -17,6 +17,7 @@ export interface ProjectMetadataInput {
   references: ReferenceRecord[];
   relationships: RelationshipRecord[];
   patternsCount: number;
+  findingsCount?: number;
   analyzerRuns: ProjectAnalyzerRun[];
   generatedAt?: Date;
 }
@@ -41,7 +42,8 @@ export function createProjectMetadata(input: ProjectMetadataInput): ProjectMetad
       symbols: input.symbols.length,
       references: input.references.length,
       relationships: input.relationships.length,
-      patterns: input.patternsCount
+      patterns: input.patternsCount,
+      findings: input.findingsCount ?? 0
     },
     agentGuidance: {
       readFirst: [

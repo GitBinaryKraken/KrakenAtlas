@@ -12,22 +12,28 @@ test("scanWorkspaceFiles records source files and skips ignored/sensitive files"
   await fs.mkdir(path.join(root, "wwwroot", "js"), { recursive: true });
   await fs.mkdir(path.join(root, "node_modules", "package"), { recursive: true });
   await fs.mkdir(path.join(root, ".kraken-atlas"), { recursive: true });
+  await fs.mkdir(path.join(root, ".agents", "skills", "kraken-atlas"), { recursive: true });
   await fs.mkdir(path.join(root, "graphify-out"), { recursive: true });
   await fs.mkdir(path.join(root, "artifacts"), { recursive: true });
   await fs.mkdir(path.join(root, "Sandbox"), { recursive: true });
   await fs.mkdir(path.join(root, "Sandbox_old"), { recursive: true });
   await fs.mkdir(path.join(root, "Properties", "PublishProfiles"), { recursive: true });
+  await fs.mkdir(path.join(root, "wwwroot", "cached-pages"), { recursive: true });
 
   await fs.writeFile(path.join(root, "Controllers", "HomeController.cs"), "public class HomeController {}", "utf8");
   await fs.writeFile(path.join(root, "wwwroot", "js", "site.js"), "function init() {}", "utf8");
   await fs.writeFile(path.join(root, ".env"), "SECRET=true", "utf8");
   await fs.writeFile(path.join(root, "node_modules", "package", "index.js"), "module.exports = {}", "utf8");
   await fs.writeFile(path.join(root, ".kraken-atlas", "old.jsonl"), "{}", "utf8");
+  await fs.writeFile(path.join(root, ".agents", "skills", "kraken-atlas", "SKILL.md"), "# generated skill", "utf8");
+  await fs.writeFile(path.join(root, "AGENTS.md"), "# generated agent instructions", "utf8");
+  await fs.writeFile(path.join(root, ".tmp_map_page.html"), "<html>temporary capture</html>", "utf8");
   await fs.writeFile(path.join(root, "graphify-out", "graph.json"), "{}", "utf8");
   await fs.writeFile(path.join(root, "artifacts", "generated.js"), "function generated() {}", "utf8");
   await fs.writeFile(path.join(root, "Sandbox", "old-test.js"), "function oldTest() {}", "utf8");
   await fs.writeFile(path.join(root, "Sandbox_old", "legacy.cs"), "public class Legacy {}", "utf8");
   await fs.writeFile(path.join(root, "Properties", "PublishProfiles", "FolderProfile.pubxml"), "<Project />", "utf8");
+  await fs.writeFile(path.join(root, "wwwroot", "cached-pages", "en.html"), "<html>cached</html>", "utf8");
   await fs.writeFile(path.join(root, "wwwroot", "js", "site.min.js"), "function minified(){}", "utf8");
   await fs.writeFile(path.join(root, "wwwroot", "js", "site.js.map"), "{}", "utf8");
 

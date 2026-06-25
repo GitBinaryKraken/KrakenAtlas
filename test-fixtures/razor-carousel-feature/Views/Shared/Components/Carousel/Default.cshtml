@@ -1,0 +1,11 @@
+@model KelpApiDomain.PageMediaBlockConfig
+
+<div class="carousel">
+@foreach (var item in Model.Items)
+{
+    <figure>
+        <img src="@item.Url" alt="@item.AltText" />
+        <figcaption>@item.Caption</figcaption>
+    </figure>
+}
+</div>

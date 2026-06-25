@@ -4,6 +4,7 @@ import * as os from "os";
 import * as path from "path";
 import test from "node:test";
 import { renderContextPack } from "../src/context/agentContext";
+import { renderAgentResponse } from "../src/format/agentFormatter";
 import { withQueryService } from "../src/query/queryService";
 import { rebuildProject } from "../src/rebuild/rebuildProject";
 import { updateProject } from "../src/rebuild/updateProject";
@@ -28,11 +29,50 @@ test("rebuildProject writes agent-queryable map outputs", async () => {
 
   assert.strictEqual(result.fileCount > 0, true);
   assert.strictEqual(manifest.outputs.project, "project.json");
+  assert.strictEqual(manifest.outputs.findings, "findings.jsonl");
+  assert.ok(await fs.readFile(path.join(outputRoot, "findings.jsonl"), "utf8") !== undefined);
   assert.ok(project.projectTypes.includes("vanilla-js"));
   assert.match(relationships, /LOADS_SCRIPT/);
   assert.match(patterns, /pattern:web:vanilla-js-dom-event/);
   assert.match(agentReadme, /Use it before opening broad source files/);
   assert.match(agentReadme, /Kraken Atlas: Export Context Pack/);
+});
+
+test("search treats filename-shaped queries as exact map lookups", async () => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const sourceFixture = path.join(projectRoot, "test-fixtures", "vanilla-web-simple");
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-exact-file-"));
+  await copyDirectory(sourceFixture, workspaceRoot);
+  await rebuildProject({ extensionPath: projectRoot, workspaceRoot });
+
+  await withQueryService(workspaceRoot, (service) => {
+    const present = service.search("Edit.cshtml");
+    const absent = service.search(".tmp_map_page.html");
+    assert.match(present.answer, /exact indexed file match/);
+    assert.ok(present.files.some((file) => file.endsWith("Edit.cshtml")));
+    assert.strictEqual(absent.answer, 'No exact indexed file match for ".tmp_map_page.html".');
+    assert.deepStrictEqual(absent.files, []);
+    assert.ok(absent.evidence.some((item) => item.recordType === "exactFileSearch" && item.found === false));
+  });
+});
+
+test("validation context packs exclude unrelated rendering and browser-state edges", () => {
+  const pack = renderContextPack({
+    query: "add validation to composable location editing",
+    answer: "Likely edit locations.",
+    confidence: 0.5,
+    files: ["Adapters/LocationAdapter.cs"], symbols: [], patterns: [], flow: [], nextQueries: [],
+    evidence: [{ recordType: "fileRecommendation", file: "Adapters/LocationAdapter.cs", score: 10, reasons: ["Search match."] }],
+    relationships: [
+      { type: "READS_QUERY_STRING", from: "js:map", to: "query:location", file: "wwwroot/map.js" },
+      { type: "RENDERS_VIEW", from: "component:aside", to: "file:Views/Aside.cshtml", file: "Components/Aside.cs" }
+    ],
+    estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
+  });
+
+  assert.match(pack, /No direct validation\/auth relationship evidence was found/);
+  assert.doesNotMatch(pack, /READS_QUERY_STRING:/);
+  assert.doesNotMatch(pack, /RENDERS_VIEW:/);
 });
 
 test("updateProject skips unchanged maps and partially refreshes vanilla web changes", async () => {
@@ -134,6 +174,10 @@ test("realistic .NET feature-flow fixture supports flow and where-to-add queries
     assert.ok(validationWhereToAdd.files.includes("Validation/UserPreferenceRequestValidator.cs"));
     assert.ok(validationWhereToAdd.files.includes("Services/UserPreferencesService.cs"));
     assert.ok(validationWhereToAdd.files.includes("Controllers/UserPreferencesController.cs"));
+    if (validationWhereToAdd.files.includes("Program.cs")) {
+      assert.ok(validationWhereToAdd.files.indexOf("Validation/UserPreferenceRequestValidator.cs") < validationWhereToAdd.files.indexOf("Program.cs"));
+      assert.ok(validationWhereToAdd.files.indexOf("Controllers/UserPreferencesController.cs") < validationWhereToAdd.files.indexOf("Program.cs"));
+    }
     assert.ok(backgroundWhereToAdd.files.includes("Background/PreferenceDigestWorker.cs"));
     assert.ok(middlewareWhereToAdd.files.includes("Middleware/PreferenceAuditMiddleware.cs"));
     assert.ok(handlerWhereToAdd.files.includes("Handlers/PreviewPreferenceHandler.cs"));
@@ -167,6 +211,75 @@ test("realistic .NET feature-flow fixture supports flow and where-to-add queries
     assert.ok(optionsRelationships.relationships.some((relationship) => relationship.type === "USES_OPTIONS" && relationship.to === "symbol:csharp:DotnetFeatureFlow.Options.UserPreferenceOptions"));
     assert.ok(optionsConfigRelationships.relationships.some((relationship) => relationship.type === "USES_CONFIG_KEY" && relationship.to === "config:csharp:UserPreferences"));
     assert.ok(optionsPattern.patterns.some((pattern) => pattern.id === "pattern:dotnet:options-config"));
+  });
+});
+
+test("Razor carousel fixture supports cross-language editor flow queries", async () => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const sourceFixture = path.join(projectRoot, "test-fixtures", "razor-carousel-feature");
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-carousel-flow-"));
+  await copyDirectory(sourceFixture, workspaceRoot);
+
+  await rebuildProject({
+    extensionPath: projectRoot,
+    workspaceRoot
+  });
+
+  await withQueryService(workspaceRoot, (service) => {
+    const whereToAdd = service.whereToAdd("make image carousels editable in the composable editor");
+    const flow = service.findFlow("image carousel rendering and editing");
+    const relationships = service.findRelationships("Views/Shared/ComposableContent/_EditorShell.cshtml");
+    const componentRelationships = service.findRelationships("CarouselViewComponent");
+    const flowContextPack = renderContextPack(flow, { workspaceRoot });
+
+    assert.ok(whereToAdd.files.includes("Views/Shared/ComposableContent/_EditorShell.cshtml"));
+    assert.ok(whereToAdd.files.includes("Components/PageParts/CarouselViewComponent.cs") || whereToAdd.files.includes("Views/Shared/Components/Carousel/Default.cshtml"));
+    assert.match(whereToAdd.answer, /Existing implementation evidence found/);
+    assert.ok(whereToAdd.evidence.some((item) => item.recordType === "capabilityAssessment"));
+    assert.ok(flow.files.includes("Views/Shared/ComposableContent/_EditorShell.cshtml"));
+    assert.ok(flow.files.includes("Components/PageParts/CarouselViewComponent.cs"));
+    assert.ok(flow.files.includes("Views/Shared/Components/Carousel/Default.cshtml"));
+    assert.ok(flow.files.includes("KelpApiDomain/PageMediaBlockConfig.cs"));
+    assert.ok(flow.files.includes("Services/ComposableContent/PageComposableContentEditorAdapter.cs"));
+    assert.ok(flow.relationships.some((relationship) => relationship.type === "WRITES_FIELD" && String(relationship.to).includes("ConfigJson")));
+    assert.ok(flow.relationships.some((relationship) => relationship.type === "BINDS_MODEL_PROPERTY" && String(relationship.to).includes("Parts[].ConfigJson")));
+    assert.ok(flow.relationships.some((relationship) => relationship.type === "MAPS_PROPERTY" && String(relationship.evidence).includes("ConfigJson = part.ConfigJson")));
+    assert.ok(flow.relationships.some((relationship) => relationship.type === "SELECTS_ELEMENT" && String(relationship.evidence).includes("data-carousel-field")));
+    assert.ok(flow.relationships.some((relationship) => relationship.type === "INVOKES_VIEW_COMPONENT" && relationship.to === "symbol:csharp:CarouselViewComponent"));
+    assert.ok(flow.relationships.some((relationship) => relationship.type === "RENDERS_VIEW" && relationship.to === "file:Views/Shared/Components/Carousel/Default.cshtml"));
+    assert.ok(relationships.relationships.some((relationship) => relationship.type === "WRITES_FIELD"));
+    assert.ok(componentRelationships.relationships.some((relationship) => relationship.type === "RENDERS_VIEW"));
+    assert.ok(componentRelationships.relationships.some((relationship) => relationship.type === "RENDERS_VIEW" && String(relationship.file).includes("CarouselViewComponent.cs")));
+    assert.match(flowContextPack, /## Evidence Excerpts/);
+    assert.match(flowContextPack, /data-carousel-field/);
+    assert.match(flowContextPack, /ConfigJson/);
+    assert.match(flowContextPack, /Views\/Shared\/Components\/Carousel\/Default\.cshtml:1/);
+    assert.match(flowContextPack, /@model KelpApiDomain\.PageMediaBlockConfig/);
+  });
+});
+
+test("JavaScript controller fixture returns an ordered click-to-selection-to-highlight flow", async () => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const sourceFixture = path.join(projectRoot, "test-fixtures", "javascript-controller-flow");
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-js-controller-flow-"));
+  await copyDirectory(sourceFixture, workspaceRoot);
+  await rebuildProject({ extensionPath: projectRoot, workspaceRoot });
+
+  await withQueryService(workspaceRoot, (service) => {
+    const flow = service.findFlow("search result selection map highlight");
+    const output = renderAgentResponse(flow);
+    assert.ok(flow.files.includes("wwwroot/js/explorer.js"));
+    assert.ok(flow.files.includes("wwwroot/js/search-controller.js"));
+    assert.ok(flow.files.includes("wwwroot/js/map-controller.js"));
+    assert.ok(flow.relationships.some((edge) => edge.type === "CALLS" && /selectResult/u.test(String(edge.evidence))));
+    assert.ok(flow.relationships.some((edge) => edge.type === "CALLS" && /selectItem/u.test(String(edge.evidence))));
+    assert.ok(flow.relationships.some((edge) => edge.type === "CALLS" && /focusItem/u.test(String(edge.evidence))));
+    assert.ok(flow.relationships.some((edge) => edge.type === "EMITS_EVENT" && edge.to === "event:javascript:selectionChange"));
+    assert.ok(flow.relationships.some((edge) => edge.type === "SUBSCRIBES_EVENT" && edge.to === "event:javascript:selectionChange"));
+    assert.ok(flow.relationships.some((edge) => edge.type === "UPDATES_ELEMENT_STATE"));
+    assert.match(output, /wwwroot\/js\/map-controller\.js/);
+    assert.ok(output.indexOf("selectResult") < output.indexOf("selectItem"));
+    assert.ok(output.indexOf("selectItem") < output.indexOf("EMITS_EVENT"));
   });
 });
 

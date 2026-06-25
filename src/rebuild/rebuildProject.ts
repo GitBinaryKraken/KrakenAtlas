@@ -1,10 +1,12 @@
 import * as fs from "fs/promises";
 import * as path from "path";
+import { analyzeAspNetConventions } from "../analyzers/aspnetConventionAnalyzer";
 import { analyzeDotnetProjects } from "../analyzers/dotnetProjectAnalyzer";
 import { runRoslynAnalyzer } from "../analyzers/roslynAnalyzer";
 import { analyzeVanillaWeb } from "../analyzers/webAnalyzer";
 import { defaultMaxFileSizeBytes, defaultOutputFolder } from "../config/defaults";
 import { renderAgentReadme } from "../context/agentContext";
+import { detectCodeHealthFindings } from "../findings/codeHealthDetector";
 import { ProjectAnalyzerRun } from "../model/records";
 import { detectPatterns, renderConventionsMarkdown } from "../patterns/patternDetector";
 import { ScanOptions, ScanSummary, scanWorkspace } from "../scanner/fileScanner";
@@ -29,6 +31,7 @@ export interface RebuildProjectResult {
   referenceCount: number;
   relationshipCount: number;
   patternCount: number;
+  findingCount: number;
   analyzerRuns: ProjectAnalyzerRun[];
   scanSummary?: ScanSummary;
 }
@@ -58,19 +61,23 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
   const roslynResult = roslynAnalysis.result ?? { symbols: [], references: [], relationships: [] };
 
   progress("Running web analyzer");
-  const webResult = await analyzeVanillaWeb(options.workspaceRoot, files);
+  const webResult = await analyzeVanillaWeb(options.workspaceRoot, files, roslynResult.symbols);
   progress("Running .NET project analyzer");
   const dotnetProjectResult = await analyzeDotnetProjects(options.workspaceRoot, files);
   const symbols = [...roslynResult.symbols, ...webResult.symbols, ...dotnetProjectResult.symbols];
   const references = [...roslynResult.references, ...webResult.references];
-  const relationships = [...roslynResult.relationships, ...webResult.relationships, ...dotnetProjectResult.relationships];
+  const conventionResult = analyzeAspNetConventions(files, symbols);
+  const relationships = uniqueById([...roslynResult.relationships, ...webResult.relationships, ...dotnetProjectResult.relationships, ...conventionResult.relationships]);
   const patterns = detectPatterns({ symbols, relationships });
+  progress("Detecting code-health findings");
+  const findings = await detectCodeHealthFindings({ workspaceRoot: options.workspaceRoot, symbols, references, relationships });
 
   progress("Writing graph JSONL files");
   await writeJsonl(path.join(outputFolder, "symbols.jsonl"), symbols);
   await writeJsonl(path.join(outputFolder, "references.jsonl"), references);
   await writeJsonl(path.join(outputFolder, "relationships.jsonl"), relationships);
   await writeJsonl(path.join(outputFolder, "patterns.jsonl"), patterns);
+  await writeJsonl(path.join(outputFolder, "findings.jsonl"), findings);
   await fs.writeFile(path.join(outputFolder, "conventions.md"), renderConventionsMarkdown(patterns), "utf8");
 
   const analyzerRuns: ProjectAnalyzerRun[] = [
@@ -110,6 +117,7 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
     references,
     relationships,
     patternsCount: patterns.length,
+    findingsCount: findings.length,
     analyzerRuns
   });
 
@@ -124,6 +132,7 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
     references,
     relationships,
     patterns,
+    findings,
     project: projectMetadata
   });
 
@@ -134,7 +143,8 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
       fileCount: files.length,
       symbolCount: symbols.length,
       relationshipCount: relationships.length,
-      patternCount: patterns.length
+      patternCount: patterns.length,
+      findingCount: findings.length
     })
   );
 
@@ -145,6 +155,7 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
     referenceCount: references.length,
     relationshipCount: relationships.length,
     patternCount: patterns.length,
+    findingCount: findings.length,
     analyzerRuns,
     scanSummary: scanResult.summary
   };
@@ -236,4 +247,15 @@ function classifyAnalyzerFailure(detail: string): {
 
 function sanitizeAnalyzerDetail(detail: string): string {
   return detail.replace(/\r/g, "").split("\n").map((line) => line.trim()).filter(Boolean).slice(0, 12).join("\n");
+}
+
+function uniqueById<T extends { id: string }>(records: T[]): T[] {
+  const seen = new Set<string>();
+  return records.filter((record) => {
+    if (seen.has(record.id)) {
+      return false;
+    }
+    seen.add(record.id);
+    return true;
+  });
 }

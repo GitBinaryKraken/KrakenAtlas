@@ -4,6 +4,7 @@ export const defaultIgnoredDirectories = new Set([
   ".git",
   ".vs",
   ".vscode",
+  ".agents",
   ".kraken-atlas",
   "node_modules",
   "bin",
@@ -16,12 +17,14 @@ export const defaultIgnoredDirectories = new Set([
   "coverage",
   "artifacts",
   "graphify-out",
+  "cached-pages",
   "sandbox",
   "sandbox_old"
 ]);
 
 export const defaultIgnoredFileNames = new Set([
   ".kraken-atlas-ignore",
+  "AGENTS.md",
   "graph.html",
   "graph.json",
   "graph_tree.html",
@@ -33,6 +36,7 @@ export const defaultIgnoredExtensions = new Set([
 ]);
 
 export const defaultIgnoredGlobs = [
+  ".tmp*",
   "**/Properties/PublishProfiles/**",
   "**/*.min.js",
   "**/*.generated.*",

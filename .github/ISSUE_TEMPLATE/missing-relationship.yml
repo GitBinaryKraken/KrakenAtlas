@@ -1,0 +1,40 @@
+name: Missing relationship
+description: Report a missing route, call, form post, validator, config, project reference, or pattern edge.
+title: "[Relationship] "
+labels: ["alpha-feedback", "relationship-coverage"]
+body:
+  - type: textarea
+    id: expected_edge
+    attributes:
+      label: Missing relationship
+      description: Describe the edge Kraken Atlas should have found.
+      placeholder: Forms/ProfileBio.cshtml posts to FormsController.ProfileBio, or Program.cs binds UserPreferenceOptions.
+    validations:
+      required: true
+  - type: textarea
+    id: query
+    attributes:
+      label: Query used
+      description: Paste the command or Command Palette action that should have exposed this relationship.
+    validations:
+      required: true
+  - type: textarea
+    id: nearby_code
+    attributes:
+      label: Safe snippet or file paths
+      description: Include non-secret file paths, symbol names, or a tiny sanitized snippet that shows the relationship.
+  - type: dropdown
+    id: relationship_type
+    attributes:
+      label: Relationship category
+      options:
+        - Route/controller/page handler
+        - Form post
+        - JavaScript event/fetch
+        - Service/repository call
+        - Validator/auth
+        - Options/config
+        - Middleware/hosted service
+        - Project reference
+        - Other
+

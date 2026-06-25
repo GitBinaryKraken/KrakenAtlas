@@ -2,7 +2,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import * as process from "process";
-import { installAgentInstructions } from "./agent/terminalInstructions";
+import { installAgentInstructions, installAgentSkill } from "./agent/terminalInstructions";
 import { renderContextPack } from "./context/agentContext";
 import { inspectMap } from "./doctor/mapDoctor";
 import { renderAgentBuildResult, renderAgentDoctor, renderAgentResponse } from "./format/agentFormatter";
@@ -19,9 +19,11 @@ interface CliOptions {
   format: "json" | "md" | "info" | "agent";
   quiet: boolean;
   projectContext?: string;
+  edgeTypes: string[];
+  limit?: number;
 }
 
-type QueryCommandType = "project" | "symbol" | "references" | "relationships" | "pattern" | "flow" | "search" | "where-to-add";
+type QueryCommandType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "flow" | "search" | "where-to-add" | "orphans" | "duplicates";
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
@@ -29,7 +31,7 @@ async function main(): Promise<number> {
   const positional = args.filter((arg, index) => !isOptionArg(args, index));
 
   if (args.includes("--version") || positional[0] === "version") {
-    console.log("kraken-atlas 0.1.10");
+    console.log("kraken-atlas 0.1.26");
     return 0;
   }
 
@@ -67,7 +69,7 @@ async function main(): Promise<number> {
   const query = positional.slice(2).join(" ");
   const doctorResult = await inspectForCli(options);
 
-  const response = await withQueryService(options.workspaceRoot, (service) => runQuery(service, queryType, query), { projectContext: options.projectContext });
+  const response = await withQueryService(options.workspaceRoot, (service) => runQuery(service, queryType, query, options), { projectContext: options.projectContext });
   const cliResponse = applyCliNextCommandOptions(response, options);
 
   printStaleWarning(doctorResult, options);
@@ -99,16 +101,20 @@ async function doctor(options: CliOptions): Promise<number> {
 
 async function installAgent(options: CliOptions): Promise<number> {
   const result = await installAgentInstructions(options.workspaceRoot);
+  const skill = await installAgentSkill(options.workspaceRoot);
 
   if (options.format === "agent") {
     console.log(`Answer
-Kraken Atlas agent instructions ${result.action}.
+Kraken Atlas agent instructions ${result.action}; project skill ${skill.action}.
 
 Open These Files
 - ${result.filePath}
+- ${skill.skillPath}
+- ${path.join(skill.referencesFolder, "query-playbooks.md")}
 
 Evidence
 - AGENTS.md now contains terminal-first Kraken Atlas query guidance.
+- .agents/skills/kraken-atlas now contains a project-local agent skill.
 
 Next Commands
 - kraken-atlas update --workspace .
@@ -117,15 +123,17 @@ Next Commands
 Stop Condition
 - Stop here once the agent instructions are installed.`);
   } else if (options.format === "md" || options.format === "info") {
-    console.log(`# Kraken Atlas agent instructions ${result.action}
+    console.log(`# Kraken Atlas agent setup ${result.action}
 
 - File: ${result.filePath}
+- Skill: ${skill.skillPath}
 - Use: terminal-first code-map queries from VS Code agents`);
   } else {
     console.log(JSON.stringify({
       status: "completed",
       action: result.action,
-      file: result.filePath
+      file: result.filePath,
+      skill: skill.skillPath
     }, null, 2));
   }
 
@@ -151,16 +159,17 @@ async function writeContextPack(options: CliOptions, query: string): Promise<num
   const contextQuery = parseContextQuery(query);
   const response = await withQueryService(
     options.workspaceRoot,
-    (service) => runQuery(service, contextQuery.type, contextQuery.query || "project"),
+    (service) => runQuery(service, contextQuery.type, contextQuery.query || "project", options),
     { projectContext: options.projectContext }
   );
-  const markdown = renderContextPack(response);
+  const cliResponse = applyCliNextCommandOptions(response, { ...options, format: "agent" });
+  const markdown = renderContextPack(cliResponse, { workspaceRoot: options.workspaceRoot });
   const outputPath = path.join(options.workspaceRoot, ".kraken-atlas", "context-pack.md");
 
   await fs.writeFile(outputPath, markdown, "utf8");
 
   if (options.format === "agent") {
-    console.log(`${renderAgentResponse(applyCliNextCommandOptions(response, options)).trimEnd()}
+    console.log(`${renderAgentResponse(cliResponse).trimEnd()}
 
 Context Pack
 - Output: ${outputPath}
@@ -175,14 +184,14 @@ Context Pack
       query: response.query,
       files: response.files,
       relationships: response.relationships.length,
-      nextQueries: response.nextQueries
+      nextQueries: cliResponse.nextQueries
     }, null, 2));
   }
 
   return 0;
 }
 
-function runQuery(service: QueryService, queryType: string, query: string) {
+function runQuery(service: QueryService, queryType: string, query: string, options: CliOptions) {
   switch (queryType) {
     case "project":
       return service.getProject(query || "project");
@@ -193,10 +202,14 @@ function runQuery(service: QueryService, queryType: string, query: string) {
       return service.findReferences(query);
     case "relationships":
     case "relationship":
-      return service.findRelationships(query);
+      return service.findRelationships(query, { edgeTypes: options.edgeTypes, limit: options.limit });
     case "pattern":
     case "patterns":
       return service.findPatterns(query);
+    case "pattern-map":
+    case "patterns-map":
+    case "map-patterns":
+      return service.findPatternMap(query || "pattern-map");
     case "flow":
       return service.findFlow(query);
     case "search":
@@ -204,6 +217,12 @@ function runQuery(service: QueryService, queryType: string, query: string) {
       return service.search(query);
     case "where-to-add":
       return service.whereToAdd(query);
+    case "orphans":
+    case "orphan":
+      return service.findOrphans(query);
+    case "duplicates":
+    case "duplicate":
+      return service.findDuplicates(query);
     default:
       throw new Error(`Unknown query type: ${queryType}`);
   }
@@ -238,6 +257,10 @@ function normalizeQueryType(value: string): QueryCommandType | undefined {
     case "pattern":
     case "patterns":
       return "pattern";
+    case "pattern-map":
+    case "patterns-map":
+    case "map-patterns":
+      return "pattern-map";
     case "flow":
       return "flow";
     case "search":
@@ -245,6 +268,12 @@ function normalizeQueryType(value: string): QueryCommandType | undefined {
       return "search";
     case "where-to-add":
       return "where-to-add";
+    case "orphan":
+    case "orphans":
+      return "orphans";
+    case "duplicate":
+    case "duplicates":
+      return "duplicates";
     default:
       return undefined;
   }
@@ -276,6 +305,7 @@ function printBuildResult(result: UpdateProjectResult, options: CliOptions): voi
 - References: ${result.referenceCount}
 - Relationships: ${result.relationshipCount}
 - Patterns: ${result.patternCount}
+- Findings: ${result.findingCount}
 - Output: ${result.outputFolder}
 - Reason: ${result.reason}
 - Excluded files/folders: ${result.scanSummary?.excludedFiles ?? 0}
@@ -298,7 +328,8 @@ function printBuildResult(result: UpdateProjectResult, options: CliOptions): voi
         symbols: result.symbolCount,
         references: result.referenceCount,
         relationships: result.relationshipCount,
-        patterns: result.patternCount
+        patterns: result.patternCount,
+        findings: result.findingCount
       },
       scan: result.scanSummary
     }, null, 2));
@@ -368,14 +399,32 @@ function parseOptions(args: string[]): CliOptions {
   const workspaceIndex = args.indexOf("--workspace");
   const formatIndex = args.indexOf("--format");
   const contextIndex = args.indexOf("--context");
+  const edgeTypes = optionValues(args, "--edge")
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const limitIndex = args.indexOf("--limit");
+  const parsedLimit = limitIndex >= 0 ? Number.parseInt(args[limitIndex + 1] ?? "", 10) : undefined;
 
   return {
     workspaceRoot: workspaceIndex >= 0 && args[workspaceIndex + 1] ? path.resolve(args[workspaceIndex + 1]) : process.cwd(),
     workspaceArg: workspaceIndex >= 0 && args[workspaceIndex + 1] ? args[workspaceIndex + 1] : ".",
     format: parseFormat(formatIndex >= 0 ? args[formatIndex + 1] : undefined),
     quiet: args.includes("--quiet"),
-    projectContext: contextIndex >= 0 ? args[contextIndex + 1] : undefined
+    projectContext: contextIndex >= 0 ? args[contextIndex + 1] : undefined,
+    edgeTypes,
+    limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
   };
+}
+
+function optionValues(args: string[], optionName: string): string[] {
+  const values: string[] = [];
+  for (let index = 0; index < args.length; index++) {
+    if (args[index] === optionName && args[index + 1]) {
+      values.push(args[index + 1]);
+    }
+  }
+  return values;
 }
 
 function parseFormat(value: string | undefined): CliOptions["format"] {
@@ -388,7 +437,7 @@ function parseFormat(value: string | undefined): CliOptions["format"] {
 function isOptionArg(args: string[], index: number): boolean {
   const arg = args[index];
   const previous = args[index - 1];
-  return arg.startsWith("--") || previous === "--workspace" || previous === "--format" || previous === "--context";
+  return arg.startsWith("--") || previous === "--workspace" || previous === "--format" || previous === "--context" || previous === "--edge" || previous === "--limit";
 }
 
 function toMarkdown(response: any): string {
@@ -410,28 +459,33 @@ function toMarkdown(response: any): string {
 }
 
 function printUsage(error: boolean): void {
-  const output = `Kraken Atlas 0.1.10
+  const output = `Kraken Atlas 0.1.26
 
 Usage:
   kraken-atlas rebuild [--workspace <path>] [--format json|info|md|agent] [--quiet]
   kraken-atlas update [--workspace <path>] [--format json|info|md|agent] [--quiet]
   kraken-atlas doctor [--workspace <path>] [--format json|info|md|agent]
   kraken-atlas install-agent [--workspace <path>] [--format json|info|md|agent]
-  kraken-atlas context [flow|where-to-add|search|relationships|symbol|references|pattern|project] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
-  kraken-atlas query <project|symbol|references|relationships|pattern|flow|search|where-to-add> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
+  kraken-atlas context [flow|where-to-add|search|relationships|symbol|references|pattern|pattern-map|project|orphans|duplicates] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
+  kraken-atlas query <project|symbol|references|relationships|pattern|pattern-map|flow|search|where-to-add|orphans|duplicates> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--limit <n>]
 
 Agent loop:
   kraken-atlas doctor --workspace . --format agent
   kraken-atlas update --workspace . --format agent
   kraken-atlas query flow "feature or behavior" --workspace . --format agent
+  kraken-atlas query pattern-map --workspace . --format agent
   kraken-atlas query flow "feature or behavior" --workspace . --context WebApp --format agent
   kraken-atlas query where-to-add "requested change" --workspace . --format agent
+  kraken-atlas query orphans --workspace . --context WebUI --format agent
+  kraken-atlas query duplicates --workspace . --context WebUI --format agent
   kraken-atlas context where-to-add "requested change" --workspace . --context WebApp --format md
 
 Options:
   --workspace <path>  Workspace root. Defaults to current directory.
   --context <name>    Scope query seeds to a project/folder in a parent workspace.
   --format <format>   json, info, md, or agent. Defaults to json. Use agent for compact token-saving output; info/md for richer human-readable output.
+  --edge <type>        Filter relationship query output by edge type. Repeat or comma-separate values, e.g. --edge WRITES_FIELD,MAPS_PROPERTY.
+  --limit <n>          Limit relationship query output. Defaults to 30, max 100.
   --quiet             Suppress rebuild/update progress logs.
   --help              Show this help.
   --version           Show CLI version.`;
@@ -449,9 +503,9 @@ function resolveExtensionPath(): string {
 
 main()
   .then((code) => {
-    process.exit(code);
+    (globalThis as any).process.exitCode = code;
   })
   .catch((error) => {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    (globalThis as any).process.exitCode = 1;
   });
