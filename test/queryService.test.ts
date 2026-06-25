@@ -633,6 +633,7 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     const relationshipResult = service.findRelationships("UserService");
     const patternResult = service.findPatterns("interface");
     const patternMapResult = service.findPatternMap();
+    const hotspotResult = service.findArchitectureHotspots();
     const flowResult = service.findFlow("save-user");
     const trimRelationships = service.findRelationships("string.Trim");
     const whereToAddResult = service.whereToAdd("add user endpoint field");
@@ -663,6 +664,10 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     assert.ok(patternMapResult.patterns.some((item) => item.id === "pattern:aspnet:controller-service-flow"));
     assert.ok(patternMapResult.files.includes("Controllers/UserController.cs"));
     assert.ok(patternMapResult.nextQueries.some((query) => query.includes("pattern:aspnet:controller-service-flow")));
+    assert.match(hotspotResult.answer, /architecture hotspot candidate/);
+    assert.ok(hotspotResult.evidence.some((item) => item.recordType === "architectureHotspot" && typeof item.file === "string"));
+    assert.ok(hotspotResult.evidence.some((item) => item.recordType === "hotspotSummary"));
+    assert.ok(hotspotResult.nextQueries.some((query) => query.includes("kraken-atlas query relationships")));
     assert.ok(flowResult.flow.some((edge) => edge.type === "HANDLES_EVENT"));
     assert.ok(flowResult.flow.some((edge) => edge.type === "CALLS"));
     assert.ok(flowResult.flow.some((edge) => edge.type === "PROJECT_REFERENCES"));
@@ -672,6 +677,12 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     assert.ok(trimRelationships.relationships.some((edge) => edge.to === "symbol:csharp:string.Trim()"));
     assert.ok(whereToAddResult.evidence.some((item) => item.recordType === "fileRecommendation" && item.file === "Controllers/UserController.cs"));
     assert.ok((whereToAddResult.evidence.find((item) => item.file === "Controllers/UserController.cs")?.reasons as string[]).length > 0);
+    assert.ok(whereToAddResult.evidence.some((item) =>
+      item.recordType === "patternFit" &&
+      item.patternId === "pattern:aspnet:controller-service-flow" &&
+      Array.isArray(item.matchedFiles) &&
+      item.matchedFiles.includes("Controllers/UserController.cs")
+    ));
     assert.ok(scopedFlowResult.flow.some((edge) => edge.file === "Web/UserController.cs"));
     assert.ok(scopedFlowResult.flow.some((edge) => edge.type === "PROJECT_REFERENCES"));
     assert.ok(!scopedFlowResult.flow.some((edge) => stringValue(edge.file).startsWith("AdminTools/")));

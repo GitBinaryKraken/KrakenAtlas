@@ -85,6 +85,18 @@ export function activate(context: vscode.ExtensionContext): void {
       const contextName = await promptForContext();
       await runQueryCommand(output, "pattern-map", "pattern-map", contextName);
     }),
+    vscode.commands.registerCommand("krakenAtlas.queryHotspots", async () => {
+      const query = await vscode.window.showInputBox({
+        title: "Kraken Atlas: Show Architecture Hotspots",
+        prompt: "Optional hotspot filter such as config, routing, service, or UI",
+        placeHolder: "Leave blank to inspect central shared files"
+      });
+      if (query === undefined) {
+        return;
+      }
+      const contextName = await promptForContext();
+      await runQueryCommand(output, "hotspots", query || "hotspots", contextName);
+    }),
     vscode.commands.registerCommand("krakenAtlas.findOrphans", async () => {
       const query = await vscode.window.showInputBox({
         title: "Kraken Atlas: Find Orphaned Code Candidates",
@@ -232,7 +244,7 @@ async function runDoctorCommand(extensionPath: string, output: vscode.OutputChan
   );
 }
 
-type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "flow" | "search" | "where-to-add" | "orphans" | "duplicates";
+type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "hotspots" | "flow" | "search" | "where-to-add" | "orphans" | "duplicates";
 
 async function runQueryCommand(output: vscode.OutputChannel, queryType: ExtensionQueryType, query: string, contextName?: string): Promise<void> {
   const workspaceRoot = getWorkspaceRoot();
@@ -267,6 +279,9 @@ async function runQueryCommand(output: vscode.OutputChannel, queryType: Extensio
         }
         if (queryType === "pattern-map") {
           return service.findPatternMap(query);
+        }
+        if (queryType === "hotspots") {
+          return service.findArchitectureHotspots(query);
         }
         if (queryType === "flow") {
           return service.findFlow(query);
@@ -310,6 +325,9 @@ async function runQuery(workspaceRoot: string, queryType: ExtensionQueryType, qu
     }
     if (queryType === "pattern-map") {
       return service.findPatternMap(query);
+    }
+    if (queryType === "hotspots") {
+      return service.findArchitectureHotspots(query);
     }
     if (queryType === "flow") {
       return service.findFlow(query);
@@ -590,6 +608,9 @@ function registerLanguageModelTools(context: vscode.ExtensionContext, _output: v
           if (queryType === "pattern-map") {
             return service.findPatternMap(query);
           }
+          if (queryType === "hotspots") {
+            return service.findArchitectureHotspots(query);
+          }
           if (queryType === "orphans") {
             return service.findOrphans(query);
           }
@@ -612,7 +633,7 @@ interface ToolQueryInput {
 }
 
 function normalizeToolQueryType(value: string | undefined): ExtensionQueryType | undefined {
-  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "pattern" || value === "pattern-map" || value === "flow" || value === "search" || value === "where-to-add" || value === "orphans" || value === "duplicates") {
+  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "pattern" || value === "pattern-map" || value === "hotspots" || value === "flow" || value === "search" || value === "where-to-add" || value === "orphans" || value === "duplicates") {
     return value;
   }
   if (value === "symbols") {
@@ -626,6 +647,9 @@ function normalizeToolQueryType(value: string | undefined): ExtensionQueryType |
   }
   if (value === "patterns-map" || value === "map-patterns") {
     return "pattern-map";
+  }
+  if (value === "hotspot" || value === "architecture-hotspots" || value === "architecture") {
+    return "hotspots";
   }
   return undefined;
 }

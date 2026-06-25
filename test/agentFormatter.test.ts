@@ -190,6 +190,17 @@ test("renderAgentResponse prioritizes where-to-add file recommendations", () => 
     flow: [],
     evidence: [
       {
+        recordType: "patternFit",
+        patternId: "pattern:web:html-form-handler",
+        patternName: "HTML form handler",
+        category: "ui-flow",
+        confidence: 0.82,
+        frequency: 4,
+        guidance: "Mirror the existing form, route, handler, and validation path.",
+        matchedFiles: ["Views/User/Edit.cshtml"],
+        exampleFiles: ["Views/User/Edit.cshtml", "Controllers/UserController.cs"]
+      },
+      {
         recordType: "fileRecommendation",
         file: "Views/User/Edit.cshtml",
         score: 10,
@@ -202,6 +213,7 @@ test("renderAgentResponse prioritizes where-to-add file recommendations", () => 
   } satisfies QueryResponse);
 
   assert.match(output, /1\. Views\/User\/Edit.cshtml/);
+  assert.match(output, /Pattern fit: HTML form handler \(ui-flow\)\. Mirror the existing form, route, handler, and validation path\. Examples: Views\/User\/Edit\.cshtml\./);
   assert.match(output, /1\. match: user field/);
   assert.doesNotMatch(output, /score 10/);
   assert.doesNotMatch(output, /POSTS_TO: form -> route/);
@@ -275,6 +287,42 @@ test("renderAgentResponse formats project metadata as a structured summary", () 
   assert.match(output, /12 files, 30 symbols, 20 relationships/);
   assert.match(output, /Projects: Web\/Web\.csproj/);
   assert.doesNotMatch(output, /\{"recordType":"projectSummary"/);
+});
+
+test("renderAgentResponse formats architecture hotspots as cautious guidance", () => {
+  const output = renderAgentResponse({
+    query: "hotspots",
+    answer: "Found 1 architecture hotspot candidate(s). Treat central files as shared context, not default edit targets.",
+    confidence: 0.72,
+    files: ["Web/Program.cs"],
+    symbols: [],
+    relationships: [],
+    patterns: [],
+    flow: [],
+    evidence: [
+      {
+        recordType: "hotspotSummary",
+        message: "Hotspots are ranked from relationship volume, relationship-type diversity, and shared graph endpoints."
+      },
+      {
+        recordType: "architectureHotspot",
+        file: "Web/Program.cs",
+        role: "composition-root",
+        relationshipCount: 12,
+        distinctRelationshipTypes: 3,
+        sharedEndpointCount: 5,
+        topRelationshipTypes: [{ type: "REGISTERS", count: 8 }, { type: "USES_MIDDLEWARE", count: 2 }],
+        guidance: "Avoid editing unless the task is explicitly startup, DI, routing, middleware, or shared setup. Use this for architecture context first."
+      }
+    ],
+    nextQueries: ['kraken-atlas query relationships "Web/Program.cs"'],
+    estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
+  } satisfies QueryResponse);
+
+  assert.match(output, /1\. Web\/Program\.cs/);
+  assert.match(output, /Hotspot: Web\/Program\.cs \[composition-root\]; 12 relationship\(s\), 3 type\(s\), 5 shared endpoint\(s\)\. Top: REGISTERS=8, USES_MIDDLEWARE=2\./);
+  assert.match(output, /Avoid editing unless the task is explicitly startup, DI, routing, middleware, or shared setup/);
+  assert.doesNotMatch(output, /\{"recordType":"architectureHotspot"/);
 });
 
 test("renderAgentResponse labels code-health findings as review candidates", () => {

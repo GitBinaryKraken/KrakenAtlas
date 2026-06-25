@@ -439,6 +439,51 @@ export class QueryService {
     });
   }
 
+  public findArchitectureHotspots(query = "hotspots"): QueryResponse {
+    const ambiguity = this.ambiguousContextResponse("hotspots", query);
+    if (ambiguity) {
+      return ambiguity;
+    }
+
+    const context = this.relationshipContextWhere("WHERE");
+    const rows = this.execJson(
+      `SELECT json FROM relationships
+       ${context.sql}
+       ORDER BY file, start_line
+       LIMIT 5000;`,
+      context.params
+    );
+    const terms = queryTerms(query).filter((term) => !["hotspot", "hotspots", "architecture", "central", "shared"].includes(term));
+    const scopedRows = terms.length
+      ? rows.filter((row) => terms.some((term) => JSON.stringify(row).toLowerCase().includes(term)))
+      : rows;
+    const activeRows = scopedRows.length || !terms.length ? scopedRows : rows;
+    const hotspots = buildArchitectureHotspots(activeRows).slice(0, 8);
+    const files = hotspots.map((hotspot) => stringValue(hotspot.file));
+
+    return compactResponse({
+      query,
+      answer: hotspots.length
+        ? `Found ${hotspots.length} architecture hotspot candidate(s). Treat central files as shared context, not default edit targets.`
+        : "No architecture hotspot candidates found. Rebuild the map or run relationship queries first.",
+      confidence: hotspots.length ? 0.72 : 0.2,
+      evidence: [
+        {
+          recordType: "hotspotSummary",
+          message: "Hotspots are ranked from relationship volume, relationship-type diversity, and shared graph endpoints. They are useful for architecture awareness and risk checks."
+        },
+        ...hotspots,
+        {
+          recordType: "caveat",
+          message: "High centrality is not proof a file should be edited. Prefer feature-specific files unless the task explicitly touches startup, config, routing, shared services, or cross-cutting behavior."
+        }
+      ],
+      files,
+      relationships: activeRows.slice(0, 12),
+      nextQueries: uniqueStrings(files.slice(0, 6).map((file) => `kraken-atlas query relationships "${file}"`))
+    });
+  }
+
   public findOrphans(query = ""): QueryResponse {
     return this.findCodeHealthFindings("orphan-callable", query);
   }
@@ -688,6 +733,7 @@ export class QueryService {
       ? rankedRecommendations.filter((recommendation) => browserStateFiles.has(recommendation.file))
       : rankedRecommendations).slice(0, 8);
     const capabilityAssessment = assessExistingCapabilityEvidence(query, flow.relationships);
+    const patternFit = buildPatternFitEvidence(patterns, recommendations);
     const caveats = buildWhereToAddCaveats(query, recommendations, flow.relationships);
     const files = recommendations.map((recommendation) => recommendation.file);
     const confidence = Math.min(calculateWhereToAddConfidence(query, recommendations, flow.relationships), flow.confidence);
@@ -698,7 +744,7 @@ export class QueryService {
         ? `${capabilityAssessment.answerPrefix}Likely edit locations for "${query}" ranked by text matches, feature-flow edges, and detected project patterns.`
         : `No strong edit-location recommendation found for "${query}". Start with search and project queries.`,
       confidence,
-      evidence: [...recommendations, ...capabilityAssessment.evidence, ...strongAnchors, ...patterns.slice(0, 4).map(patternEvidence), ...caveats],
+      evidence: [...recommendations, ...capabilityAssessment.evidence, ...patternFit, ...strongAnchors, ...patterns.slice(0, 4).map(patternEvidence), ...caveats],
       files,
       symbols: uniqueStrings(flow.symbols),
       relationships: flow.relationships.slice(0, 12),
@@ -1697,6 +1743,122 @@ function buildPatternMapSummaries(patterns: Array<Record<string, unknown>>): Arr
     });
 }
 
+function buildArchitectureHotspots(relationships: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+  interface HotspotStats {
+    file: string;
+    relationshipCount: number;
+    types: Map<string, number>;
+    endpoints: Set<string>;
+  }
+
+  const byFile = new Map<string, HotspotStats>();
+  const endpointCounts = new Map<string, number>();
+
+  for (const relationship of relationships) {
+    const file = stringValue(relationship.file);
+    if (!file || isLikelyTestFile(file)) {
+      continue;
+    }
+
+    const stats = byFile.get(file) ?? {
+      file,
+      relationshipCount: 0,
+      types: new Map<string, number>(),
+      endpoints: new Set<string>()
+    };
+    stats.relationshipCount += 1;
+    const type = stringValue(relationship.type) || "UNKNOWN";
+    stats.types.set(type, (stats.types.get(type) ?? 0) + 1);
+    for (const endpoint of [stringValue(relationship.from), stringValue(relationship.to)]) {
+      if (endpoint && !isCommonExternalSymbol(endpoint)) {
+        stats.endpoints.add(endpoint);
+        endpointCounts.set(endpoint, (endpointCounts.get(endpoint) ?? 0) + 1);
+      }
+    }
+    byFile.set(file, stats);
+  }
+
+  return [...byFile.values()]
+    .map((stats) => {
+      const sharedEndpointCount = [...stats.endpoints].filter((endpoint) => (endpointCounts.get(endpoint) ?? 0) > 1).length;
+      const relationshipTypes = [...stats.types.entries()]
+        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+        .map(([type, count]) => ({ type, count }));
+      const role = inferHotspotRole(stats.file, relationshipTypes.map((entry) => entry.type));
+      const score = stats.relationshipCount + stats.types.size * 3 + sharedEndpointCount * 2 + hotspotRoleScore(role);
+      return {
+        recordType: "architectureHotspot",
+        file: stats.file,
+        score,
+        role,
+        relationshipCount: stats.relationshipCount,
+        distinctRelationshipTypes: stats.types.size,
+        sharedEndpointCount,
+        topRelationshipTypes: relationshipTypes.slice(0, 5),
+        guidance: hotspotGuidance(role)
+      };
+    })
+    .filter((hotspot) => numberValue(hotspot.score) >= 4)
+    .sort((left, right) =>
+      numberValue(right.score) - numberValue(left.score) ||
+      numberValue(right.relationshipCount) - numberValue(left.relationshipCount) ||
+      stringValue(left.file).localeCompare(stringValue(right.file))
+    );
+}
+
+function inferHotspotRole(file: string, relationshipTypes: string[]): string {
+  const normalized = file.replace(/\\/g, "/");
+  const basename = normalized.split("/").pop() ?? normalized;
+  const types = new Set(relationshipTypes);
+
+  if (/^(Program|Startup)\.cs$/iu.test(basename) || types.has("REGISTERS") || types.has("USES_MIDDLEWARE")) {
+    return "composition-root";
+  }
+  if (/appsettings|config|options|settings/iu.test(normalized) || types.has("USES_CONFIG_KEY") || types.has("BINDS_OPTIONS")) {
+    return "configuration";
+  }
+  if (/(Controller|PageModel|\.cshtml\.cs)$/iu.test(basename) || types.has("MAPS_ROUTE") || types.has("HANDLES_REQUEST")) {
+    return "entry-point";
+  }
+  if (/(Service|Manager|Repository|Adapter)\.cs$/iu.test(basename) || types.has("CALLS_REPOSITORY") || types.has("USES_DBSET")) {
+    return "service-layer";
+  }
+  if (/\.(js|ts|tsx)$/iu.test(basename) || types.has("HANDLES_EVENT") || types.has("WRITES_QUERY_STRING")) {
+    return "client-flow";
+  }
+  return "shared-bridge";
+}
+
+function hotspotRoleScore(role: string): number {
+  switch (role) {
+    case "composition-root":
+    case "configuration":
+      return 4;
+    case "entry-point":
+    case "service-layer":
+      return 2;
+    default:
+      return 0;
+  }
+}
+
+function hotspotGuidance(role: string): string {
+  switch (role) {
+    case "composition-root":
+      return "Avoid editing unless the task is explicitly startup, DI, routing, middleware, or shared setup. Use this for architecture context first.";
+    case "configuration":
+      return "Likely shared configuration/options surface. Check binding and usage before adding new keys or settings.";
+    case "entry-point":
+      return "Likely request or UI entry point. Use it to understand flow, then prefer the matching feature service/model/view files for edits.";
+    case "service-layer":
+      return "Likely shared behavior or data orchestration. Check callers before changing behavior.";
+    case "client-flow":
+      return "Likely browser interaction hub. Check related selectors, events, routes, and state writes before editing.";
+    default:
+      return "Likely bridge file across multiple graph relationships. Use for orientation and risk checks before editing.";
+  }
+}
+
 function averagePatternConfidence(patterns: Array<Record<string, unknown>>): number {
   if (patterns.length === 0) {
     return 0;
@@ -2162,6 +2324,50 @@ function buildWhereToAddCaveats(query: string, recommendations: FileRecommendati
   }
 
   return caveats;
+}
+
+function buildPatternFitEvidence(patterns: Array<Record<string, unknown>>, recommendations: FileRecommendation[]): Array<Record<string, unknown>> {
+  if (!patterns.length || !recommendations.length) {
+    return [];
+  }
+
+  const recommendedFiles = new Set(recommendations.map((recommendation) => recommendation.file));
+  const ranked = patterns
+    .map((pattern) => {
+      const instances = Array.isArray(pattern.instances) ? pattern.instances as Array<Record<string, unknown>> : [];
+      const exampleFiles = uniqueStrings(instances.flatMap((instance) =>
+        Array.isArray(instance.files) ? instance.files.filter((file): file is string => typeof file === "string") : []
+      ));
+      const matchedFiles = exampleFiles.filter((file) => recommendedFiles.has(file));
+      const score = matchedFiles.length * 10 + numberValue(pattern.confidence) * 3 + Math.min(3, numberValue(pattern.frequency));
+      return { pattern, exampleFiles, matchedFiles, score };
+    })
+    .filter((entry) => entry.exampleFiles.length > 0)
+    .sort((left, right) =>
+      right.score - left.score ||
+      numberValue(right.pattern.confidence) - numberValue(left.pattern.confidence) ||
+      stringValue(left.pattern.name).localeCompare(stringValue(right.pattern.name))
+    );
+
+  const best = ranked[0];
+  if (!best) {
+    return [];
+  }
+
+  return [{
+    recordType: "patternFit",
+    patternId: best.pattern.id,
+    patternName: best.pattern.name,
+    category: best.pattern.category,
+    confidence: best.pattern.confidence,
+    frequency: best.pattern.frequency,
+    guidance: best.pattern.agentGuidance,
+    matchedFiles: best.matchedFiles.slice(0, 5),
+    exampleFiles: best.exampleFiles.slice(0, 5),
+    message: best.matchedFiles.length
+      ? `Recommended files overlap the ${stringValue(best.pattern.name) || "detected"} pattern.`
+      : `Closest detected pattern is ${stringValue(best.pattern.name) || stringValue(best.pattern.id)}.`
+  }];
 }
 
 function calculateWhereToAddConfidence(query: string, recommendations: FileRecommendation[], relationships: Array<Record<string, unknown>>): number {

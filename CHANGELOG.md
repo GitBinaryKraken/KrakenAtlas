@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added `query pattern-map` plus Command Palette and language-model tool support for architecture pattern overviews grouped by detected area.
+- Added explicit pattern-fit evidence to `where-to-add` so agents see which local convention to copy before opening files.
+- Added `query hotspots` plus Command Palette and language-model tool support for cautious architecture hotspot discovery over central/shared graph files.
 - Documented Pattern Map as the first-step workflow for choosing which local convention an agent should follow before `where-to-add`.
 
 ## 0.1.26

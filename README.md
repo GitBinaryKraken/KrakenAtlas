@@ -379,6 +379,7 @@ Open `Ctrl+Shift+P` and run:
 | `Kraken Atlas: Show Relationships` | Exploring dependencies, callers, implementations, routes, config usage, or project references. |
 | `Kraken Atlas: Show Detected Pattern` | Inspecting repeated conventions such as service registration or controller-service flow. |
 | `Kraken Atlas: Show Pattern Map` | Seeing detected architecture areas and the strongest patterns to follow before planning edits. |
+| `Kraken Atlas: Show Architecture Hotspots` | Finding central shared files to inspect carefully before cross-cutting edits. |
 | `Kraken Atlas: Find Orphaned Code Candidates` | Reviewing private/internal C# methods with no mapped incoming static evidence. |
 | `Kraken Atlas: Find Duplicate Code Blocks` | Reviewing exact normalized duplicate C# method bodies. |
 | `Kraken Atlas: Trace Feature Flow` | Following behavior through UI, route, service, repository, and related code. |
@@ -399,6 +400,8 @@ After installing the workspace terminal CLI shim, agents can run:
 ```powershell
 kraken-atlas doctor --workspace . --format agent
 kraken-atlas query project --workspace . --format agent
+kraken-atlas query pattern-map --workspace . --context WebUI --format agent
+kraken-atlas query hotspots --workspace . --context WebUI --format agent
 kraken-atlas query where-to-add "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query flow "profile setup after registration" --workspace . --context WebUI --format agent
 kraken-atlas query relationships "Kelp2025_WebUI/Services/KelpUserManager.cs" --workspace . --context WebUI --format agent

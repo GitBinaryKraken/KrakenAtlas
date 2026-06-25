@@ -17,7 +17,8 @@ export function renderAgentResponse(response: QueryResponse): string {
     const fileEvidence = evidence.filter((item) => item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file)));
     const caveats = evidence.filter((item) => item.recordType === "caveat");
     const capability = evidence.filter((item) => item.recordType === "capabilityAssessment");
-    evidence = [...caveats, ...capability, ...fileEvidence];
+    const patternFit = evidence.filter((item) => item.recordType === "patternFit");
+    evidence = [...caveats, ...capability, ...patternFit, ...fileEvidence];
   }
   const lines = [
     "Answer",
@@ -134,7 +135,7 @@ function selectEvidence(response: QueryResponse): Array<Record<string, unknown>>
     const anchors = response.evidence.filter((item) => item.recordType === "strongAnchor");
     return [...summaries, ...response.flow, ...anchors];
   }
-  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "reference", "referenceSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
+  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "patternFit", "reference", "referenceSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "architectureHotspot", "hotspotSummary", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
     return response.evidence;
   }
   if (response.relationships.length) {
@@ -233,6 +234,18 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
     return `- Pattern area: ${stringValue(item.category)}; ${item.patternCount ?? 0} pattern(s), ${item.totalFrequency ?? 0} observed edge(s), avg confidence ${formatDecimal(item.averageConfidence)}.${names ? ` Top: ${names}.` : ""}`;
   }
 
+  if (item.recordType === "hotspotSummary") {
+    return `- Scope: ${truncate(stringValue(item.message), 190)}`;
+  }
+
+  if (item.recordType === "architectureHotspot") {
+    const relationshipTypes = Array.isArray(item.topRelationshipTypes)
+      ? item.topRelationshipTypes.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object")
+      : [];
+    const topTypes = relationshipTypes.slice(0, 3).map((row) => `${stringValue(row.type)}=${row.count ?? 0}`).join(", ");
+    return `- Hotspot: ${stringValue(item.file)} [${stringValue(item.role)}]; ${item.relationshipCount ?? 0} relationship(s), ${item.distinctRelationshipTypes ?? 0} type(s), ${item.sharedEndpointCount ?? 0} shared endpoint(s).${topTypes ? ` Top: ${topTypes}.` : ""} ${truncate(stringValue(item.guidance), 130)}`;
+  }
+
   if (item.recordType === "findingSummary") {
     return `- Scope: ${truncate(stringValue(item.message), 190)}`;
   }
@@ -252,6 +265,14 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
 
   if (item.recordType === "capabilityAssessment") {
     return `- Capability: ${truncate(stringValue(item.message), 160)}`;
+  }
+
+  if (item.recordType === "patternFit") {
+    const matchedFiles = Array.isArray(item.matchedFiles) ? item.matchedFiles.filter((value): value is string => typeof value === "string") : [];
+    const exampleFiles = Array.isArray(item.exampleFiles) ? item.exampleFiles.filter((value): value is string => typeof value === "string") : [];
+    const examples = matchedFiles.length ? matchedFiles : exampleFiles;
+    const exampleText = examples.length ? ` Examples: ${examples.slice(0, 3).join(", ")}.` : "";
+    return `- Pattern fit: ${stringValue(item.patternName) || stringValue(item.patternId)} (${stringValue(item.category)}). ${truncate(stringValue(item.guidance), 140)}${exampleText}`;
   }
 
   if (item.recordType === "referenceSummary") {

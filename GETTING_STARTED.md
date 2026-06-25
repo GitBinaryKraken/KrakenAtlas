@@ -99,6 +99,8 @@ Good starting commands after installing the workspace terminal CLI:
 ```powershell
 kraken-atlas doctor --workspace . --format agent
 kraken-atlas query project --workspace . --format agent
+kraken-atlas query pattern-map --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query hotspots --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query where-to-add "requested change" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query flow "feature or behavior" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query relationships "FileOrSymbolName" --workspace . --context ProjectOrFolderName --format agent
@@ -159,6 +161,7 @@ Useful first playbooks:
 - Find UI post: `kraken-atlas query flow "button or form action name" --workspace . --context ProjectOrFolderName --format agent`
 - Find callers: `kraken-atlas query relationships "ServiceOrMethodName" --workspace . --context ProjectOrFolderName --format agent`
 - Find persistence: `kraken-atlas query where-to-add "persist field-or-entity-name" --workspace . --context ProjectOrFolderName --format agent`
+- Review shared hotspots: `kraken-atlas query hotspots --workspace . --context ProjectOrFolderName --format agent`
 - Review orphan candidates: `kraken-atlas query orphans --workspace . --context ProjectOrFolderName --format agent`
 - Review exact duplicate methods: `kraken-atlas query duplicates --workspace . --context ProjectOrFolderName --format agent`
 
@@ -175,12 +178,13 @@ Useful first playbooks:
 | `Show Relationships` | You want dependencies, callers, implementations, routes, config usage, or project references. | Shows graph edges for the entered symbol, file, type, or graph id. |
 | `Show Detected Pattern` | You want examples of a convention. | Shows repeated patterns such as controller-service, options/config, validation/auth, middleware, or repository data flow. |
 | `Show Pattern Map` | You want the repo's architecture patterns before planning a change. | Groups detected conventions by architecture area and points to follow-up pattern or relationship queries. |
+| `Show Architecture Hotspots` | You want central shared files before cross-cutting edits. | Ranks files by relationship volume, relationship-type diversity, and shared endpoints with cautious edit guidance. |
 | `Find Orphaned Code Candidates` | You want conservative unused-method leads. | Shows private/internal C# methods with no mapped incoming static evidence and warns you to verify dynamic use. |
 | `Find Duplicate Code Blocks` | You want exact duplication leads. | Shows grouped exact normalized C# method bodies with file and line locations. |
 | `Trace Feature Flow` | You want context for a behavior like login or image storage. | Returns a compact path through related UI/backend/data files. |
 | `Suggest Where To Add Code` | You are planning a change. | Ranks likely edit files with reasons, related patterns, and caveats. |
 | `Search Map` | You have a broad text term. | Searches indexed file, symbol, relationship, and pattern text. |
-| `Export Context Pack` | You want a bounded markdown context bundle. | Writes `.kraken-atlas/context-pack.md`. Terminal use can source the pack from `flow`, `where-to-add`, `search`, `relationships`, `symbol`, `references`, `pattern`, `pattern-map`, or `project`. |
+| `Export Context Pack` | You want a bounded markdown context bundle. | Writes `.kraken-atlas/context-pack.md`. Terminal use can source the pack from `flow`, `where-to-add`, `search`, `relationships`, `symbol`, `references`, `pattern`, `pattern-map`, `hotspots`, or `project`. |
 | `Install Agent Instructions` | You want workspace guidance for AI coding agents. | Creates or updates `AGENTS.md` with query-first instructions. |
 | `Install CLI For Workspace Terminals` | You want `kraken-atlas` to work in VS Code terminals for this workspace. | Creates `.kraken-atlas/bin` shims and updates `.vscode/settings.json`; open a new terminal afterward. |
 | `Install AI Agent Setup` | You want agent instructions and terminal CLI setup in one step. | Updates `AGENTS.md`, installs `.agents/skills/kraken-atlas`, creates workspace CLI shims, and updates terminal PATH settings. |

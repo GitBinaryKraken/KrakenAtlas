@@ -23,7 +23,7 @@ interface CliOptions {
   limit?: number;
 }
 
-type QueryCommandType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "flow" | "search" | "where-to-add" | "orphans" | "duplicates";
+type QueryCommandType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "hotspots" | "flow" | "search" | "where-to-add" | "orphans" | "duplicates";
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
@@ -210,6 +210,11 @@ function runQuery(service: QueryService, queryType: string, query: string, optio
     case "patterns-map":
     case "map-patterns":
       return service.findPatternMap(query || "pattern-map");
+    case "hotspots":
+    case "hotspot":
+    case "architecture-hotspots":
+    case "architecture":
+      return service.findArchitectureHotspots(query || "hotspots");
     case "flow":
       return service.findFlow(query);
     case "search":
@@ -261,6 +266,11 @@ function normalizeQueryType(value: string): QueryCommandType | undefined {
     case "patterns-map":
     case "map-patterns":
       return "pattern-map";
+    case "hotspots":
+    case "hotspot":
+    case "architecture-hotspots":
+    case "architecture":
+      return "hotspots";
     case "flow":
       return "flow";
     case "search":
@@ -466,14 +476,15 @@ Usage:
   kraken-atlas update [--workspace <path>] [--format json|info|md|agent] [--quiet]
   kraken-atlas doctor [--workspace <path>] [--format json|info|md|agent]
   kraken-atlas install-agent [--workspace <path>] [--format json|info|md|agent]
-  kraken-atlas context [flow|where-to-add|search|relationships|symbol|references|pattern|pattern-map|project|orphans|duplicates] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
-  kraken-atlas query <project|symbol|references|relationships|pattern|pattern-map|flow|search|where-to-add|orphans|duplicates> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--limit <n>]
+  kraken-atlas context [flow|where-to-add|search|relationships|symbol|references|pattern|pattern-map|hotspots|project|orphans|duplicates] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
+  kraken-atlas query <project|symbol|references|relationships|pattern|pattern-map|hotspots|flow|search|where-to-add|orphans|duplicates> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--limit <n>]
 
 Agent loop:
   kraken-atlas doctor --workspace . --format agent
   kraken-atlas update --workspace . --format agent
   kraken-atlas query flow "feature or behavior" --workspace . --format agent
   kraken-atlas query pattern-map --workspace . --format agent
+  kraken-atlas query hotspots --workspace . --format agent
   kraken-atlas query flow "feature or behavior" --workspace . --context WebApp --format agent
   kraken-atlas query where-to-add "requested change" --workspace . --format agent
   kraken-atlas query orphans --workspace . --context WebUI --format agent
