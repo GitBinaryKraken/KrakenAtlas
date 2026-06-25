@@ -87,9 +87,9 @@ Use this sequence when an AI agent is trying to reduce context before editing:
 
 1. `Check Map Health`.
 2. Pick a project/folder context for multi-project workspaces. Partial names such as `WebUI` can resolve to indexed projects such as `Kelp2025_WebUI`.
-3. Use `Suggest Where To Add Code` for planned changes, or `Trace Feature Flow` for existing behavior.
+3. Use `Plan Code Change` for planned features, `Suggest Where To Add Code` for focused edit-location questions, or `Trace Feature Flow` for existing behavior.
 4. Use `Show Relationships`, `Find References`, `Find Symbol`, or `Search Map` only to expand from the first answer.
-5. Use `Export Context Pack` only after the target files are narrowed, or use `kraken-atlas context where-to-add "requested change" --workspace . --context ProjectOrFolderName --format md` from the terminal.
+5. Use `Export Context Pack` only after the target files are narrowed, or use `kraken-atlas context plan-change "requested change" --workspace . --context ProjectOrFolderName --format md` from the terminal.
 6. Stop expanding once `Open These Files` and `Evidence` answer the immediate task.
 
 If the agent already knows an anchor such as a property, class, method, route, selector, file, config key, or graph id, query the map directly instead of asking a broad recommendation question first.
@@ -101,6 +101,7 @@ kraken-atlas doctor --workspace . --format agent
 kraken-atlas query project --workspace . --format agent
 kraken-atlas query pattern-map --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query hotspots --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query plan-change "requested change" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query where-to-add "requested change" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query flow "feature or behavior" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query relationships "FileOrSymbolName" --workspace . --context ProjectOrFolderName --format agent
@@ -111,7 +112,7 @@ kraken-atlas query search "natural language terms" --workspace . --context Proje
 kraken-atlas query orphans "optional method or file filter" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query duplicates "optional method or file filter" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query drift "optional feature or file filter" --workspace . --context ProjectOrFolderName --format agent
-kraken-atlas context where-to-add "requested change" --workspace . --context ProjectOrFolderName --format md
+kraken-atlas context plan-change "requested change" --workspace . --context ProjectOrFolderName --format md
 ```
 
 Direct map-query loop:
@@ -155,6 +156,7 @@ Those tools are read-only and return compact map answers. The terminal CLI remai
 Useful first playbooks:
 
 - Add/change field: `kraken-atlas query where-to-add "add field-name to feature-name" --workspace . --context ProjectOrFolderName --format agent`
+- Plan a feature implementation: `kraken-atlas query plan-change "requested change" --workspace . --context ProjectOrFolderName --format agent`
 - Add validation/auth: `kraken-atlas query where-to-add "add validation for request-name" --workspace . --context ProjectOrFolderName --format agent`
 - Add endpoint/handler: `kraken-atlas query where-to-add "add endpoint for feature-name" --workspace . --context ProjectOrFolderName --format agent`
 - Add setting/option: `kraken-atlas query where-to-add "add setting for feature-name" --workspace . --context ProjectOrFolderName --format agent`
@@ -186,8 +188,9 @@ Useful first playbooks:
 | `Find Pattern Drift Candidates` | You want places that may violate local architecture conventions. | Shows cautious candidates such as controllers bypassing service delegation or services bypassing repository data-flow patterns. |
 | `Trace Feature Flow` | You want context for a behavior like login or image storage. | Returns a compact path through related UI/backend/data files. |
 | `Suggest Where To Add Code` | You are planning a change. | Ranks likely edit files with reasons, related patterns, and caveats. |
+| `Plan Code Change` | You want a compact implementation plan before opening files. | Combines edit-file ranking, pattern fit, hotspot/drift risk checks, and a context-pack command. |
 | `Search Map` | You have a broad text term. | Searches indexed file, symbol, relationship, and pattern text. |
-| `Export Context Pack` | You want a bounded markdown context bundle. | Writes `.kraken-atlas/context-pack.md`. Terminal use can source the pack from `flow`, `where-to-add`, `search`, `relationships`, `symbol`, `references`, `pattern`, `pattern-map`, `hotspots`, `drift`, or `project`. |
+| `Export Context Pack` | You want a bounded markdown context bundle. | Writes `.kraken-atlas/context-pack.md`. Terminal use can source the pack from `flow`, `where-to-add`, `plan-change`, `search`, `relationships`, `symbol`, `references`, `pattern`, `pattern-map`, `hotspots`, `drift`, or `project`. |
 | `Install Agent Instructions` | You want workspace guidance for AI coding agents. | Creates or updates `AGENTS.md` with query-first instructions. |
 | `Install CLI For Workspace Terminals` | You want `kraken-atlas` to work in VS Code terminals for this workspace. | Creates `.kraken-atlas/bin` shims and updates `.vscode/settings.json`; open a new terminal afterward. |
 | `Install AI Agent Setup` | You want agent instructions and terminal CLI setup in one step. | Updates `AGENTS.md`, installs `.agents/skills/kraken-atlas`, creates workspace CLI shims, and updates terminal PATH settings. |

@@ -145,6 +145,18 @@ export function activate(context: vscode.ExtensionContext): void {
       const contextName = await promptForContext();
       await runQueryCommand(output, "where-to-add", query, contextName);
     }),
+    vscode.commands.registerCommand("krakenAtlas.planChange", async () => {
+      const query = await vscode.window.showInputBox({
+        title: "Kraken Atlas: Plan Code Change",
+        prompt: "Describe the feature or change to plan",
+        placeHolder: "add notification preferences"
+      });
+      if (!query) {
+        return;
+      }
+      const contextName = await promptForContext();
+      await runQueryCommand(output, "plan-change", query, contextName);
+    }),
     vscode.commands.registerCommand("krakenAtlas.searchMap", async () => {
       const query = await vscode.window.showInputBox({
         title: "Kraken Atlas: Search Map",
@@ -256,7 +268,7 @@ async function runDoctorCommand(extensionPath: string, output: vscode.OutputChan
   );
 }
 
-type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "hotspots" | "flow" | "search" | "where-to-add" | "orphans" | "duplicates" | "drift";
+type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "hotspots" | "flow" | "search" | "where-to-add" | "plan-change" | "orphans" | "duplicates" | "drift";
 
 async function runQueryCommand(output: vscode.OutputChannel, queryType: ExtensionQueryType, query: string, contextName?: string): Promise<void> {
   const workspaceRoot = getWorkspaceRoot();
@@ -310,6 +322,9 @@ async function runQueryCommand(output: vscode.OutputChannel, queryType: Extensio
         if (queryType === "drift") {
           return service.findDrift(query);
         }
+        if (queryType === "plan-change") {
+          return service.planChange(query);
+        }
         return service.whereToAdd(query);
       }, { projectContext: contextName });
 
@@ -358,6 +373,9 @@ async function runQuery(workspaceRoot: string, queryType: ExtensionQueryType, qu
     }
     if (queryType === "drift") {
       return service.findDrift(query);
+    }
+    if (queryType === "plan-change") {
+      return service.planChange(query);
     }
     return service.whereToAdd(query);
   }, { projectContext: contextName });
@@ -638,6 +656,9 @@ function registerLanguageModelTools(context: vscode.ExtensionContext, _output: v
           if (queryType === "drift") {
             return service.findDrift(query);
           }
+          if (queryType === "plan-change") {
+            return service.planChange(query);
+          }
           return service.whereToAdd(query);
         }, { projectContext: stringValue(input.context) });
         return textToolResult(renderContextPack(response, { workspaceRoot }));
@@ -654,8 +675,11 @@ interface ToolQueryInput {
 }
 
 function normalizeToolQueryType(value: string | undefined): ExtensionQueryType | undefined {
-  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "pattern" || value === "pattern-map" || value === "hotspots" || value === "flow" || value === "search" || value === "where-to-add" || value === "orphans" || value === "duplicates" || value === "drift") {
+  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "pattern" || value === "pattern-map" || value === "hotspots" || value === "flow" || value === "search" || value === "where-to-add" || value === "plan-change" || value === "orphans" || value === "duplicates" || value === "drift") {
     return value;
+  }
+  if (value === "plan") {
+    return "plan-change";
   }
   if (value === "symbols") {
     return "symbol";

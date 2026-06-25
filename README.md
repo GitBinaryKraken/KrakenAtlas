@@ -204,7 +204,7 @@ A good Kraken Atlas workflow looks like this:
 
 1. Check map health before reading source files.
 2. Pick a project context in parent workspaces, such as `WebUI`, `Api`, or `AdminTools`.
-3. Ask `where-to-add` or `flow` before opening folders.
+3. Ask `plan-change`, `where-to-add`, or `flow` before opening folders.
 4. Expand only with targeted relationship, symbol, reference, or search queries.
 5. Export a context pack once the likely edit files are known.
 6. Stop opening files once the answer and evidence cover the immediate task.
@@ -214,9 +214,10 @@ Example terminal workflow:
 ```powershell
 kraken-atlas doctor --workspace . --format agent
 kraken-atlas query project --workspace . --format agent
+kraken-atlas query plan-change "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query where-to-add "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query flow "profile setup after registration" --workspace . --context WebUI --format agent
-kraken-atlas context where-to-add "add initial profile setup steps after user registration" --workspace . --context WebUI --format md
+kraken-atlas context plan-change "add initial profile setup steps after user registration" --workspace . --context WebUI --format md
 ```
 
 ### Direct Map Queries For Agents
@@ -332,6 +333,7 @@ Use `Kraken Atlas: Find Orphaned Code Candidates` to inspect private/internal C#
 
 | Task | Start With | Expand Only If Needed |
 | --- | --- | --- |
+| Plan a feature implementation | `plan-change "requested change"` | Use the returned context-pack command after reviewing pattern fit, edit files, drift, and hotspot warnings. |
 | Add or change a field | `where-to-add "add field-name to feature-name"` | `relationships "Returned/File.cs"` for model/entity, form/view, handler/controller, service, data, and validation files. |
 | Add validation or authorization | `where-to-add "add validation for request-name"` | Validator, request/model, controller/page handler, service, and auth relationships. |
 | Add an endpoint or handler | `where-to-add "add endpoint for feature-name"` | `flow "nearest existing endpoint or route"` to mirror the local route/controller/page/service pattern. |
@@ -386,6 +388,7 @@ Open `Ctrl+Shift+P` and run:
 | `Kraken Atlas: Find Pattern Drift Candidates` | Reviewing places that may diverge from detected local architecture patterns. |
 | `Kraken Atlas: Trace Feature Flow` | Following behavior through UI, route, service, repository, and related code. |
 | `Kraken Atlas: Suggest Where To Add Code` | Getting likely edit locations for a requested change. |
+| `Kraken Atlas: Plan Code Change` | Combining likely edit files, local pattern fit, risk checks, and a context-pack command for a planned feature. |
 | `Kraken Atlas: Search Map` | Searching indexed map text before opening files. |
 | `Kraken Atlas: Export Context Pack` | Writing a bounded markdown context pack for an agent. |
 | `Kraken Atlas: Install Agent Instructions` | Creating or updating workspace `AGENTS.md` guidance. |
@@ -404,6 +407,7 @@ kraken-atlas doctor --workspace . --format agent
 kraken-atlas query project --workspace . --format agent
 kraken-atlas query pattern-map --workspace . --context WebUI --format agent
 kraken-atlas query hotspots --workspace . --context WebUI --format agent
+kraken-atlas query plan-change "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query where-to-add "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query flow "profile setup after registration" --workspace . --context WebUI --format agent
 kraken-atlas query relationships "Kelp2025_WebUI/Services/KelpUserManager.cs" --workspace . --context WebUI --format agent
@@ -412,7 +416,7 @@ kraken-atlas query references "KelpUserManager" --workspace . --context WebUI --
 kraken-atlas query references "ITranslationDictionaryService" --workspace . --context WebUI --format agent
 kraken-atlas query symbol "RegisterModel" --workspace . --context WebUI --format agent
 kraken-atlas query search "profile setup registration" --workspace . --context WebUI --format agent
-kraken-atlas context where-to-add "add initial profile setup steps after user registration" --workspace . --context WebUI --format md
+kraken-atlas context plan-change "add initial profile setup steps after user registration" --workspace . --context WebUI --format md
 ```
 
 If the agent cannot find `kraken-atlas` but the shim exists, use `.\.kraken-atlas\bin\kraken-atlas.cmd` in place of `kraken-atlas`.

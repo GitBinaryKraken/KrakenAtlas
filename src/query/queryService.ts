@@ -763,6 +763,75 @@ export class QueryService {
     });
   }
 
+  public planChange(query: string): QueryResponse {
+    const ambiguity = this.ambiguousContextResponse("plan-change", query);
+    if (ambiguity) {
+      return ambiguity;
+    }
+
+    const where = this.whereToAdd(query);
+    const hotspots = this.findArchitectureHotspots(query);
+    const drift = this.findDrift(query);
+    const files = where.files.slice(0, 6);
+    const fileSet = new Set(files);
+    const fileRecommendations = where.evidence
+      .filter((item) => item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file)))
+      .slice(0, 6);
+    const patternFit = where.evidence.filter((item) => item.recordType === "patternFit").slice(0, 2);
+    const caveats = where.evidence.filter((item) => item.recordType === "caveat").slice(0, 2);
+    const avoidHotspots = hotspots.evidence
+      .filter((item) => item.recordType === "architectureHotspot" && !fileSet.has(stringValue(item.file)))
+      .slice(0, 3)
+      .map((item) => ({
+        recordType: "planAvoidFile",
+        file: item.file,
+        role: item.role,
+        reason: "Central/shared hotspot. Inspect only if this change touches shared setup, configuration, routing, or cross-cutting behavior."
+      }));
+    const driftFindings = drift.evidence
+      .filter((item) => item.recordType === "finding")
+      .slice(0, 3);
+    const contextCommand = `kraken-atlas context plan-change "${query.replace(/"/g, '\\"')}"`;
+
+    return compactResponse({
+      query,
+      answer: files.length
+        ? `Implementation plan for "${query}" with likely edit files, pattern guidance, risk checks, and a bounded context command.`
+        : `No implementation plan found for "${query}". Start with search and project queries.`,
+      confidence: Math.min(where.confidence + (patternFit.length ? 0.05 : 0), 0.92),
+      evidence: [
+        {
+          recordType: "changePlanSummary",
+          editFileCount: files.length,
+          patternFitCount: patternFit.length,
+          driftCount: driftFindings.length,
+          avoidFileCount: avoidHotspots.length,
+          message: "Open likely edit files first, copy the local pattern, avoid central files initially, then export context only after the plan is accepted."
+        },
+        ...caveats,
+        ...patternFit,
+        ...fileRecommendations,
+        ...avoidHotspots,
+        ...driftFindings,
+        {
+          recordType: "contextPackCommand",
+          command: contextCommand,
+          message: "Use this after reviewing the plan to create a bounded context pack for implementation."
+        }
+      ],
+      files,
+      symbols: where.symbols,
+      relationships: where.relationships,
+      patterns: where.patterns,
+      nextQueries: uniqueStrings([
+        contextCommand,
+        ...where.nextQueries.slice(0, 4),
+        "kraken-atlas query hotspots",
+        "kraken-atlas query drift"
+      ]).slice(0, 8)
+    });
+  }
+
   private findSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>> {
     const terms = queryTerms(query);
     if (terms.length === 0) {

@@ -10,7 +10,7 @@ The `main` branch has a clean committed checkpoint at:
 1434700 Add pattern-aware Atlas querying
 ```
 
-After that commit, we continued with three feature slices: making `where-to-add` show explicit pattern-fit guidance, adding a cautious architecture-hotspots query inspired by the Graphify/NetworkX competitor review, and adding the first pattern-drift candidate.
+After that commit, we continued with four feature slices: making `where-to-add` show explicit pattern-fit guidance, adding a cautious architecture-hotspots query inspired by the Graphify/NetworkX competitor review, adding initial pattern-drift candidates, and adding `plan-change` as the one-step implementation planning query.
 
 ## Uncommitted Work In Progress
 
@@ -38,7 +38,8 @@ What changed:
 - `query drift` now reports initial pattern-drift candidates:
   - controllers directly accessing repository/data relationships when controller-service delegation is already detected
   - services directly querying/writing DbSet-style data when service-to-repository and repository data-flow patterns are already detected
-- The CLI, Command Palette, VS Code language-model tool manifest, README, getting-started guide, and changelog expose the hotspot and drift queries.
+- `query plan-change` now combines likely edit files, pattern fit, hotspot/drift risk checks, and a bounded context-pack command.
+- The CLI, Command Palette, VS Code language-model tool manifest, README, getting-started guide, agent skill, and changelog expose the new planning workflow.
 - Tests verify raw query evidence, compact rendered output, package contributions, and CLI help.
 
 Verification:
@@ -77,11 +78,12 @@ Atlas implications:
 
 ## Recommended Next Steps
 
-1. Commit the current drift slice as a clean checkpoint.
+1. Commit the current `plan-change` slice as a clean checkpoint.
 2. Run a CLI smoke test against a real mapped workspace:
+   - `kraken-atlas query plan-change "requested change" --workspace . --context WebUI --format agent`
    - `kraken-atlas query hotspots --workspace . --context WebUI --format agent`
    - `kraken-atlas query drift --workspace . --context WebUI --format agent`
-   - `kraken-atlas query where-to-add "requested change" --workspace . --context WebUI --format agent`
+   - `kraken-atlas context plan-change "requested change" --workspace . --context WebUI --format md`
 3. Add the next cautious pattern-drift candidate:
    - form post or endpoint exists without nearby validation
 4. Add pattern-specific feedback prompts to `ALPHA_FEEDBACK.md`.

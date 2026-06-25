@@ -22,9 +22,10 @@ test("CLI help and version are discoverable", async () => {
 
   assert.match(help.stdout, new RegExp(`Kraken Atlas ${escapedVersion}`));
   assert.match(help.stdout, /kraken-atlas query <project\|symbol/);
+  assert.match(help.stdout, /where-to-add\|plan-change/);
   assert.match(help.stdout, /pattern-map\|hotspots\|flow/);
   assert.match(help.stdout, /duplicates\|drift/);
-  assert.match(help.stdout, /kraken-atlas context \[flow\|where-to-add\|search/);
+  assert.match(help.stdout, /kraken-atlas context \[flow\|where-to-add\|plan-change\|search/);
   assert.match(help.stdout, /kraken-atlas context where-to-add "requested change"/);
   assert.match(help.stdout, /json\|info\|md\|agent/);
   assert.match(help.stdout, /Use agent for compact token-saving output; info\/md for richer human-readable output/);
@@ -140,6 +141,7 @@ test("package files include runtime assets and exclude source/test folders", asy
   assert.ok(commands.includes("krakenAtlas.findDuplicates"));
   assert.ok(commands.includes("krakenAtlas.findDrift"));
   assert.ok(commands.includes("krakenAtlas.whereToAdd"));
+  assert.ok(commands.includes("krakenAtlas.planChange"));
   assert.ok(commands.includes("krakenAtlas.searchMap"));
   assert.ok(commands.includes("krakenAtlas.exportContextPack"));
   assert.ok(commands.includes("krakenAtlas.installAgentInstructions"));
@@ -154,6 +156,10 @@ test("package files include runtime assets and exclude source/test folders", asy
   assert.match(
     packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
     /where-to-add/
+  );
+  assert.match(
+    packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
+    /plan-change/
   );
   assert.match(
     packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,

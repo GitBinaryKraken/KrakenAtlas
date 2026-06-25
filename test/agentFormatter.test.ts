@@ -325,6 +325,68 @@ test("renderAgentResponse formats architecture hotspots as cautious guidance", (
   assert.doesNotMatch(output, /\{"recordType":"architectureHotspot"/);
 });
 
+test("renderAgentResponse formats change plans as compact implementation guidance", () => {
+  const output = renderAgentResponse({
+    query: "add notification preferences",
+    answer: "Implementation plan for \"add notification preferences\" with likely edit files, pattern guidance, risk checks, and a bounded context command.",
+    confidence: 0.85,
+    files: ["Web/Controllers/NotificationController.cs", "Web/Services/NotificationService.cs"],
+    symbols: [],
+    relationships: [],
+    patterns: [],
+    flow: [],
+    evidence: [
+      {
+        recordType: "changePlanSummary",
+        editFileCount: 2,
+        patternFitCount: 1,
+        avoidFileCount: 1,
+        driftCount: 1,
+        message: "Open likely edit files first, copy the local pattern, avoid central files initially."
+      },
+      {
+        recordType: "patternFit",
+        patternId: "pattern:aspnet:controller-service-flow",
+        patternName: "Controller-service flow",
+        category: "feature-flow",
+        guidance: "Add endpoint behavior through the existing controller-service pair.",
+        matchedFiles: ["Web/Controllers/NotificationController.cs", "Web/Services/NotificationService.cs"]
+      },
+      {
+        recordType: "fileRecommendation",
+        file: "Web/Controllers/NotificationController.cs",
+        score: 20,
+        reasons: ["Search match in symbol notification preferences."]
+      },
+      {
+        recordType: "planAvoidFile",
+        file: "Web/Program.cs",
+        role: "composition-root",
+        reason: "Central/shared hotspot. Inspect only if this change touches shared setup."
+      },
+      {
+        recordType: "finding",
+        kind: "pattern-drift",
+        title: "Controller bypasses service-layer pattern",
+        summary: "A controller relationship directly uses CALLS_REPOSITORY.",
+        locations: [{ file: "Web/Controllers/LegacyNotificationController.cs", range: { startLine: 25 } }]
+      },
+      {
+        recordType: "contextPackCommand",
+        command: "kraken-atlas context plan-change \"add notification preferences\""
+      }
+    ],
+    nextQueries: ['kraken-atlas context plan-change "add notification preferences"'],
+    estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
+  } satisfies QueryResponse);
+
+  assert.match(output, /Plan: 2 likely edit file\(s\), 1 pattern fit\(s\), 1 central file\(s\) to avoid initially, 1 drift candidate\(s\)/);
+  assert.match(output, /Pattern fit: Controller-service flow/);
+  assert.match(output, /Avoid initially: Web\/Program\.cs \[composition-root\]/);
+  assert.match(output, /Context pack: kraken-atlas context plan-change/);
+  assert.doesNotMatch(output, /\{"recordType":"changePlanSummary"/);
+});
+
 test("renderAgentResponse labels code-health findings as review candidates", () => {
   const output = renderAgentResponse({
     query: "orphans", answer: "Found 1 orphan callable candidate(s).", confidence: 0.9,

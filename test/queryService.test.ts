@@ -637,6 +637,7 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     const flowResult = service.findFlow("save-user");
     const trimRelationships = service.findRelationships("string.Trim");
     const whereToAddResult = service.whereToAdd("add user endpoint field");
+    const planChangeResult = service.planChange("add user endpoint field");
     const scopedService = new QueryService(database, { projectContext: "Web" });
     const scopedFlowResult = scopedService.findFlow("save-user");
     const scopedSearchResult = scopedService.search("save-user");
@@ -683,6 +684,12 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
       Array.isArray(item.matchedFiles) &&
       item.matchedFiles.includes("Controllers/UserController.cs")
     ));
+    assert.match(planChangeResult.answer, /Implementation plan/);
+    assert.ok(planChangeResult.files.length > 0);
+    assert.ok(planChangeResult.evidence.some((item) => item.recordType === "fileRecommendation"));
+    assert.ok(planChangeResult.evidence.some((item) => item.recordType === "changePlanSummary"));
+    assert.ok(planChangeResult.evidence.some((item) => item.recordType === "contextPackCommand"));
+    assert.ok(planChangeResult.nextQueries.some((query) => query.includes("context plan-change")));
     assert.ok(scopedFlowResult.flow.some((edge) => edge.file === "Web/UserController.cs"));
     assert.ok(scopedFlowResult.flow.some((edge) => edge.type === "PROJECT_REFERENCES"));
     assert.ok(!scopedFlowResult.flow.some((edge) => stringValue(edge.file).startsWith("AdminTools/")));

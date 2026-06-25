@@ -11,14 +11,15 @@ Agents need a callable CLI in their VS Code terminal. The normal setup is:
 3. Verify `kraken-atlas --help`.
 4. Run `kraken-atlas doctor --workspace . --format agent`.
 5. Choose `--context ProjectOrFolderName` in parent workspaces.
-6. Use `where-to-add` for planned changes.
-7. Use `flow` for existing behavior.
-8. Use `relationships` for a known file or symbol.
-9. Use direct map queries when you already have an anchor such as a property, class, method, route, selector, file, config key, or graph id.
-10. Use `search` only as fallback discovery.
-11. Use `orphans` and `duplicates` for code-health review, never automatic cleanup.
-12. Use `context` only after narrowing the target.
-13. Stop when `Open These Files` and `Evidence` answer the immediate task.
+6. Use `plan-change` for planned feature implementation.
+7. Use `where-to-add` for focused edit-location questions.
+8. Use `flow` for existing behavior.
+9. Use `relationships` for a known file or symbol.
+10. Use direct map queries when you already have an anchor such as a property, class, method, route, selector, file, config key, or graph id.
+11. Use `search` only as fallback discovery.
+12. Use `orphans`, `duplicates`, and `drift` for review candidates, never automatic cleanup or refactoring.
+13. Use `context` only after narrowing the target.
+14. Stop when `Open These Files` and `Evidence` answer the immediate task.
 
 If `kraken-atlas` is not recognized, do not assume a global install is needed. Some agent terminals do not inherit VS Code's integrated-terminal PATH settings. If the workspace shim exists, use it directly:
 
@@ -43,6 +44,7 @@ Use the terminal CLI when those tools are unavailable or when the agent needs co
 kraken-atlas --help
 kraken-atlas doctor --workspace . --format agent
 kraken-atlas query project --workspace . --format agent
+kraken-atlas query plan-change "requested change" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query where-to-add "requested change" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query flow "feature or behavior" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query relationships "FileOrSymbolName" --workspace . --context ProjectOrFolderName --format agent
@@ -52,7 +54,8 @@ kraken-atlas query symbol "ClassOrMethodName" --workspace . --context ProjectOrF
 kraken-atlas query search "natural language terms" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query orphans "optional filter" --workspace . --context ProjectOrFolderName --format agent
 kraken-atlas query duplicates "optional filter" --workspace . --context ProjectOrFolderName --format agent
-kraken-atlas context where-to-add "requested change" --workspace . --context ProjectOrFolderName --format md
+kraken-atlas query drift "optional filter" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas context plan-change "requested change" --workspace . --context ProjectOrFolderName --format md
 ```
 
 ## Direct Map Query Loop
@@ -82,9 +85,10 @@ Use direct map queries for questions like:
 - Treat empty `references` output as a coverage signal, not proof a symbol is unused. Follow the returned relationship/search fallback commands for Razor markup, model binding, generated code, string conventions, reflection, or dynamic framework usage.
 - Treat `orphans` as candidates only. Verify reflection, dynamic/framework invocation, generated code, and external consumers before deletion.
 - Treat `duplicates` as exact normalized callable-body groups. Confirm duplication is unintentional before consolidating code.
+- Treat `drift` as pattern-review candidates. Verify local intent and nearby examples before changing architecture.
 - Prefer `--format agent` for compact output.
 - Use `--format info` when a human-readable expanded answer is needed.
-- Create a context pack for handoff with `kraken-atlas context where-to-add "requested change" --workspace . --context ProjectOrFolderName --format md`.
+- Create a context pack for handoff with `kraken-atlas context plan-change "requested change" --workspace . --context ProjectOrFolderName --format md`.
 
 ## Playbooks
 
@@ -95,7 +99,7 @@ Use `ProjectOrFolderName` for the app you are editing. In parent workspaces, do 
 Start:
 
 ```bash
-kraken-atlas query where-to-add "add field-name to feature-name" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query plan-change "add field-name to feature-name" --workspace . --context ProjectOrFolderName --format agent
 ```
 
 Inspect the top model/entity, form/view, controller/page model, service, repository/data, and validation files returned. Expand only the files you will edit:
@@ -111,7 +115,7 @@ Stop when the returned files cover storage, binding, validation, and display/upd
 Start:
 
 ```bash
-kraken-atlas query where-to-add "add validation for request-name" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query plan-change "add validation for request-name" --workspace . --context ProjectOrFolderName --format agent
 ```
 
 Inspect validator, request/model, controller/page handler, service, and authorization evidence. Expand validator or handler relationships only if the first answer lacks the actual rule location.

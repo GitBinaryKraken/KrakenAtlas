@@ -5,9 +5,10 @@ import type { UpdateProjectResult } from "../rebuild/updateProject";
 export function renderAgentResponse(response: QueryResponse): string {
   let evidence = selectEvidence(response);
   const isWhereToAdd = evidence.some((item) => item.recordType === "fileRecommendation");
+  const isChangePlan = evidence.some((item) => item.recordType === "changePlanSummary");
   const isJavaScriptInteractionFlow = response.flow.some((item) => ["EMITS_EVENT", "SUBSCRIBES_EVENT", "UPDATES_ELEMENT_STATE"].includes(stringValue(item.type)));
-  const fileLimit = isWhereToAdd ? 4 : 8;
-  const evidenceLimit = isWhereToAdd ? 4 : isJavaScriptInteractionFlow ? 11 : response.flow.length ? 9 : 6;
+  const fileLimit = isChangePlan ? 5 : isWhereToAdd ? 4 : 8;
+  const evidenceLimit = isChangePlan ? 8 : isWhereToAdd ? 4 : isJavaScriptInteractionFlow ? 11 : response.flow.length ? 9 : 6;
   const nextCommandLimit = 3;
   const responseFiles = response.flow.length ? visibleEvidenceFiles(evidence, evidenceLimit) : response.files;
   const files = responseFiles.slice(0, fileLimit);
@@ -18,7 +19,13 @@ export function renderAgentResponse(response: QueryResponse): string {
     const caveats = evidence.filter((item) => item.recordType === "caveat");
     const capability = evidence.filter((item) => item.recordType === "capabilityAssessment");
     const patternFit = evidence.filter((item) => item.recordType === "patternFit");
-    evidence = [...caveats, ...capability, ...patternFit, ...fileEvidence];
+    const planSummary = evidence.filter((item) => item.recordType === "changePlanSummary");
+    const avoidFiles = evidence.filter((item) => item.recordType === "planAvoidFile");
+    const drift = evidence.filter((item) => item.recordType === "finding" && item.kind === "pattern-drift");
+    const contextPack = evidence.filter((item) => item.recordType === "contextPackCommand");
+    evidence = isChangePlan
+      ? [...planSummary, ...caveats, ...capability, ...patternFit, ...fileEvidence, ...avoidFiles, ...drift, ...contextPack]
+      : [...caveats, ...capability, ...patternFit, ...fileEvidence];
   }
   const lines = [
     "Answer",
@@ -135,7 +142,7 @@ function selectEvidence(response: QueryResponse): Array<Record<string, unknown>>
     const anchors = response.evidence.filter((item) => item.recordType === "strongAnchor");
     return [...summaries, ...response.flow, ...anchors];
   }
-  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "patternFit", "reference", "referenceSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "architectureHotspot", "hotspotSummary", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
+  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "patternFit", "changePlanSummary", "planAvoidFile", "contextPackCommand", "reference", "referenceSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "architectureHotspot", "hotspotSummary", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
     return response.evidence;
   }
   if (response.relationships.length) {
@@ -265,6 +272,18 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
 
   if (item.recordType === "capabilityAssessment") {
     return `- Capability: ${truncate(stringValue(item.message), 160)}`;
+  }
+
+  if (item.recordType === "changePlanSummary") {
+    return `- Plan: ${item.editFileCount ?? 0} likely edit file(s), ${item.patternFitCount ?? 0} pattern fit(s), ${item.avoidFileCount ?? 0} central file(s) to avoid initially, ${item.driftCount ?? 0} drift candidate(s). ${truncate(stringValue(item.message), 120)}`;
+  }
+
+  if (item.recordType === "planAvoidFile") {
+    return `- Avoid initially: ${stringValue(item.file)}${item.role ? ` [${stringValue(item.role)}]` : ""}. ${truncate(stringValue(item.reason), 140)}`;
+  }
+
+  if (item.recordType === "contextPackCommand") {
+    return `- Context pack: ${stringValue(item.command)}`;
   }
 
   if (item.recordType === "patternFit") {
