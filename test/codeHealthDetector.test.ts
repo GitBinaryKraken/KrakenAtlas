@@ -90,6 +90,46 @@ test("code-health detector flags controller data access when service delegation 
   assert.match(drift.evidence.join(" "), /edgeType=CALLS_REPOSITORY/);
 });
 
+test("code-health detector flags service data access when repository flow is established", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-service-drift-"));
+  const relationships: RelationshipRecord[] = [
+    relationship(
+      "relationship:calls:service-repository",
+      "symbol:csharp:Web.Services.UserService.Get()",
+      "symbol:csharp:Web.Repositories.IUserRepository.Get()",
+      "CALLS_REPOSITORY",
+      "Web/Services/UserService.cs"
+    ),
+    relationship(
+      "relationship:queries:repository-dbset",
+      "symbol:csharp:Web.Repositories.UserRepository.Get()",
+      "symbol:csharp:Web.Data.ApplicationDbContext.Users",
+      "QUERIES",
+      "Web/Repositories/UserRepository.cs"
+    ),
+    relationship(
+      "relationship:queries:service-dbset",
+      "symbol:csharp:Web.Services.LegacyUserService.Save()",
+      "symbol:csharp:Web.Data.ApplicationDbContext.Users",
+      "WRITES",
+      "Web/Services/LegacyUserService.cs"
+    )
+  ];
+
+  const findings = await detectCodeHealthFindings({
+    workspaceRoot: root,
+    symbols: [],
+    references: [],
+    relationships
+  });
+
+  const drift = findings.find((finding) => finding.kind === "pattern-drift" && finding.title === "Service bypasses repository data-flow pattern");
+  assert.ok(drift);
+  assert.strictEqual(drift.locations[0].file, "Web/Services/LegacyUserService.cs");
+  assert.match(drift.evidence.join(" "), /pattern=repository-data-flow/);
+  assert.match(drift.evidence.join(" "), /edgeType=WRITES/);
+});
+
 test("finding queries return scoped compact records from SQLite", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-finding-query-"));
   const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");

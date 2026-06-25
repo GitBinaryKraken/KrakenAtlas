@@ -35,7 +35,9 @@ What changed:
 - Agent output renders this as a compact `Pattern fit` line near the top of the evidence section.
 - `query hotspots` now ranks architecture hotspot candidates from relationship volume, relationship-type diversity, and shared graph endpoints.
 - Hotspot output is cautious by design: central files are shared context and risk surfaces, not default edit targets.
-- `query drift` now reports the first pattern-drift candidate: controllers directly accessing repository/data relationships when controller-service delegation is already detected.
+- `query drift` now reports initial pattern-drift candidates:
+  - controllers directly accessing repository/data relationships when controller-service delegation is already detected
+  - services directly querying/writing DbSet-style data when service-to-repository and repository data-flow patterns are already detected
 - The CLI, Command Palette, VS Code language-model tool manifest, README, getting-started guide, and changelog expose the hotspot and drift queries.
 - Tests verify raw query evidence, compact rendered output, package contributions, and CLI help.
 
@@ -80,8 +82,7 @@ Atlas implications:
    - `kraken-atlas query hotspots --workspace . --context WebUI --format agent`
    - `kraken-atlas query drift --workspace . --context WebUI --format agent`
    - `kraken-atlas query where-to-add "requested change" --workspace . --context WebUI --format agent`
-3. Add the next cautious pattern-drift candidates:
-   - service writes directly to `DbContext` where repository usage is the norm
+3. Add the next cautious pattern-drift candidate:
    - form post or endpoint exists without nearby validation
 4. Add pattern-specific feedback prompts to `ALPHA_FEEDBACK.md`.
 

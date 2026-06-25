@@ -131,10 +131,16 @@ async function detectDuplicateCodeBlocks(workspaceRoot: string, symbols: SymbolR
 }
 
 async function detectPatternDrift(relationships: RelationshipRecord[]): Promise<FindingRecord[]> {
+  return [
+    ...detectControllerDataAccessDrift(relationships),
+    ...detectServiceDataAccessDrift(relationships)
+  ];
+}
+
+function detectControllerDataAccessDrift(relationships: RelationshipRecord[]): FindingRecord[] {
   if (!hasControllerServiceFlow(relationships)) {
     return [];
   }
-
   const directDataTypes = new Set(["CALLS_REPOSITORY", "USES_DBSET", "QUERIES", "WRITES"]);
   const candidates = relationships.filter((relationship) =>
     directDataTypes.has(relationship.type) &&
@@ -160,6 +166,37 @@ async function detectPatternDrift(relationships: RelationshipRecord[]): Promise<
   })).filter((finding) => finding.locations[0].file);
 }
 
+function detectServiceDataAccessDrift(relationships: RelationshipRecord[]): FindingRecord[] {
+  if (!hasRepositoryDataFlow(relationships)) {
+    return [];
+  }
+
+  const directDataTypes = new Set(["USES_DBSET", "QUERIES", "WRITES"]);
+  const candidates = relationships.filter((relationship) =>
+    directDataTypes.has(relationship.type) &&
+    isServiceEndpoint(relationship.from, relationship.file) &&
+    !isRepositoryEndpoint(relationship.from, relationship.file)
+  );
+
+  return candidates.map((relationship) => ({
+    recordType: "finding" as const,
+    id: `finding:drift:service-data-access:${stableFindingKey(relationship)}`,
+    kind: "pattern-drift" as const,
+    title: "Service bypasses repository data-flow pattern",
+    severity: "warning" as const,
+    confidence: relationship.type === "USES_DBSET" ? 0.82 : 0.76,
+    summary: `A service relationship directly uses ${relationship.type}. The map also shows service-to-repository and repository data-flow edges elsewhere, so this may drift from the local persistence pattern.`,
+    locations: [{ symbolId: relationship.from, file: relationship.file ?? "", range: relationship.range ?? firstLineRange() }],
+    evidence: [
+      "pattern=repository-data-flow",
+      `edgeType=${relationship.type}`,
+      `from=${relationship.from}`,
+      `to=${relationship.to}`
+    ],
+    caveats: ["Candidate only. Some simple services intentionally access DbContext or DbSet directly. Verify whether this feature owns persistence directly before introducing a repository hop."]
+  })).filter((finding) => finding.locations[0].file);
+}
+
 function hasControllerServiceFlow(relationships: RelationshipRecord[]): boolean {
   return relationships.some((relationship) =>
     (relationship.type === "CALLS" || relationship.type === "INJECTS") &&
@@ -168,8 +205,29 @@ function hasControllerServiceFlow(relationships: RelationshipRecord[]): boolean 
   );
 }
 
+function hasRepositoryDataFlow(relationships: RelationshipRecord[]): boolean {
+  const hasServiceToRepository = relationships.some((relationship) =>
+    relationship.type === "CALLS_REPOSITORY" &&
+    isServiceEndpoint(relationship.from, relationship.file) &&
+    /(?:Repository)(?:[.:]|$)/u.test(relationship.to)
+  );
+  const hasRepositoryDataAccess = relationships.some((relationship) =>
+    ["USES_DBSET", "QUERIES", "WRITES"].includes(relationship.type) &&
+    isRepositoryEndpoint(relationship.from, relationship.file)
+  );
+  return hasServiceToRepository && hasRepositoryDataAccess;
+}
+
 function isControllerEndpoint(symbolId: string, file: string | undefined): boolean {
   return /Controller(?:[.:]|$)/u.test(symbolId) || /(^|\/)Controllers\/.+Controller\.cs$/iu.test((file ?? "").replace(/\\/g, "/"));
+}
+
+function isServiceEndpoint(symbolId: string, file: string | undefined): boolean {
+  return /Service(?:[.:]|$)/u.test(symbolId) || /(^|\/)Services\/.+Service\.cs$/iu.test((file ?? "").replace(/\\/g, "/"));
+}
+
+function isRepositoryEndpoint(symbolId: string, file: string | undefined): boolean {
+  return /Repository(?:[.:]|$)/u.test(symbolId) || /(^|\/)Repositories\/.+Repository\.cs$/iu.test((file ?? "").replace(/\\/g, "/"));
 }
 
 function stableFindingKey(relationship: RelationshipRecord): string {

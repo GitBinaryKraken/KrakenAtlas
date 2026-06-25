@@ -183,7 +183,7 @@ Useful first playbooks:
 | `Show Architecture Hotspots` | You want central shared files before cross-cutting edits. | Ranks files by relationship volume, relationship-type diversity, and shared endpoints with cautious edit guidance. |
 | `Find Orphaned Code Candidates` | You want conservative unused-method leads. | Shows private/internal C# methods with no mapped incoming static evidence and warns you to verify dynamic use. |
 | `Find Duplicate Code Blocks` | You want exact duplication leads. | Shows grouped exact normalized C# method bodies with file and line locations. |
-| `Find Pattern Drift Candidates` | You want places that may violate local architecture conventions. | Shows cautious candidates such as controllers directly accessing repositories/data when controller-service delegation is established. |
+| `Find Pattern Drift Candidates` | You want places that may violate local architecture conventions. | Shows cautious candidates such as controllers bypassing service delegation or services bypassing repository data-flow patterns. |
 | `Trace Feature Flow` | You want context for a behavior like login or image storage. | Returns a compact path through related UI/backend/data files. |
 | `Suggest Where To Add Code` | You are planning a change. | Ranks likely edit files with reasons, related patterns, and caveats. |
 | `Search Map` | You have a broad text term. | Searches indexed file, symbol, relationship, and pattern text. |
