@@ -6,7 +6,7 @@ Kraken Atlas is currently optimized for AI-agent usage in VS Code. First testers
 
 - Node.js 20 or newer.
 - .NET SDK 9 or newer.
-- A C#/.NET Core, ASP.NET Core, Razor/HTML, or vanilla JavaScript project to map.
+- A C#/.NET Core, ASP.NET Core, Razor/HTML, vanilla JavaScript, or first-pass React/TypeScript project to map.
 
 ## Install From A Local Tarball
 
@@ -25,8 +25,8 @@ From this repository:
 
 ```powershell
 npm install
-npm run check:vsix
-code --install-extension ..\pack-artifacts\kraken-atlas-0.1.27.vsix --force
+npm run release:vsix
+code --install-extension ..\pack-artifacts\kraken-atlas-0.2.2.vsix --force
 code --list-extensions --show-versions | Select-String kraken-atlas
 ```
 
@@ -86,7 +86,7 @@ kraken-atlas query where-to-add "add validation to the profile form" --workspace
 Use this sequence when an AI agent is trying to reduce context before editing:
 
 1. `Check Map Health`.
-2. Pick a project/folder context for multi-project workspaces. Partial names such as `WebUI` can resolve to indexed projects such as `Kelp2025_WebUI`.
+2. Pick a project/folder context for multi-project workspaces. Partial names such as `WebUI` can resolve to indexed projects such as `ExampleWebUI`.
 3. Use `Plan Code Change` for planned features, `Suggest Where To Add Code` for focused edit-location questions, or `Trace Feature Flow` for existing behavior.
 4. Use `Show Relationships`, `Find References`, `Find Symbol`, or `Search Map` only to expand from the first answer.
 5. Use `Export Context Pack` only after the target files are narrowed, or use `kraken-atlas context plan-change "requested change" --workspace . --context ProjectOrFolderName --format md` from the terminal.
@@ -162,6 +162,7 @@ Useful first playbooks:
 - Add setting/option: `kraken-atlas query where-to-add "add setting for feature-name" --workspace . --context ProjectOrFolderName --format agent`
 - Trace bug: `kraken-atlas query flow "bug symptom or behavior" --workspace . --context ProjectOrFolderName --format agent`
 - Find UI post: `kraken-atlas query flow "button or form action name" --workspace . --context ProjectOrFolderName --format agent`
+- React component or route work: `kraken-atlas query relationships "ComponentOrHookName" --workspace . --context ProjectOrFolderName --format agent`
 - Find callers: `kraken-atlas query relationships "ServiceOrMethodName" --workspace . --context ProjectOrFolderName --format agent`
 - Find persistence: `kraken-atlas query where-to-add "persist field-or-entity-name" --workspace . --context ProjectOrFolderName --format agent`
 - Review shared hotspots: `kraken-atlas query hotspots --workspace . --context ProjectOrFolderName --format agent`
@@ -208,7 +209,7 @@ From a temporary test workspace:
 
 ```powershell
 npm init -y
-npm install ..\kraken-atlas\kraken-atlas-0.1.27.tgz
+npm install ..\kraken-atlas\kraken-atlas-0.2.2.tgz
 ```
 
 For a project copied into the temp workspace as `.\AdminTools`, run:
@@ -230,9 +231,9 @@ You can also point `--workspace` at a parent folder that contains several relate
 In a parent workspace with several apps, use `--context` when the query should start inside one project or folder:
 
 ```powershell
-.\node_modules\.bin\kraken-atlas.cmd query flow "location" --workspace . --context Kelp2025_WebUI --format agent
-.\node_modules\.bin\kraken-atlas.cmd query where-to-add "add location field" --workspace . --context Kelp2025_WebUI --format agent
-.\node_modules\.bin\kraken-atlas.cmd context "location" --workspace . --context Kelp2025_WebUI --format agent
+.\node_modules\.bin\kraken-atlas.cmd query flow "location" --workspace . --context ExampleWebUI --format agent
+.\node_modules\.bin\kraken-atlas.cmd query where-to-add "add location field" --workspace . --context ExampleWebUI --format agent
+.\node_modules\.bin\kraken-atlas.cmd context "location" --workspace . --context ExampleWebUI --format agent
 ```
 
 `--context` scopes broad search and flow seeds to that project first, while still allowing the returned graph slice to include useful cross-project relationships such as `PROJECT_REFERENCES`.
@@ -315,6 +316,7 @@ After rebuild, the target project contains:
 - The visual graph is intentionally out of scope.
 - MCP is intentionally deferred until the terminal CLI contract is stable.
 - C# semantic changes trigger full rebuilds.
-- Analyzer coverage is strongest for controllers, Razor Pages, services, DI, routes, forms, vanilla JS DOM hooks, options/config, repository/data flow, validation/auth, hosted services, middleware, request handlers, and common EF `DbSet` usage.
+- Analyzer coverage is strongest for controllers, Razor Pages, services, DI, routes, forms, vanilla JS DOM hooks, options/config, repository/data flow, validation/auth, hosted services, middleware, request handlers, and common EF `DbSet` usage. React/TypeScript coverage is first-pass for components, hooks, context, routes, JSX props/events, imports, and API calls, with compiler-backed project discovery, import resolution, declaration/member extraction, and selected prop/call/type edges now present.
+- Full TypeScript type-checker inference, broad generic expansion, complex mapped/indexed types, generated declaration coverage, external package surfaces, and deeper React framework conventions still need more validation.
 - Deeper EF query chains, migrations, unusual validation/auth frameworks, custom middleware wrappers, and nonstandard mediator patterns still need more validation.
 - `doctor` reports categorized analyzer failures for common SDK/runtime, restore/package, project/input, and analyzer-crash cases, but unfamiliar toolchain failures may still be classified as `unknown`.

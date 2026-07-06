@@ -97,7 +97,10 @@ function detectProjectTypes(files: FileRecord[], symbols: SymbolRecord[], relati
     projectTypes.add("csharp");
   }
 
-  if (symbols.some((symbol) => symbol.patterns?.includes("aspnet-controller")) || relationshipTypes.has("MAPS_ROUTE")) {
+  if (
+    symbols.some((symbol) => symbol.patterns?.includes("aspnet-controller")) ||
+    relationships.some((relationship) => relationship.type === "MAPS_ROUTE" && (relationship.from.startsWith("symbol:csharp:") || relationship.id.includes(":aspnet:")))
+  ) {
     projectTypes.add("aspnet-core");
   }
 
@@ -113,8 +116,17 @@ function detectProjectTypes(files: FileRecord[], symbols: SymbolRecord[], relati
     projectTypes.add("razor");
   }
 
-  if (languages.has("javascript")) {
+  if (files.some((file) => [".js", ".mjs", ".cjs"].includes(file.extension)) || symbols.some((symbol) => symbol.patterns?.some((pattern) => pattern.startsWith("vanilla-js")))) {
     projectTypes.add("vanilla-js");
+  }
+  if (languages.has("typescript")) {
+    projectTypes.add("typescript");
+  }
+  if (
+    symbols.some((symbol) => symbol.patterns?.some((pattern) => pattern.startsWith("react-"))) ||
+    relationships.some((relationship) => relationship.type.startsWith("RENDERS_COMPONENT") || relationship.type === "USES_HOOK")
+  ) {
+    projectTypes.add("react");
   }
 
   return [...projectTypes].sort();

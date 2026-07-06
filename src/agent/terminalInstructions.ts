@@ -3,7 +3,7 @@ import * as path from "path";
 
 const beginMarker = "<!-- kraken-atlas:start -->";
 const endMarker = "<!-- kraken-atlas:end -->";
-const defaultSkillVersion = "0.1.27";
+const defaultSkillVersion = "0.2.2";
 
 export interface InstallAgentInstructionsResult {
   filePath: string;
@@ -45,7 +45,7 @@ export async function installAgentSkill(workspaceRoot: string, version = default
 export function renderAgentSkill(): string {
   return `---
 name: kraken-atlas
-description: "Use for questions about a C#/.NET Core, ASP.NET Core, Razor/HTML, or vanilla JavaScript codebase when .kraken-atlas/ exists or Kraken Atlas is installed. Query the local code map before broad file reads to find likely edit locations, relationships, feature flows, patterns, and compact context packs for AI coding agents."
+description: "Use for questions about a C#/.NET Core, ASP.NET Core, Razor/HTML, vanilla JavaScript, or first-pass React/TypeScript codebase when .kraken-atlas/ exists or Kraken Atlas is installed. Query the local code map before broad file reads to find likely edit locations, relationships, feature flows, patterns, and compact context packs for AI coding agents."
 trigger: /kraken-atlas
 ---
 
@@ -90,7 +90,7 @@ kraken-atlas context where-to-add "requested change" --workspace . --context Pro
 
 ## Direct Map Query Loop
 
-When you already know an anchor such as a property, class, method, route, selector, file, config key, or graph id, query the atlas directly before opening source:
+When you already know an anchor such as a property, class, method, route, selector, React component, hook, file, config key, or graph id, query the atlas directly before opening source:
 
 1. \`project\` to choose the context.
 2. \`search\` or \`symbol\` to find the anchor.
@@ -148,6 +148,16 @@ kraken-atlas query flow "button, route, feature, or bug symptom" --workspace . -
 \`\`\`
 
 Use this before opening controllers, views, JavaScript, or services.
+
+## React Component Or Route Work
+
+\`\`\`powershell
+kraken-atlas query pattern-map --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query relationships "ComponentOrHookName" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query flow "button, route, component, or API behavior" --workspace . --context ProjectOrFolderName --format agent
+\`\`\`
+
+Use this for first-pass React/TypeScript maps before opening \`.jsx\`, \`.tsx\`, or \`.ts\` files. Expand \`RENDERS_COMPONENT\`, \`USES_HOOK\`, \`USES_STORE\`, \`PASSES_PROP\`, \`PROVIDES_CONTEXT\`, \`CONSUMES_CONTEXT\`, \`HANDLES_EVENT\`, \`MAPS_ROUTE\`, and \`CALLS_API_ROUTE\` edges one hop at a time.
 
 ## Inspect A Known File Or Symbol
 
@@ -217,7 +227,7 @@ On macOS/Linux:
 1. Check map health.
 2. Pick the target project/folder context when the workspace has multiple projects.
 3. Run \`where-to-add\` for change planning, or \`flow\` for behavior tracing.
-4. When you already know an anchor such as a property, class, method, route, selector, file, config key, or graph id, query the map directly with \`symbol\`, \`search\`, \`relationships\`, or \`references\`.
+4. When you already know an anchor such as a property, class, method, route, selector, React component, hook, file, config key, or graph id, query the map directly with \`symbol\`, \`search\`, \`relationships\`, or \`references\`.
 5. Expand only with \`relationships\`, \`references\`, \`symbol\`, or \`search\` when the first answer is not enough.
 6. Export a context pack only after query results prove which files matter.
 7. Stop opening more files once the returned evidence answers the immediate task.
@@ -242,7 +252,7 @@ If \`kraken-atlas\` is not recognized and \`.kraken-atlas/bin/kraken-atlas.cmd\`
 When the VS Code agent surface exposes extension-contributed language-model tools, use these read-only tools before shell commands:
 
 - \`kraken_atlas_doctor\`: check whether the map is ready.
-- \`kraken_atlas_query\`: run \`project\`, \`where-to-add\`, \`flow\`, \`relationships\`, \`search\`, \`symbol\`, \`references\`, \`pattern\`, \`orphans\`, or \`duplicates\`.
+- \`kraken_atlas_query\`: run \`project\`, \`plan-change\`, \`where-to-add\`, \`flow\`, \`relationships\`, \`search\`, \`symbol\`, \`references\`, \`pattern\`, \`pattern-map\`, \`hotspots\`, \`drift\`, \`orphans\`, or \`duplicates\`.
 - \`kraken_atlas_context_pack\`: create compact context from a narrowed query.
 
 Use terminal commands when those tools are unavailable or when command output needs to be shown directly.
@@ -299,7 +309,7 @@ If the workspace shim exists but PATH injection is unavailable, use:
 - Use \`--format info\` only when a richer human-readable answer is needed.
 - Prefer \`where-to-add\`, \`flow\`, and \`relationships\` over reading full files.
 - Prefer direct map queries when you have a concrete anchor: \`symbol\` for names, \`search\` for text, \`relationships\` for graph edges, and \`references\` for semantic usage.
-- In parent workspaces with multiple projects, add \`--context ProjectOrFolderName\` so broad queries resolve inside the intended project first. Partial names are okay when they clearly match one indexed project, such as \`--context WebUI\` for \`Kelp2025_WebUI\`.
+- In parent workspaces with multiple projects, add \`--context ProjectOrFolderName\` so broad queries resolve inside the intended project first. Partial names are okay when they clearly match one indexed project, such as \`--context WebUI\` for \`ExampleWebUI\`.
 - Use returned file paths and line ranges to open only the smallest useful source slices.
 - Follow \`Next Commands\` one hop at a time before expanding scope.
 - Treat empty \`references\` output as a coverage signal, not proof that a symbol is unused. Follow the returned relationship/search fallback commands for Razor markup, model binding, generated code, string conventions, reflection, or dynamic framework usage.
@@ -325,6 +335,7 @@ If the workspace shim exists but PATH injection is unavailable, use:
 - Find where a UI action posts: \`flow "button or form action name" --workspace . --context ProjectOrFolderName --format agent\`; expand \`POSTS_TO\`, \`HANDLES_EVENT\`, \`CALLS\`, and \`MAPS_ROUTE\`.
 - Find callers of a service method: \`relationships "ServiceOrMethodName" --workspace . --context ProjectOrFolderName --format agent\`; for interface-based services, query both interface and implementation names.
 - Find where data is persisted: \`where-to-add "persist field-or-entity-name" --workspace . --context ProjectOrFolderName --format agent\`; inspect entity/model, DbContext/DbSet, repository, service, and related entry points.
+- React component or route work: \`relationships "ComponentOrHookName" --workspace . --context ProjectOrFolderName --format agent\`, then expand \`RENDERS_COMPONENT\`, \`USES_HOOK\`, \`USES_STORE\`, \`PASSES_PROP\`, \`HANDLES_EVENT\`, \`MAPS_ROUTE\`, or \`CALLS_API_ROUTE\` edges when the first slice needs one more hop.
 - Inspect a known map anchor: \`relationships "PropertyOrSymbolOrFile" --workspace . --context ProjectOrFolderName --format agent\`; add \`--edge WRITES_FIELD --limit 20\` or another edge type when you need a focused slice.
 - Review orphan candidates: \`orphans --workspace . --context ProjectOrFolderName --format agent\`; follow with focused \`relationships\`, \`references\`, and source inspection before deletion.
 - Review duplicate methods: \`duplicates --workspace . --context ProjectOrFolderName --format agent\`; compare every returned file/line location before extracting shared code.
@@ -332,7 +343,7 @@ If the workspace shim exists but PATH injection is unavailable, use:
 
 ## Scope
 
-Kraken Atlas is focused on C#/.NET Core, ASP.NET Core, Razor/HTML, and vanilla JavaScript patterns. Visual graph browsing, static HTML reports, broad narrative reports, hosted code analysis, and MCP-first workflows are not v1 goals.
+Kraken Atlas is focused on C#/.NET Core, ASP.NET Core, Razor/HTML, vanilla JavaScript, and first-pass React/TypeScript patterns. Visual graph browsing, static HTML reports, broad narrative reports, hosted code analysis, and MCP-first workflows are not v1 goals.
 ${endMarker}`;
 }
 

@@ -13,6 +13,7 @@ test("renderAgentInstructions gives agents terminal-first query guidance", () =>
   assert.match(instructions, /Terminal-based AI agents need a callable CLI/);
   assert.match(instructions, /Kraken Atlas: Install AI Agent Setup once/);
   assert.match(instructions, /If `kraken-atlas` is not recognized/);
+  assert.match(instructions, /first-pass React\/TypeScript patterns/);
   assert.match(instructions, /Some agent terminals do not inherit VS Code's integrated-terminal PATH settings/);
   assert.match(instructions, /\.\\\.kraken-atlas\\bin\\kraken-atlas\.cmd --help/);
   assert.match(instructions, /Only ask the user to run Kraken Atlas: Install AI Agent Setup/);
@@ -51,6 +52,9 @@ test("renderAgentInstructions gives agents terminal-first query guidance", () =>
   assert.match(instructions, /search "exact error message or UI label"/);
   assert.match(instructions, /Find where a UI action posts/);
   assert.match(instructions, /POSTS_TO/);
+  assert.match(instructions, /React component or route work/);
+  assert.match(instructions, /RENDERS_COMPONENT/);
+  assert.match(instructions, /CALLS_API_ROUTE/);
   assert.match(instructions, /Find callers of a service method/);
   assert.match(instructions, /relationships "ServiceOrMethodName"/);
   assert.match(instructions, /Find where data is persisted/);
@@ -80,6 +84,7 @@ test("renderAgentSkill provides a project-local .agents skill", () => {
   assert.match(skill, /name: kraken-atlas/);
   assert.match(skill, /trigger: \/kraken-atlas/);
   assert.match(skill, /Use Kraken Atlas before broad source reads/);
+  assert.match(skill, /first-pass React\/TypeScript codebase/);
   assert.match(skill, /\.\\\.kraken-atlas\\bin\\kraken-atlas\.cmd --help/);
   assert.match(skill, /Only ask the user to run `Kraken Atlas: Install AI Agent Setup` when the shim is missing/);
   assert.match(skill, /## Direct Map Query Loop/);
@@ -87,6 +92,8 @@ test("renderAgentSkill provides a project-local .agents skill", () => {
   assert.match(skill, /references\/query-playbooks\.md/);
   assert.match(playbooks, /# Kraken Atlas Query Playbooks/);
   assert.match(playbooks, /kraken-atlas query where-to-add "add field-name to feature-name"/);
+  assert.match(playbooks, /React Component Or Route Work/);
+  assert.match(playbooks, /USES_HOOK/);
   assert.match(playbooks, /where a property is written, displayed, model-bound, persisted, retrieved/);
   assert.match(playbooks, /If output says the search is weak/);
 });

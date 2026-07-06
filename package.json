@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Maps C#/.NET Core, vanilla JavaScript, and HTML/Razor codebases into local queryable code facts for AI context reduction.",
-  "version": "0.1.27",
+  "description": "Maps C#/.NET Core, React/TypeScript, vanilla JavaScript, and HTML/Razor codebases into local queryable code facts for AI context reduction.",
+  "version": "0.2.2",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -35,6 +35,10 @@
     "aspnetcore",
     "razor",
     "javascript",
+    "react",
+    "typescript",
+    "jsx",
+    "tsx",
     "html"
   ],
   "activationEvents": [
@@ -282,7 +286,7 @@
         "krakenAtlas.updateOnSave": {
           "type": "boolean",
           "default": false,
-          "description": "Update Kraken Atlas after saving supported C#/.NET, vanilla JavaScript, HTML, or Razor files."
+          "description": "Update Kraken Atlas after saving supported C#/.NET, React/TypeScript, vanilla JavaScript, HTML, or Razor files."
         },
         "krakenAtlas.excludeDirectories": {
           "type": "array",
@@ -337,7 +341,11 @@
     "compile:test": "tsc -p ./tsconfig.test.json",
     "publish:analyzer": "dotnet publish analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/KrakenAtlas.RoslynAnalyzer.csproj -c Release -o analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish",
     "pack:dry": "npm pack --dry-run",
-    "package:vsix": "node scripts/vsce-package.cjs package --out ../pack-artifacts/kraken-atlas-0.1.27.vsix --no-rewrite-relative-links --allow-missing-repository --skip-license",
+    "package:vsix": "node scripts/vsce-package.cjs package --no-rewrite-relative-links --allow-missing-repository --skip-license",
+    "release:bump": "node scripts/release-bump.cjs",
+    "release:check-version": "node scripts/release-check-version.cjs",
+    "release:history-from-vsix": "node scripts/release-history-from-vsix.cjs",
+    "release:vsix": "node scripts/release-vsix.cjs",
     "check:vsix": "npm run compile && npm run publish:analyzer && npm run package:vsix",
     "check:package": "npm run compile && npm run publish:analyzer && npm pack --dry-run",
     "test": "npm run compile && npm run compile:test && node --test --test-concurrency=1 \"dist-test/test/**/*.js\"",

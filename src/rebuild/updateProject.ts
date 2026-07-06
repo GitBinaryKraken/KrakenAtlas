@@ -33,7 +33,7 @@ export interface UpdateProjectResult extends RebuildProjectResult {
   reason: string;
 }
 
-const webExtensions = new Set([".js", ".mjs", ".cjs", ".html", ".htm", ".cshtml", ".razor"]);
+const webExtensions = new Set([".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".html", ".htm", ".cshtml", ".razor"]);
 const csharpSemanticExtensions = new Set([".cs", ".csproj", ".sln", ".props", ".targets"]);
 
 export async function updateProject(options: RebuildProjectOptions): Promise<UpdateProjectResult> {
@@ -132,7 +132,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
         symbols: webResult.symbols.length,
         references: webResult.references.length,
         relationships: webResult.relationships.length,
-        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web")).length
+        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web") || pattern.id.startsWith("pattern:react")).length
       }
     }
   ];
@@ -220,16 +220,21 @@ function hasCSharpSemanticChange(
 }
 
 function isWebSymbol(symbol: SymbolRecord): boolean {
-  return symbol.language === "javascript" || symbol.language === "razor" || symbol.language === "html" || isWebFile(symbol.file);
+  return symbol.language === "javascript" || symbol.language === "typescript" || symbol.language === "razor" || symbol.language === "html" || isWebFile(symbol.file);
 }
 
 function isWebRelationship(relationship: RelationshipRecord): boolean {
   return (
     isWebFile(relationship.file ?? "") ||
     relationship.id.includes(":web:") ||
+    relationship.id.includes(":react:") ||
+    relationship.from.startsWith("symbol:react:") ||
     relationship.from.startsWith("symbol:javascript:") ||
     relationship.from.startsWith("symbol:razor:") ||
     relationship.from.startsWith("route:web:") ||
+    relationship.to.startsWith("symbol:react:") ||
+    relationship.to.startsWith("prop:react:") ||
+    relationship.to.startsWith("event:react:") ||
     relationship.to.startsWith("symbol:javascript:") ||
     relationship.to.startsWith("symbol:razor:") ||
     relationship.to.startsWith("route:web:")

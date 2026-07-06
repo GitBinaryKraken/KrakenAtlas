@@ -214,6 +214,60 @@ test("realistic .NET feature-flow fixture supports flow and where-to-add queries
   });
 });
 
+test("Kelp multi-project fixture produces shared-contract context focus", async (t) => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const workspaceRoot = path.resolve(projectRoot, "..", "test-projects");
+  const requiredProjects = ["Kelp2025_WebUI", "KelpApi", "KelpApiDomain", "KelpApiLogicLayer"];
+  for (const project of requiredProjects) {
+    if (!await pathExists(path.join(workspaceRoot, project))) {
+      t.skip("Kelp sibling test-projects corpus is not present.");
+      return;
+    }
+  }
+
+  const result = await rebuildProject({
+    extensionPath: projectRoot,
+    workspaceRoot
+  });
+
+  assert.ok(result.fileCount > 100);
+  assert.ok((result.scanSummary?.excludedByReason["directory:bin"] ?? 0) > 0);
+  assert.ok((result.scanSummary?.excludedByReason["directory:obj"] ?? 0) > 0);
+
+  await withQueryService(workspaceRoot, (service) => {
+    const plan = service.planChange("add meta description to page draft");
+    const contextPack = renderContextPack(plan, { workspaceRoot });
+    const pruning = plan.evidence.find((item) => item.recordType === "contextPruning");
+    const boundaries = plan.evidence.filter((item) => item.recordType === "sharedContractBoundary");
+    const domainRecommendation = plan.evidence.find((item) =>
+      item.recordType === "fileRecommendation" &&
+      item.file === "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"
+    );
+    const domainRoles = Array.isArray(domainRecommendation?.symbolRoles) ? domainRecommendation.symbolRoles : [];
+    const domainMembers = Array.isArray(domainRecommendation?.memberHints)
+      ? domainRecommendation.memberHints as Array<Record<string, unknown>>
+      : [];
+
+    assert.ok(plan.files.includes("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"));
+    assert.ok(plan.files.includes("Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs"));
+    assert.ok(boundaries.some((boundary) =>
+      Array.isArray(boundary.projects) &&
+      boundary.projects.includes("KelpApiDomain") &&
+      boundary.projects.includes("Kelp2025_WebUI")
+    ));
+    assert.ok(pruning);
+    assert.ok(Number(pruning?.keptRelationshipCount) < Number(pruning?.originalRelationshipCount));
+    assert.ok(!plan.relationships.some((relationship) => String(relationship.file).includes("Areas/Identity/Pages/Account/ExternalLogin")));
+    assert.strictEqual((domainRecommendation?.projectHint as Record<string, unknown> | undefined)?.project, "KelpApiDomain");
+    assert.ok(domainRoles.includes("request-dto"));
+    assert.ok(domainMembers.some((member) => member.name === "MetaDescription"));
+    assert.match(contextPack, /## Context Focus/);
+    assert.match(contextPack, /Tags: .*page-draft/);
+    assert.match(contextPack, /Shared Contract Checklist/);
+    assert.match(contextPack, /Guidance: project KelpApiDomain; roles .*request-dto/);
+  }, { projectContext: "Kelp2025_WebUI" });
+});
+
 test("Razor carousel fixture supports cross-language editor flow queries", async () => {
   const projectRoot = path.resolve(__dirname, "..", "..");
   const sourceFixture = path.join(projectRoot, "test-fixtures", "razor-carousel-feature");
@@ -283,10 +337,252 @@ test("JavaScript controller fixture returns an ordered click-to-selection-to-hig
   });
 });
 
+test("ReactAgentDashboard fixture rebuilds into queryable React map facts", async (t) => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const sourceFixture = path.resolve(projectRoot, "..", "test-projects", "ReactAgentDashboard");
+  if (!await pathExists(sourceFixture)) {
+    t.skip("ReactAgentDashboard sibling test-projects fixture is not present.");
+    return;
+  }
+
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-react-dashboard-"));
+  await copyDirectory(sourceFixture, workspaceRoot);
+  await rebuildProject({ extensionPath: projectRoot, workspaceRoot });
+
+  const project = JSON.parse(await fs.readFile(path.join(workspaceRoot, ".kraken-atlas", "project.json"), "utf8"));
+  const patterns = await fs.readFile(path.join(workspaceRoot, ".kraken-atlas", "patterns.jsonl"), "utf8");
+
+  assert.ok(project.projectTypes.includes("react"));
+  assert.ok(project.projectTypes.includes("typescript"));
+  assert.ok(!project.projectTypes.includes("aspnet-core"));
+  assert.ok(!project.projectTypes.includes("vanilla-js"));
+  assert.match(patterns, /pattern:react:component-composition/);
+  assert.match(patterns, /pattern:react:hook-context-flow/);
+  assert.match(patterns, /pattern:react:state-store-flow/);
+  assert.match(patterns, /pattern:react:route-api-flow/);
+
+  await withQueryService(workspaceRoot, (service) => {
+    const relationships = service.findRelationships("DashboardPage");
+    const propsRelationships = service.findRelationships("ProjectCardProps");
+    const toolbarRelationships = service.findRelationships("ProjectToolbar");
+    const storeRelationships = service.findRelationships("useProjectSelectionStore");
+    const patternMap = service.findPatternMap();
+
+    assert.ok(relationships.files.includes("src/pages/DashboardPage.tsx"));
+    assert.ok(relationships.relationships.some((relationship) => relationship.type === "MAPS_ROUTE"));
+    assert.ok(relationships.relationships.some((relationship) => relationship.type === "RENDERS_COMPONENT"));
+    assert.ok(relationships.relationships.some((relationship) => relationship.type === "PASSES_PROP"));
+    assert.ok(relationships.relationships.some((relationship) =>
+      relationship.type === "MAPS_ROUTE" &&
+      relationship.from === "symbol:react:src/routes.ts:route:data-dashboard"
+    ));
+    assert.ok(toolbarRelationships.files.includes("src/components/ProjectToolbar.tsx"));
+    assert.ok(toolbarRelationships.relationships.some((relationship) =>
+      relationship.type === "RENDERS_COMPONENT" &&
+      relationship.to === "symbol:react:src/components/ProjectToolbar.tsx:component:ProjectToolbarSearchInput"
+    ));
+    assert.ok(toolbarRelationships.relationships.some((relationship) =>
+      relationship.type === "DECLARES_PROP" &&
+      relationship.to === "symbol:react:src/components/ProjectToolbar.tsx:props:ProjectToolbarProps.resultCount"
+    ));
+    assert.ok(relationships.evidence.some((item) =>
+      item.recordType === "nodeRoleSummary" &&
+      Array.isArray(item.roles) &&
+      item.roles.some((role) => typeof role === "object" && role !== null && (role as { role?: unknown }).role === "react-component")
+    ));
+    assert.ok(propsRelationships.files.includes("src/components/ProjectCard.tsx"));
+    assert.ok(propsRelationships.relationships.some((relationship) =>
+      relationship.type === "HAS_MEMBER" &&
+      typeof relationship.to === "string" &&
+      relationship.to.endsWith(".onOpenProject")
+    ));
+    assert.ok(propsRelationships.relationships.some((relationship) =>
+      relationship.type === "DECLARES_PROP" &&
+      typeof relationship.to === "string" &&
+      relationship.to.endsWith(".onOpenProject")
+    ));
+    assert.ok(propsRelationships.evidence.some((item) =>
+      item.recordType === "nodeMemberSummary" &&
+      Array.isArray(item.members) &&
+      item.members.some((member) => typeof member === "object" && member !== null && (member as { name?: unknown }).name === "project")
+    ));
+    assert.ok(storeRelationships.files.includes("src/stores/useProjectSelectionStore.ts"));
+    assert.ok(storeRelationships.relationships.some((relationship) => relationship.type === "USES_STORE"));
+    assert.ok(storeRelationships.evidence.some((item) =>
+      item.recordType === "nodeRoleSummary" &&
+      Array.isArray(item.roles) &&
+      item.roles.some((role) => typeof role === "object" && role !== null && (role as { role?: unknown }).role === "state-store")
+    ));
+    assert.ok(patternMap.patterns.some((pattern) => pattern.id === "pattern:react:component-composition"));
+    assert.ok(patternMap.patterns.some((pattern) => pattern.id === "pattern:react:hook-context-flow"));
+    assert.ok(patternMap.patterns.some((pattern) => pattern.id === "pattern:react:state-store-flow"));
+    assert.ok(patternMap.patterns.some((pattern) => pattern.id === "pattern:react:route-api-flow"));
+  });
+});
+
+test("ReactWorkflowBoard fixture rebuilds into queryable route and store map facts", async (t) => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const sourceFixture = path.resolve(projectRoot, "..", "test-projects", "ReactWorkflowBoard");
+  if (!await pathExists(sourceFixture)) {
+    t.skip("ReactWorkflowBoard sibling test-projects fixture is not present.");
+    return;
+  }
+
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-react-workflow-"));
+  await copyDirectory(sourceFixture, workspaceRoot);
+  await rebuildProject({ extensionPath: projectRoot, workspaceRoot });
+
+  const project = JSON.parse(await fs.readFile(path.join(workspaceRoot, ".kraken-atlas", "project.json"), "utf8"));
+  const patterns = await fs.readFile(path.join(workspaceRoot, ".kraken-atlas", "patterns.jsonl"), "utf8");
+
+  assert.ok(project.projectTypes.includes("react"));
+  assert.ok(project.projectTypes.includes("typescript"));
+  assert.match(patterns, /pattern:react:state-store-flow/);
+  assert.match(patterns, /pattern:react:route-api-flow/);
+
+  await withQueryService(workspaceRoot, (service) => {
+    const workspaceRelationships = service.findRelationships("WorkspacePage");
+    const storeRelationships = service.findRelationships("useWorkflowStore");
+    const summaryPropsRelationships = service.findRelationships("WorkflowSummaryProps");
+    const patternMap = service.findPatternMap();
+
+    assert.ok(workspaceRelationships.files.includes("src/pages/WorkspacePage.tsx"));
+    assert.ok(workspaceRelationships.relationships.some((relationship) => relationship.type === "MAPS_ROUTE"));
+    assert.ok(workspaceRelationships.relationships.some((relationship) => relationship.type === "USES_STORE"));
+    assert.ok(storeRelationships.files.includes("src/state/useWorkflowStore.ts"));
+    assert.ok(storeRelationships.relationships.some((relationship) => relationship.type === "USES_STORE"));
+    assert.ok(storeRelationships.evidence.some((item) =>
+      item.recordType === "nodeRoleSummary" &&
+      Array.isArray(item.roles) &&
+      item.roles.some((role) => typeof role === "object" && role !== null && (role as { role?: unknown }).role === "state-store")
+    ));
+    assert.ok(summaryPropsRelationships.files.includes("src/components/WorkflowSummary.tsx"));
+    assert.ok(summaryPropsRelationships.relationships.some((relationship) =>
+      relationship.type === "HAS_MEMBER" &&
+      relationship.to === "symbol:react:src/components/WorkflowSummary.tsx:props:WorkflowSummaryProps.onClearSelection"
+    ));
+    assert.ok(summaryPropsRelationships.evidence.some((item) =>
+      item.recordType === "nodeMemberSummary" &&
+      Array.isArray(item.members) &&
+      item.members.some((member) => typeof member === "object" && member !== null && (member as { name?: unknown }).name === "blockedCount")
+    ));
+    assert.ok(patternMap.patterns.some((pattern) => pattern.id === "pattern:react:state-store-flow"));
+  });
+});
+
+test("ReactNextPortal fixture rebuilds Next-style file routes into queryable map facts", async (t) => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const sourceFixture = path.resolve(projectRoot, "..", "test-projects", "ReactNextPortal");
+  if (!await pathExists(sourceFixture)) {
+    t.skip("ReactNextPortal sibling test-projects fixture is not present.");
+    return;
+  }
+
+  const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-react-next-"));
+  await copyDirectory(sourceFixture, workspaceRoot);
+  await rebuildProject({ extensionPath: projectRoot, workspaceRoot });
+
+  const project = JSON.parse(await fs.readFile(path.join(workspaceRoot, ".kraken-atlas", "project.json"), "utf8"));
+  const patterns = await fs.readFile(path.join(workspaceRoot, ".kraken-atlas", "patterns.jsonl"), "utf8");
+
+  assert.ok(project.projectTypes.includes("react"));
+  assert.ok(project.projectTypes.includes("typescript"));
+  assert.match(patterns, /pattern:react:component-composition/);
+  assert.match(patterns, /pattern:react:route-api-flow/);
+
+  await withQueryService(workspaceRoot, (service) => {
+    const homeRelationships = service.findRelationships("app/page.tsx");
+    const workflowRelationships = service.findRelationships("WorkflowPage");
+    const workflowPropsRelationships = service.findRelationships("WorkflowPageProps");
+    const reportRelationships = service.findRelationships("ReportPage");
+    const barrelRelationships = service.findRelationships("components/index.ts");
+    const shellRelationships = service.findRelationships("WorkflowShell");
+    const badgeRelationships = service.findRelationships("InteractiveWorkflowBadge");
+    const actionRelationships = service.findRelationships("saveWorkflowDecision");
+    const routeHandlerRelationships = service.findRelationships("app/api/workflows/[workflowId]/decision/route.ts");
+
+    assert.ok(homeRelationships.relationships.some((relationship) =>
+      relationship.type === "IMPORTS_MODULE" &&
+      relationship.to === "file:components/WorkflowShell.tsx"
+    ));
+    assert.ok(workflowRelationships.files.includes("app/workflows/[workflowId]/page.tsx"));
+    assert.ok(workflowRelationships.relationships.some((relationship) =>
+      relationship.type === "MAPS_ROUTE" &&
+      relationship.from === "symbol:react:app/workflows/[workflowId]/page.tsx:route:path:workflows/:workflowId"
+    ));
+    assert.ok(workflowRelationships.relationships.some((relationship) =>
+      relationship.type === "CALLS" &&
+      relationship.to === "symbol:react:services/workflowClient.ts:function:fetchWorkflowSnapshot"
+    ));
+    assert.ok(workflowRelationships.relationships.some((relationship) =>
+      relationship.type === "RENDERS_COMPONENT" &&
+      relationship.to === "symbol:react:components/WorkflowShell.tsx:component:WorkflowShell"
+    ));
+    assert.ok(workflowPropsRelationships.relationships.some((relationship) =>
+      relationship.type === "HAS_MEMBER" &&
+      relationship.to === "symbol:react:app/workflows/[workflowId]/page.tsx:props:WorkflowPageProps.params.workflowId"
+    ));
+    assert.ok(workflowPropsRelationships.evidence.some((item) =>
+      item.recordType === "nodeMemberSummary" &&
+      Array.isArray(item.members) &&
+      item.members.some((member) => typeof member === "object" && member !== null && (member as { name?: unknown }).name === "params.workflowId")
+    ));
+    assert.ok(reportRelationships.relationships.some((relationship) =>
+      relationship.type === "MAPS_ROUTE" &&
+      relationship.from === "symbol:react:pages/reports/[reportId].tsx:route:path:reports/:reportId"
+    ));
+    assert.ok(barrelRelationships.relationships.some((relationship) =>
+      relationship.type === "RE_EXPORTS_MODULE" &&
+      relationship.to === "file:components/WorkflowShell.tsx"
+    ));
+    assert.ok(shellRelationships.files.includes("components/WorkflowShell.tsx"));
+    assert.ok(shellRelationships.relationships.some((relationship) =>
+      relationship.type === "DECLARES_PROP" &&
+      relationship.to === "symbol:react:components/WorkflowShell.tsx:props:WorkflowShellProps.mode"
+    ));
+    assert.ok(shellRelationships.evidence.some((item) =>
+      item.recordType === "nodeMemberSummary" &&
+      Array.isArray(item.members) &&
+      item.members.some((member) => typeof member === "object" && member !== null && (member as { name?: unknown }).name === "mode")
+    ));
+    assert.ok(badgeRelationships.relationships.some((relationship) =>
+      relationship.type === "DECLARES_PROP" &&
+      relationship.to === "symbol:react:components/InteractiveWorkflowBadge.tsx:props:InteractiveWorkflowBadgeProps.status"
+    ));
+    assert.ok(badgeRelationships.evidence.some((item) =>
+      item.recordType === "nodeRoleSummary" &&
+      Array.isArray(item.roles) &&
+      item.roles.some((role) => typeof role === "object" && role !== null && (role as { role?: unknown }).role === "client-component")
+    ));
+    assert.ok(actionRelationships.relationships.some((relationship) =>
+      relationship.type === "CALLS_API_ROUTE" &&
+      relationship.to === "route:web:/api/workflows/:param/decision"
+    ));
+    assert.ok(actionRelationships.evidence.some((item) =>
+      item.recordType === "nodeRoleSummary" &&
+      Array.isArray(item.roles) &&
+      item.roles.some((role) => typeof role === "object" && role !== null && (role as { role?: unknown }).role === "server-action")
+    ));
+    assert.ok(routeHandlerRelationships.relationships.some((relationship) =>
+      relationship.type === "MAPS_ROUTE" &&
+      relationship.to === "symbol:react:app/api/workflows/[workflowId]/decision/route.ts:function:POST"
+    ));
+  });
+});
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function copyDirectory(source: string, destination: string): Promise<void> {
   await fs.mkdir(destination, { recursive: true });
   for (const entry of await fs.readdir(source, { withFileTypes: true })) {
-    if (entry.name === ".kraken-atlas") {
+    if (entry.name === ".kraken-atlas" || entry.name === "node_modules" || entry.name === "dist" || entry.name === ".vite") {
       continue;
     }
 

@@ -233,7 +233,7 @@ function shouldUpdateOnSave(document: vscode.TextDocument): boolean {
     return false;
   }
 
-  return new Set([".cs", ".csproj", ".sln", ".props", ".targets", ".js", ".mjs", ".cjs", ".html", ".htm", ".cshtml", ".razor"]).has(
+  return new Set([".cs", ".csproj", ".sln", ".props", ".targets", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".html", ".htm", ".cshtml", ".razor"]).has(
     path.extname(document.uri.fsPath).toLowerCase()
   );
 }
@@ -812,5 +812,5 @@ function getWorkspaceRoot(): string | undefined {
 
 function extensionVersion(): string {
   const extension = vscode.extensions.getExtension("BinaryKraken.kraken-atlas");
-  return extension?.packageJSON?.version ?? "0.1.27";
+  return extension?.packageJSON?.version ?? "0.2.2";
 }

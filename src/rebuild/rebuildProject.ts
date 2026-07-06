@@ -98,14 +98,14 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
     },
     {
       id: "vanilla-web",
-      status: files.some((file) => [".js", ".mjs", ".cjs", ".html", ".htm", ".cshtml", ".razor"].includes(file.extension))
+      status: files.some((file) => [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".html", ".htm", ".cshtml", ".razor"].includes(file.extension))
         ? "completed"
         : "skipped",
       recordCounts: {
         symbols: webResult.symbols.length,
         references: webResult.references.length,
         relationships: webResult.relationships.length,
-        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web")).length
+        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web") || pattern.id.startsWith("pattern:react")).length
       }
     }
   ];

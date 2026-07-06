@@ -149,6 +149,42 @@ const patternDefinitions: PatternDefinition[] = [
     relationshipTypes: ["CALLS"],
     rulesObserved: ["Vanilla JavaScript calls backend endpoints with fetch."],
     agentGuidance: "When changing AJAX behavior, follow fetch call edges to the backend route before loading larger context."
+  },
+  {
+    id: "pattern:react:component-composition",
+    name: "React component composition",
+    category: "ui-flow",
+    language: "typescript",
+    relationshipTypes: ["RENDERS_COMPONENT", "PASSES_PROP"],
+    rulesObserved: ["React components compose other components through JSX and pass props at the call site."],
+    agentGuidance: "When changing React UI behavior, start from the rendering component and follow component/prop edges before opening broad frontend folders."
+  },
+  {
+    id: "pattern:react:hook-context-flow",
+    name: "React hook and context flow",
+    category: "state-flow",
+    language: "typescript",
+    relationshipTypes: ["USES_HOOK", "PROVIDES_CONTEXT", "CONSUMES_CONTEXT"],
+    rulesObserved: ["React components and hooks share state through hooks and context providers."],
+    agentGuidance: "When changing shared React state, inspect the provider, consuming hook, and components that use the hook before editing unrelated state code."
+  },
+  {
+    id: "pattern:react:state-store-flow",
+    name: "React state store flow",
+    category: "state-flow",
+    language: "typescript",
+    relationshipTypes: ["USES_STORE"],
+    rulesObserved: ["React components and hooks read shared client state through store hooks."],
+    agentGuidance: "When changing shared React state, start from the store hook and follow store consumers before opening unrelated component folders."
+  },
+  {
+    id: "pattern:react:route-api-flow",
+    name: "React route and API flow",
+    category: "ui-backend-flow",
+    language: "typescript",
+    relationshipTypes: ["MAPS_ROUTE", "CALLS_API_ROUTE"],
+    rulesObserved: ["Route declarations point to page components, and frontend service functions call API routes."],
+    agentGuidance: "When changing a routed React feature, follow route-to-page and page/hook-to-service/API edges before loading broad frontend context."
   }
 ];
 
@@ -234,6 +270,14 @@ function matchingEvidence(definition: PatternDefinition, relationships: Relation
 
   if (definition.id === "pattern:web:fetch-endpoint") {
     return relationshipsByType.filter((relationship) => relationship.from.startsWith("symbol:javascript:") && relationship.to.startsWith("route:"));
+  }
+
+  if (definition.id === "pattern:web:vanilla-js-dom-event") {
+    return relationshipsByType.filter((relationship) => relationship.from.startsWith("symbol:javascript:") || relationship.to.startsWith("symbol:javascript:"));
+  }
+
+  if (definition.id.startsWith("pattern:react:")) {
+    return relationshipsByType.filter((relationship) => relationship.id.includes(":react:") || relationship.from.startsWith("symbol:react:") || relationship.to.startsWith("symbol:react:") || relationship.to.startsWith("prop:react:") || relationship.to.startsWith("event:react:"));
   }
 
   if (definition.id === "pattern:aspnet:controller-service-flow") {

@@ -15,7 +15,7 @@ Agents need a callable CLI in their VS Code terminal. The normal setup is:
 7. Use `where-to-add` for focused edit-location questions.
 8. Use `flow` for existing behavior.
 9. Use `relationships` for a known file or symbol.
-10. Use direct map queries when you already have an anchor such as a property, class, method, route, selector, file, config key, or graph id.
+10. Use direct map queries when you already have an anchor such as a property, class, method, route, selector, React component, hook, file, config key, or graph id.
 11. Use `search` only as fallback discovery.
 12. Use `orphans`, `duplicates`, and `drift` for review candidates, never automatic cleanup or refactoring.
 13. Use `context` only after narrowing the target.
@@ -73,6 +73,7 @@ Use direct map queries for questions like:
 - Where is this property written?
 - Where is this value displayed?
 - Which route, form, selector, or handler touches this symbol?
+- Which component renders this child or consumes this hook/context?
 - Which storage or repository edges are connected?
 - Which project or file owns this graph id?
 
@@ -170,7 +171,24 @@ Start with the button, form, route, or label:
 kraken-atlas query flow "button or form action name" --workspace . --context ProjectOrFolderName --format agent
 ```
 
-Inspect Razor/HTML form, vanilla JS event/fetch, route, controller/page handler, and service evidence. Expand `POSTS_TO`, `HANDLES_EVENT`, `CALLS`, and `MAPS_ROUTE`.
+Inspect Razor/HTML form, vanilla JS event/fetch, React JSX event/API-client evidence, route, controller/page handler, and service evidence. Expand `POSTS_TO`, `HANDLES_EVENT`, `CALLS`, `MAPS_ROUTE`, and `CALLS_API_ROUTE`.
+
+### React Component, Route, Or UI-To-API Flow
+
+Start with the local pattern map:
+
+```bash
+kraken-atlas query pattern-map --workspace . --context ProjectOrFolderName --format agent
+```
+
+Then inspect the known component, hook, route, or UI label:
+
+```bash
+kraken-atlas query relationships "ComponentOrHookName" --workspace . --context ProjectOrFolderName --format agent
+kraken-atlas query flow "button, route, component, or API behavior" --workspace . --context ProjectOrFolderName --format agent
+```
+
+For first-pass React/TypeScript maps, expand `RENDERS_COMPONENT`, `USES_HOOK`, `USES_STORE`, `PASSES_PROP`, `PROVIDES_CONTEXT`, `CONSUMES_CONTEXT`, `HANDLES_EVENT`, `MAPS_ROUTE`, `CALLS_API_ROUTE`, `IMPORTS_MODULE`, `TYPE_IMPORTS_MODULE`, and `REFERENCES_TYPE` edges one hop at a time. Some React/TypeScript edges are compiler/import resolved while others are convention or text derived, so prefer relationship evidence over broad component-folder reads. For shared state changes, query the store hook and inspect `USES_STORE` consumers before opening unrelated component folders.
 
 ### Find Who Calls A Service Method
 

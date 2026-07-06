@@ -11,17 +11,66 @@ Instead of asking an agent to scan the whole repository, ask Kraken Atlas first:
 - Which symbols, routes, services, forms, handlers, or config keys are connected?
 - What is the smallest useful context pack for the next edit?
 
-Kraken Atlas is currently an **alpha feedback build** focused first on **C#/.NET Core**, **ASP.NET Core**, **Razor/HTML**, and **vanilla JavaScript** projects. Its code atlas prioritizes fast command and CLI queries that help agents find the right files, understand relationships, and work with focused context before making changes.
+Kraken Atlas is currently an **alpha feedback build** focused first on **C#/.NET Core**, **ASP.NET Core**, **Razor/HTML**, **vanilla JavaScript**, and first-pass **React/TypeScript** projects. Its code atlas prioritizes fast command and CLI queries that help agents find the right files, understand relationships, and work with focused context before making changes.
 
-## What's New In 0.1.27
+## What's New In 0.2.2
 
-- Plan implementation work with `query plan-change`, which combines likely edit files, local pattern fit, hotspot/drift risk checks, and a bounded context-pack command.
-- Inspect detected architecture patterns with `query pattern-map` before choosing which local convention an agent should copy.
-- Find central shared files with `query hotspots` so agents know what to avoid unless the task is cross-cutting.
-- Review cautious `query drift` candidates for controller/service/repository pattern deviations.
-- Keep lower-level `where-to-add`, `flow`, `relationships`, `references`, `orphans`, and `duplicates` available for focused follow-up queries.
+- Added TypeScript project discovery that emits queryable `tsconfig.json`, package, path-alias, and TypeScript project-reference map facts as the first foundation slice for compiler-backed semantic analysis.
+- Resolved React/TypeScript imports through TypeScript's compiler module resolver using discovered `tsconfig` settings, so alias imports such as `@components` can connect to barrel files and implementation files with compiler-backed confidence.
+- Added compiler-AST TypeScript declaration extraction for React/TypeScript maps, including queryable interface, object type-alias, scalar type-alias, enum, enum-member, and member summary nodes.
+- Split React/TypeScript type-only imports into `TYPE_IMPORTS_MODULE` relationships and `typescript-type-import` references so contract dependencies are distinct from runtime module composition.
+- Connected JSX `PASSES_PROP` relationships to real declared prop member nodes when the rendered component has a known props type.
+- Added first-pass intersection props extraction for aliases such as `type FooProps = BaseProps & { localProp?: string }`, surfacing the inline object members as queryable prop nodes.
+- Resolved JSX namespace component usage such as `<Components.Widget />` through namespace imports and barrel re-exports so render and prop edges point at the actual component.
+- Added queryable package export nodes from `package.json` `exports`, `main`, `module`, and `types` fields as groundwork for package-export-aware module resolution.
+- Connected package export nodes to exported local files and used workspace package `exports` to resolve React/TypeScript package-subpath imports.
+- Resolved default imports through default barrel re-exports such as `export { default } from "./Component"`.
+- Preserved parallel React relationship evidence for repeated edges from the same source to the same target, so separate import paths no longer collapse during analyzer deduplication.
+- Verified the full suite at 84 passing tests after the TypeScript semantic-analysis expansion.
 
-Version `0.1.27` is a public alpha intended for real-project feedback. It has 66 automated tests and has been validated against a large multi-project ASP.NET Core/Razor workspace.
+Version `0.2.2` is a public alpha intended for real-project feedback. It has 84 automated tests.
+
+## Release History
+
+## What's New In 0.2.1
+
+- Scrubbed public Atlas documentation, generated agent instructions, release history audit output, and packaged release notes so private regression-project names are not exposed to alpha testers.
+- Added a release validation guard that fails if public/package-facing docs reintroduce private fixture wording.
+- Added a TypeScript semantic-analysis roadmap for the `0.2.x` line, including TypeScript project discovery, compiler-backed import/export resolution, type-checker-backed JSX prop mapping, and semantic confidence labels.
+
+Version `0.2.1` is a public alpha patch for the `0.2.0` React/TypeScript milestone. It keeps the same 84-test analyzer coverage while cleaning the tester-facing package and release process.
+
+## What's New In 0.2.0
+
+- Added `.ts`, `.tsx`, and `.jsx` language detection for workspace maps.
+- Added first-pass React analyzer support for components, hooks, context providers/consumers, route definitions, JSX event handlers, props, imports, and API route calls.
+- Added React export hardening for default-exported components and wrapper-assigned `memo(...)` / `forwardRef(...)` components.
+- Added route-object detection for `Component`, `component`, and JSX `element` route styles.
+- Added Next.js-style file-route detection for `app/**/page.tsx` and `pages/**/*.tsx`.
+- Added state-store detection for store hooks and `USES_STORE` relationships.
+- Added prop/member extraction for object-shaped TypeScript aliases such as `type FooProps = { ... }`.
+- Added prop/member ownership for typed components such as `const Card: React.FC<CardProps> = ...`.
+- Added React barrel re-export resolution so imports through `index.ts` still point at component implementation files.
+- Added nested prop/member hints for object props such as Next.js `params.workflowId`.
+- Added lightweight Next.js client/server roles for `"use client"` components and `"use server"` actions.
+- Added Next.js API route handler mapping for `app/api/**/route.ts`.
+- Added React pattern-map categories for component composition, hook/context flow, and route/API flow.
+- Added React-aware SQLite role enrichment so relationship queries can label components, hooks, context providers, routes, and client services.
+- Added `test-projects/ReactAgentDashboard` as the first Vite React/TypeScript fixture and regression target.
+- Added `test-projects/ReactWorkflowBoard` as a second React fixture covering a different route/state organization.
+- Added `test-projects/ReactNextPortal` as a small Next-style fixture covering app-router and pages-router file routes.
+
+Version `0.2.0` is a public alpha milestone intended for real-project feedback. It has 84 automated tests and adds first-pass React/TypeScript and Next.js mapping on top of the existing .NET/Razor/vanilla JavaScript atlas.
+
+## What's New In 0.1.30
+
+- SQLite enrichment now adds queryable project, role, tag, member, and usage-summary layers keyed by node ID.
+- `where-to-add`, `plan-change`, and context packs surface matched feature tags, shared-contract boundaries, role/project/member guidance, and cross-project contract checklists.
+- Context packs prune relationship evidence using selected files, compound feature tags, shared-contract boundaries, and project membership so agents get tighter handoffs.
+- A multi-project regression fixture now validates shared-domain/WebUI contract planning and context focus.
+- Query internals were split into focused modules, including planning, recommendation guidance, context pruning, shared contracts, and value-lifecycle lookup, so future agent work needs less source context.
+
+Version `0.1.30` is a public alpha intended for real-project feedback. It has 78 automated tests and has been validated against a large multi-project ASP.NET Core/Razor workspace.
 
 ---
 
@@ -89,6 +138,7 @@ Follow behavior through common ASP.NET Core paths such as:
 - Middleware
 - Hosted services
 - Vanilla JavaScript forms, events, selectors, and fetch calls
+- React components, hooks, context, route declarations, props, JSX events, API calls, and TypeScript project/import/declaration facts
 
 ### Show Pattern Map
 
@@ -410,9 +460,9 @@ kraken-atlas query hotspots --workspace . --context WebUI --format agent
 kraken-atlas query plan-change "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query where-to-add "add initial profile setup steps after user registration" --workspace . --context WebUI --format agent
 kraken-atlas query flow "profile setup after registration" --workspace . --context WebUI --format agent
-kraken-atlas query relationships "Kelp2025_WebUI/Services/KelpUserManager.cs" --workspace . --context WebUI --format agent
+kraken-atlas query relationships "ExampleWebUI/Services/UserManager.cs" --workspace . --context WebUI --format agent
 kraken-atlas query relationships "ConfigJson" --workspace . --context WebUI --edge WRITES_FIELD --limit 20 --format agent
-kraken-atlas query references "KelpUserManager" --workspace . --context WebUI --format agent
+kraken-atlas query references "UserManager" --workspace . --context WebUI --format agent
 kraken-atlas query references "ITranslationDictionaryService" --workspace . --context WebUI --format agent
 kraken-atlas query symbol "RegisterModel" --workspace . --context WebUI --format agent
 kraken-atlas query search "profile setup registration" --workspace . --context WebUI --format agent
@@ -516,12 +566,13 @@ Strongest support today:
 - C# and .NET Core.
 - ASP.NET Core MVC, minimal APIs, Razor Pages, services, options/config, hosted services, middleware, and common validation/auth conventions.
 - Razor/HTML and vanilla JavaScript relationships.
+- First-pass React/TypeScript relationships for components, hooks, context, routes, props, JSX events, imports, and API calls, plus compiler-backed project discovery, import resolution, declaration/member nodes, and selected prop/call/type edges.
 - Terminal and Command Palette workflows for AI coding agents.
 - Queryable C# orphan and exact duplicate callable-body candidates.
 
 Deferred or future work:
 
-- First-class React and Node.js support.
+- Full TypeScript type-checker semantics, broader React framework coverage, and Node.js backend support.
 - MCP server workflow.
 - Human-facing visual graph browsing.
 - Static HTML report generation.
@@ -531,7 +582,7 @@ Deferred or future work:
 ## Known Limits
 
 - C# semantic changes can trigger full rebuilds.
-- Query quality is strongest for common ASP.NET Core, Razor/HTML, and vanilla JavaScript patterns.
+- Query quality is strongest for common ASP.NET Core, Razor/HTML, and vanilla JavaScript patterns. React/TypeScript coverage is useful and now includes compiler-backed project/import/declaration slices, but full type-checker inference, broad generic expansion, complex mapped/indexed types, external package surfaces, and framework-specific edge cases remain in progress.
 - EF support covers common `DbContext` and `DbSet` reads and writes, but deeper provider-specific behavior and migrations are not fully modeled.
 - Validation/auth, hosted-service, middleware, and request-handler coverage is convention-based; unusual framework wrappers may need future analyzer rules.
 - Orphan detection is conservative and C#-only. Static absence is not proof of dead code; reflection, dynamic calls, framework conventions, generated code, and external consumers can be invisible.
@@ -558,12 +609,13 @@ Use [ALPHA_FEEDBACK.md](ALPHA_FEEDBACK.md) for the commands and details to inclu
 ## Contributor And Local VSIX Testing
 
 This section is for contributors building the extension from source. Normal extension users should start with the Quick Start above.
+For alpha release builds, follow [RELEASE_PROCESS.md](RELEASE_PROCESS.md) before packaging the VSIX.
 
 ```powershell
 npm install
 npm test
-npm run check:vsix
-code --install-extension ..\pack-artifacts\kraken-atlas-0.1.27.vsix --force
+npm run release:vsix
+code --install-extension ..\pack-artifacts\kraken-atlas-0.2.2.vsix --force
 ```
 
 Development commands without linking:

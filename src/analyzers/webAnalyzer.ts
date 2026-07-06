@@ -2,7 +2,9 @@ import * as fs from "fs/promises";
 import * as path from "path";
 import { FileRecord, ReferenceRecord, RelationshipRecord, SourceRange, SymbolRecord } from "../model/records";
 import { analyzeJavaScriptControllerFlows as analyzeJavaScriptFlows } from "./javascriptFlowAnalyzer";
+import { analyzeReactSources, isReactSourceFile, ReactSource } from "./reactAnalyzer";
 import { rangeFromIndex } from "./textLocation";
+import { analyzeTypeScriptProjects } from "./typescriptProjectAnalyzer";
 import { HtmlElementSummary, JavaScriptSource, WebAnalyzerResult } from "./webAnalyzerTypes";
 export { WebAnalyzerResult } from "./webAnalyzerTypes";
 
@@ -24,6 +26,7 @@ export async function analyzeVanillaWeb(workspaceRoot: string, files: FileRecord
   const elements: HtmlElementSummary[] = [];
   const scripts: ScriptSummary[] = [];
   const javascriptSources: JavaScriptSource[] = [];
+  const reactSources: ReactSource[] = [];
 
   for (const file of files.filter((candidate) => htmlExtensions.has(candidate.extension))) {
     const text = await readWorkspaceFile(workspaceRoot, file.path);
@@ -36,7 +39,14 @@ export async function analyzeVanillaWeb(workspaceRoot: string, files: FileRecord
     javascriptSources.push({ file, text, scriptId: `symbol:javascript:${file.path}` });
   }
 
+  for (const file of files.filter(isReactSourceFile)) {
+    const text = await readWorkspaceFile(workspaceRoot, file.path);
+    reactSources.push({ file, text });
+  }
+
+  const typeScriptProjects = await analyzeTypeScriptProjects(workspaceRoot, files, result);
   analyzeJavaScriptFlows(javascriptSources, result);
+  analyzeReactSources(reactSources, result, typeScriptProjects);
 
   result.symbols.sort((left, right) => left.id.localeCompare(right.id));
   result.references.sort((left, right) => left.id.localeCompare(right.id));

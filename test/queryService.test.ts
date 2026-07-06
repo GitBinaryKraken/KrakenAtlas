@@ -3,8 +3,12 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import test from "node:test";
-import { FileRecord, PatternRecord, RelationshipRecord, SymbolRecord } from "../src/model/records";
+import { renderContextPack } from "../src/context/agentContext";
+import { renderAgentResponse } from "../src/format/agentFormatter";
+import { FileRecord, PatternRecord, ReferenceRecord, RelationshipRecord, SymbolRecord } from "../src/model/records";
+import { buildContextPruningResult } from "../src/query/queryContextPruning";
 import { QueryService } from "../src/query/queryService";
+import type { FileRecommendation } from "../src/query/whereToAddRanking";
 import { openSqliteIndex, rebuildSqliteIndex } from "../src/storage/sqliteIndex";
 
 test("QueryService returns compact symbol, relationship, and pattern answers", async () => {
@@ -103,6 +107,30 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
       language: "csharp",
       sizeBytes: 100,
       sha256: "5".repeat(64),
+      modifiedTimeUtc: "2026-06-11T00:00:00.000Z",
+      isGenerated: false,
+      tags: ["csharp", "source"]
+    },
+    {
+      recordType: "file",
+      id: "file:Kelp2025_WebUI/Data/KelpUser.cs",
+      path: "Kelp2025_WebUI/Data/KelpUser.cs",
+      extension: ".cs",
+      language: "csharp",
+      sizeBytes: 100,
+      sha256: "a1".repeat(32),
+      modifiedTimeUtc: "2026-06-11T00:00:00.000Z",
+      isGenerated: false,
+      tags: ["csharp", "source"]
+    },
+    {
+      recordType: "file",
+      id: "file:Kelp2025_WebUI/Data/ApplicationDbContext.cs",
+      path: "Kelp2025_WebUI/Data/ApplicationDbContext.cs",
+      extension: ".cs",
+      language: "csharp",
+      sizeBytes: 100,
+      sha256: "a2".repeat(32),
       modifiedTimeUtc: "2026-06-11T00:00:00.000Z",
       isGenerated: false,
       tags: ["csharp", "source"]
@@ -301,6 +329,28 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
       kind: "method",
       language: "csharp",
       file: "Kelp2025_WebUI/Areas/Identity/Pages/Account/Register.cshtml.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:Kelp2025_WebUI.Data.KelpUser",
+      name: "KelpUser",
+      fullyQualifiedName: "Kelp2025_WebUI.Data.KelpUser",
+      kind: "class",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Data/KelpUser.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:Kelp2025_WebUI.Data.ApplicationDbContext",
+      name: "ApplicationDbContext",
+      fullyQualifiedName: "Kelp2025_WebUI.Data.ApplicationDbContext",
+      kind: "class",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Data/ApplicationDbContext.cs",
       range: range(),
       confidence: 1
     },
@@ -528,6 +578,28 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     },
     {
       recordType: "relationship",
+      id: "relationship:inherits:kelp-webui:user-identity",
+      from: "symbol:csharp:Kelp2025_WebUI.Data.KelpUser",
+      to: "symbol:csharp:Microsoft.AspNetCore.Identity.IdentityUser",
+      type: "INHERITS",
+      file: "Kelp2025_WebUI/Data/KelpUser.cs",
+      range: range(),
+      evidence: "KelpUser extends IdentityUser for AspNetUsers custom user properties",
+      confidence: 0.95
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:inherits:kelp-webui:dbcontext-identity",
+      from: "symbol:csharp:Kelp2025_WebUI.Data.ApplicationDbContext",
+      to: "symbol:csharp:Microsoft.AspNetCore.Identity.EntityFrameworkCore.IdentityDbContext<KelpUser>",
+      type: "INHERITS",
+      file: "Kelp2025_WebUI/Data/ApplicationDbContext.cs",
+      range: range(),
+      evidence: "ApplicationDbContext inherits IdentityDbContext<KelpUser>",
+      confidence: 0.95
+    },
+    {
+      recordType: "relationship",
       id: "relationship:calls:admin:save-user",
       from: "symbol:csharp:AdminTools.Pages.UsersModel.OnPostSaveUserAsync()",
       to: "symbol:csharp:AdminTools.Services.UserMaintenance.SaveUser()",
@@ -647,6 +719,8 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     const partialContextSearchResult = new QueryService(database, { projectContext: "WebUI" }).search("profile setup registration");
     const scopedSharedDependencyFlowResult = new QueryService(database, { projectContext: "AdminTools" }).findFlow("image storage");
     const partialContextWhereToAddResult = new QueryService(database, { projectContext: "WebUI" }).whereToAdd("initial user creation profile setup");
+    const partialContextNewUserVariableWhereToAddResult = new QueryService(database, { projectContext: "WebUI" }).whereToAdd("new user variable");
+    const partialContextNewAspectUserParameterWhereToAddResult = new QueryService(database, { projectContext: "WebUI" }).whereToAdd("new aspect user parameter");
     const ambiguousContextWhereToAddResult = new QueryService(database, { projectContext: "Admin" }).whereToAdd("save user");
     const broadWhereToAddResult = new QueryService(database, { projectContext: "Web" }).whereToAdd("user");
 
@@ -667,7 +741,8 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     assert.ok(patternMapResult.nextQueries.some((query) => query.includes("pattern:aspnet:controller-service-flow")));
     assert.match(hotspotResult.answer, /architecture hotspot candidate/);
     assert.ok(hotspotResult.evidence.some((item) => item.recordType === "architectureHotspot" && typeof item.file === "string"));
-    assert.ok(hotspotResult.evidence.some((item) => item.recordType === "hotspotSummary"));
+    assert.ok(hotspotResult.evidence.some((item) => item.recordType === "hotspotSummary" && item.source === "node_usage_summary"));
+    assert.ok(hotspotResult.evidence.some((item) => item.recordType === "architectureHotspot" && item.hotspotSource === "node_usage_summary"));
     assert.ok(hotspotResult.nextQueries.some((query) => query.includes("kraken-atlas query relationships")));
     assert.ok(flowResult.flow.some((edge) => edge.type === "HANDLES_EVENT"));
     assert.ok(flowResult.flow.some((edge) => edge.type === "CALLS"));
@@ -678,6 +753,7 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     assert.ok(trimRelationships.relationships.some((edge) => edge.to === "symbol:csharp:string.Trim()"));
     assert.ok(whereToAddResult.evidence.some((item) => item.recordType === "fileRecommendation" && item.file === "Controllers/UserController.cs"));
     assert.ok((whereToAddResult.evidence.find((item) => item.file === "Controllers/UserController.cs")?.reasons as string[]).length > 0);
+    assert.ok(typeof whereToAddResult.evidence.find((item) => item.file === "Controllers/UserController.cs")?.usageSummary === "object");
     assert.ok(whereToAddResult.evidence.some((item) =>
       item.recordType === "patternFit" &&
       item.patternId === "pattern:aspnet:controller-service-flow" &&
@@ -711,6 +787,11 @@ test("QueryService returns compact symbol, relationship, and pattern answers", a
     }
     assert.ok(partialContextSearchResult.files.includes("Kelp2025_WebUI/Areas/Identity/Pages/Account/Register.cshtml.cs"));
     assert.ok(!partialContextSearchResult.files.some((file) => file.startsWith("AdminTools/")));
+    assert.strictEqual(partialContextNewUserVariableWhereToAddResult.files[0], "Kelp2025_WebUI/Data/KelpUser.cs");
+    assert.ok(partialContextNewUserVariableWhereToAddResult.files.includes("Kelp2025_WebUI/Data/ApplicationDbContext.cs"));
+    assert.ok(!partialContextNewUserVariableWhereToAddResult.files.some((file) => file.includes("Controller")));
+    assert.strictEqual(partialContextNewAspectUserParameterWhereToAddResult.files[0], "Kelp2025_WebUI/Data/KelpUser.cs");
+    assert.ok(!partialContextNewAspectUserParameterWhereToAddResult.files.some((file) => file.includes("Controller")));
     assert.ok(scopedSharedDependencyFlowResult.flow.some((edge) => stringValue(edge.file).startsWith("AdminTools/")));
     assert.ok(!scopedSharedDependencyFlowResult.flow.some((edge) => stringValue(edge.file) === "AdminTools/Services/AdminBridgeService.cs"));
     assert.ok(!scopedSharedDependencyFlowResult.flow.some((edge) => stringValue(edge.file) === "AdminTools/Pages/Geography.cshtml.cs"));
@@ -870,6 +951,353 @@ test("where-to-add ranks feature-specific form files before base controllers and
   } finally {
     database.close();
   }
+});
+
+test("where-to-add carries matched node tags into recommendations and context packs", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-node-tag-ranking-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const requestId = "symbol:csharp:KelpApiDomain.SavePageDraftRequest";
+  const files: FileRecord[] = [
+    fileRecord("Kelp2025_WebUI/Services/Content/ContentEditorAdapter.cs"),
+    fileRecord("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs")
+  ];
+  const symbols: SymbolRecord[] = [
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:Kelp2025_WebUI.Services.Content.ContentEditorAdapter.BuildRequest()",
+      name: "BuildRequest",
+      fullyQualifiedName: "Kelp2025_WebUI.Services.Content.ContentEditorAdapter.BuildRequest",
+      kind: "method",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Services/Content/ContentEditorAdapter.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: requestId,
+      name: "SavePageDraftRequest",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest",
+      kind: "class",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.MetaDescription",
+      name: "MetaDescription",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest.MetaDescription",
+      kind: "property",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    }
+  ];
+  const relationships: RelationshipRecord[] = [{
+    recordType: "relationship",
+    id: "relationship:maps-property:page-draft-meta-description",
+    from: "symbol:csharp:Kelp2025_WebUI.Services.Content.ContentEditorAdapter.BuildRequest()",
+    to: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.MetaDescription",
+    type: "MAPS_PROPERTY",
+    file: "Kelp2025_WebUI/Services/Content/ContentEditorAdapter.cs",
+    range: range(),
+    evidence: "MetaDescription = input.MetaDescription",
+    confidence: 0.88
+  }];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const service = new QueryService(database, { projectContext: "Kelp2025_WebUI" });
+    const result = service.whereToAdd("add meta description to page draft");
+    const recommendation = result.evidence.find((item) =>
+      item.recordType === "fileRecommendation" &&
+      item.file === "Kelp2025_WebUI/Services/Content/ContentEditorAdapter.cs"
+    );
+
+    assert.ok(recommendation);
+    const matchedTags = Array.isArray(recommendation?.matchedTags) ? recommendation.matchedTags : [];
+    const reasons = Array.isArray(recommendation?.reasons) ? recommendation.reasons : [];
+    assert.ok(matchedTags.includes("page-draft"));
+    assert.ok(matchedTags.includes("meta-description"));
+    assert.ok(reasons.some((reason) => typeof reason === "string" && reason.startsWith("Node tag match:")));
+
+    const plan = service.planChange("add meta description to page draft");
+    const planRecommendation = plan.evidence.find((item) =>
+      item.recordType === "fileRecommendation" &&
+      item.file === "Kelp2025_WebUI/Services/Content/ContentEditorAdapter.cs"
+    );
+    const planMatchedTags = Array.isArray(planRecommendation?.matchedTags) ? planRecommendation.matchedTags : [];
+    assert.ok(planMatchedTags.includes("page-draft"));
+    const contextPack = renderContextPack(plan);
+    assert.match(contextPack, /Node tags: .*page-draft/);
+    assert.match(contextPack, /Node tags: .*meta-description/);
+  } finally {
+    database.close();
+  }
+});
+
+test("where-to-add warns when a requested field touches a shared request DTO", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-shared-contract-warning-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const requestId = "symbol:csharp:KelpApiDomain.SavePageDraftRequest";
+  const files: FileRecord[] = [
+    fileRecord("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"),
+    fileRecord("Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs"),
+    fileRecord("KelpApi/Controllers/PageController.cs")
+  ];
+  const symbols: SymbolRecord[] = [
+    {
+      recordType: "symbol",
+      id: requestId,
+      name: "SavePageDraftRequest",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest",
+      kind: "class",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.PageTitle",
+      name: "PageTitle",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest.PageTitle",
+      kind: "property",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.MetaDescription",
+      name: "MetaDescription",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest.MetaDescription",
+      kind: "property",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:Kelp2025_WebUI.Services.ComposableContent.PageComposableContentEditorAdapter.BuildRequest()",
+      name: "BuildRequest",
+      fullyQualifiedName: "Kelp2025_WebUI.Services.ComposableContent.PageComposableContentEditorAdapter.BuildRequest",
+      kind: "method",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApi.Controllers.PageController.SaveDraft(KelpApiDomain.SavePageDraftRequest)",
+      name: "SaveDraft",
+      fullyQualifiedName: "KelpApi.Controllers.PageController.SaveDraft",
+      kind: "method",
+      language: "csharp",
+      file: "KelpApi/Controllers/PageController.cs",
+      range: range(),
+      confidence: 1
+    }
+  ];
+  const references: ReferenceRecord[] = [
+    {
+      recordType: "reference",
+      id: "reference:csharp:webui-save-page-draft",
+      symbolName: "SavePageDraftRequest",
+      resolvedSymbolId: requestId,
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: range(),
+      context: "type-usage",
+      snippet: "new SavePageDraftRequest",
+      confidence: 0.9
+    },
+    {
+      recordType: "reference",
+      id: "reference:csharp:api-save-page-draft",
+      symbolName: "SavePageDraftRequest",
+      resolvedSymbolId: requestId,
+      file: "KelpApi/Controllers/PageController.cs",
+      range: range(),
+      context: "parameter",
+      snippet: "SavePageDraftRequest request",
+      confidence: 0.9
+    }
+  ];
+  const relationships: RelationshipRecord[] = [
+    {
+      recordType: "relationship",
+      id: "relationship:maps-property:save-page-draft-title",
+      from: "symbol:csharp:Kelp2025_WebUI.Services.ComposableContent.PageComposableContentEditorAdapter.BuildRequest()",
+      to: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.PageTitle",
+      type: "MAPS_PROPERTY",
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: range(),
+      evidence: "PageTitle = model.PageTitle",
+      confidence: 0.82
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:handles-request:save-page-draft",
+      from: "symbol:csharp:KelpApi.Controllers.PageController.SaveDraft(KelpApiDomain.SavePageDraftRequest)",
+      to: requestId,
+      type: "HANDLES_REQUEST",
+      file: "KelpApi/Controllers/PageController.cs",
+      range: range(),
+      evidence: "SaveDraft(SavePageDraftRequest request)",
+      confidence: 0.88
+    }
+  ];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols, references, relationships, patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const service = new QueryService(database, { projectContext: "Kelp2025_WebUI" });
+    const where = service.whereToAdd("add field to shared page draft request");
+    const boundary = where.evidence.find((item) => item.recordType === "sharedContractBoundary");
+
+    assert.ok(boundary);
+    assert.strictEqual(boundary.nodeId, requestId);
+    assert.deepStrictEqual(boundary.declaredIn, { KelpApiDomain: 1 });
+    assert.ok(Array.isArray(boundary.roles) && boundary.roles.includes("request-dto"));
+    assert.ok(Array.isArray(boundary.usedFrom) && boundary.usedFrom.includes("Kelp2025_WebUI"));
+    assert.ok(Array.isArray(boundary.usedFrom) && boundary.usedFrom.includes("KelpApi"));
+    assert.ok(Array.isArray(boundary.members) && boundary.members.includes("PageTitle"));
+    const contractRecommendation = where.evidence.find((item) =>
+      item.recordType === "fileRecommendation" &&
+      item.file === "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"
+    );
+    const contractRoles = Array.isArray(contractRecommendation?.symbolRoles) ? contractRecommendation.symbolRoles : [];
+    const contractMembers = Array.isArray(contractRecommendation?.memberHints) ? contractRecommendation.memberHints as Array<Record<string, unknown>> : [];
+    assert.ok(contractRecommendation);
+    assert.ok(contractRoles.includes("request-dto"));
+    assert.strictEqual((contractRecommendation?.projectHint as Record<string, unknown> | undefined)?.project, "KelpApiDomain");
+    assert.ok(contractMembers.some((member) => member.name === "PageTitle"));
+
+    const agentOutput = renderAgentResponse(where);
+    assert.match(agentOutput, /Shared contract:/);
+    assert.match(agentOutput, /SavePageDraftRequest/);
+    assert.match(agentOutput, /members .*PageTitle/);
+
+    const plan = service.planChange("add field to shared page draft request");
+    assert.ok(plan.evidence.some((item) => item.recordType === "sharedContractBoundary" && item.nodeId === requestId));
+    const checklist = plan.evidence.find((item) => item.recordType === "sharedContractChecklist" && item.nodeId === requestId);
+    const checklistItems = Array.isArray(checklist?.items) ? checklist.items as Array<Record<string, unknown>> : [];
+    assert.ok(checklist);
+    assert.ok(checklistItems.some((item) => item.area === "contract"));
+    assert.ok(checklistItems.some((item) => item.area === "mapping"));
+    assert.ok(checklistItems.some((item) => item.area === "api-handler"));
+    assert.ok(checklistItems.some((item) => item.area === "validation"));
+    assert.ok(checklistItems.some((item) => item.area === "client-or-serialization"));
+    assert.ok(checklistItems.some((item) => item.area === "tests"));
+    assert.ok(plan.files.includes("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"));
+
+    const planOutput = renderAgentResponse(plan);
+    assert.match(planOutput, /Contract checklist:/);
+    assert.match(planOutput, /Contract shape/);
+
+    const contextPack = renderContextPack(plan);
+    assert.match(contextPack, /Shared Contract Boundaries/);
+    assert.match(contextPack, /Shared Contract Checklist/);
+    assert.match(contextPack, /Client\/serialization impact/);
+    assert.match(contextPack, /Guidance: project KelpApiDomain; roles .*request-dto/);
+    assert.match(contextPack, /Members: SavePageDraftRequest\.PageTitle/);
+  } finally {
+    database.close();
+  }
+});
+
+test("context pruning keeps selected tag and project relationships while dropping adjacent noise", () => {
+  const requestId = "symbol:csharp:KelpApiDomain.SavePageDraftRequest";
+  const recommendations: FileRecommendation[] = [{
+    recordType: "fileRecommendation",
+    file: "Kelp2025_WebUI/Services/PageDraftAdapter.cs",
+    score: 20,
+    reasons: [],
+    matchedTerms: ["page", "draft"],
+    matchedTags: ["page-draft"],
+    patternsToFollow: [],
+    relationshipEvidenceCount: 1,
+    searchEvidenceCount: 0,
+    relationshipDetails: [],
+    anchorDetails: []
+  }];
+  const boundaries = [{
+    recordType: "sharedContractBoundary",
+    nodeId: requestId,
+    name: "SavePageDraftRequest",
+    file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+    projects: ["KelpApiDomain", "Kelp2025_WebUI", "KelpApi"],
+    usedFrom: ["Kelp2025_WebUI", "KelpApi"]
+  }];
+  const relationships = [
+    {
+      id: "relationship:maps:page-draft",
+      type: "MAPS_PROPERTY",
+      from: "symbol:csharp:Kelp2025_WebUI.Services.PageDraftAdapter.BuildRequest()",
+      to: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.PageTitle",
+      file: "Kelp2025_WebUI/Services/PageDraftAdapter.cs"
+    },
+    {
+      id: "relationship:handles:page-draft",
+      type: "HANDLES_REQUEST",
+      from: "symbol:csharp:KelpApi.Controllers.PageController.SaveDraft(KelpApiDomain.SavePageDraftRequest)",
+      to: requestId,
+      file: "KelpApi/Controllers/PageController.cs"
+    },
+    {
+      id: "relationship:maps:admin-report",
+      type: "MAPS_PROPERTY",
+      from: "symbol:csharp:AdminTools.Services.ReportAdapter.BuildRequest()",
+      to: "symbol:csharp:AdminTools.Contracts.AdminReportRequest.Title",
+      file: "AdminTools/Services/ReportAdapter.cs"
+    },
+    {
+      id: "relationship:calls:identity-email-store",
+      type: "CALLS",
+      from: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.ExternalLoginModel.ExternalLoginModel()",
+      to: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.ExternalLoginModel.GetEmailStore()",
+      file: "Kelp2025_WebUI/Areas/Identity/Pages/Account/ExternalLogin.cshtml.cs"
+    }
+  ];
+
+  const result = buildContextPruningResult(
+    "add field to shared page draft request",
+    ["KelpApiDomain/ViewModels/Pages/PageDraftModels.cs", "Kelp2025_WebUI/Services/PageDraftAdapter.cs"],
+    recommendations,
+    boundaries,
+    relationships,
+    [
+      { nodeId: requestId, tag: "page-draft" },
+      { nodeId: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.PageTitle", tag: "page-draft" },
+      { nodeId: "symbol:csharp:AdminTools.Contracts.AdminReportRequest.Title", tag: "admin-report" },
+      { nodeId: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.ExternalLoginModel", tag: "pages" },
+      { nodeId: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.ExternalLoginModel.GetEmailStore", tag: "identity-pages-account" }
+    ],
+    [
+      { nodeId: requestId, project: "KelpApiDomain" },
+      { nodeId: requestId, project: "Kelp2025_WebUI" },
+      { nodeId: requestId, project: "KelpApi" },
+      { nodeId: "symbol:csharp:AdminTools.Contracts.AdminReportRequest.Title", project: "AdminTools" },
+      { nodeId: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.ExternalLoginModel", project: "Kelp2025_WebUI" },
+      { nodeId: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.ExternalLoginModel.GetEmailStore", project: "Kelp2025_WebUI" }
+    ]
+  );
+
+  assert.deepStrictEqual(result.relationships.map((relationship) => relationship.id), [
+    "relationship:maps:page-draft",
+    "relationship:handles:page-draft"
+  ]);
+  assert.strictEqual(result.evidence[0]?.recordType, "contextPruning");
+  assert.strictEqual(result.evidence[0]?.originalRelationshipCount, 4);
+  assert.strictEqual(result.evidence[0]?.keptRelationshipCount, 2);
+  assert.ok(Array.isArray(result.evidence[0]?.tags) && result.evidence[0].tags.includes("page-draft"));
 });
 
 test("search diversifies repeated hits from the same file", async () => {
@@ -1063,6 +1491,91 @@ test("relationship and flow queries keep exact property anchors inspectable", as
     assert.ok(flow.relationships.some((relationship) => relationship.type === "BINDS_MODEL_PROPERTY"));
     assert.ok(flow.relationships.some((relationship) => relationship.type === "MAPS_PROPERTY"));
     assert.ok(!flow.files.includes("Kelp2025_WebUI/Areas/Identity/Pages/Account/Register.cshtml.cs"));
+  } finally {
+    database.close();
+  }
+});
+
+test("flow includes exact requested metadata property anchors across page editor mappings", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-metadata-flow-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const files: FileRecord[] = [
+    fileRecord("Kelp2025_WebUI/Views/Shared/ComposableContent/_EditorShell.cshtml"),
+    fileRecord("Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs"),
+    fileRecord("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs")
+  ];
+  const saveDraftPageId = "symbol:csharp:Kelp2025_WebUI.Services.ComposableContent.PageComposableContentEditorAdapter.SaveDraftPage(KelpApiDomain.ComposableEditorDocumentViewModel, string)";
+  const relationships: RelationshipRecord[] = [
+    {
+      recordType: "relationship",
+      id: "relationship:calls:save-page-title-facade",
+      from: saveDraftPageId,
+      to: "symbol:csharp:Kelp2025_WebUI.Services.ComposableContent.PageComposableContentEditorAdapter.ApplyPageTitleFacade(KelpApiDomain.ComposableEditorDocumentViewModel)",
+      type: "CALLS",
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: range(),
+      evidence: "ApplyPageTitleFacade(model)",
+      confidence: 0.95
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:calls:save-page-part-kind",
+      from: saveDraftPageId,
+      to: "symbol:csharp:KelpApiDomain.PagePartComponentTypes.InferPartKind(int)",
+      type: "CALLS",
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: range(),
+      evidence: "PagePartComponentTypes.InferPartKind(part.TypeCode)",
+      confidence: 0.95
+    },
+    ...["Path", "Type", "PublishDate", "PageTitle", "MetaDescription", "MetaKeywords"].map((property, index): RelationshipRecord => ({
+      recordType: "relationship",
+      id: `relationship:maps-property:page-draft:${property.toLowerCase()}`,
+      from: saveDraftPageId,
+      to: `symbol:csharp:KelpApiDomain.SavePageDraftRequest.${property}`,
+      type: "MAPS_PROPERTY",
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: { ...range(), startLine: 40 + index, endLine: 40 + index },
+      evidence: `${property} = model.${property}`,
+      confidence: 0.82
+    })),
+    {
+      recordType: "relationship",
+      id: "relationship:binds-model:metadata-description",
+      from: "symbol:razor:Kelp2025_WebUI/Views/Shared/ComposableContent/_EditorShell.cshtml:input:MetaDescription",
+      to: "model-binding:MetaDescription",
+      type: "BINDS_MODEL_PROPERTY",
+      file: "Kelp2025_WebUI/Views/Shared/ComposableContent/_EditorShell.cshtml",
+      range: range(),
+      evidence: "name=\"MetaDescription\"",
+      confidence: 0.75
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:binds-model:metadata-keywords",
+      from: "symbol:razor:Kelp2025_WebUI/Views/Shared/ComposableContent/_EditorShell.cshtml:input:MetaKeywords",
+      to: "model-binding:MetaKeywords",
+      type: "BINDS_MODEL_PROPERTY",
+      file: "Kelp2025_WebUI/Views/Shared/ComposableContent/_EditorShell.cshtml",
+      range: range(),
+      evidence: "name=\"MetaKeywords\"",
+      confidence: 0.75
+    }
+  ];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [], patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const flow = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).findFlow("page editor saves MetaDescription MetaKeywords PageTitle block");
+    const coverage = flow.evidence.find((item) => item.recordType === "flowCoverage");
+
+    assert.ok(flow.relationships.some((relationship) => stringValue(relationship.evidence).includes("MetaDescription")));
+    assert.ok(flow.relationships.some((relationship) => stringValue(relationship.evidence).includes("MetaKeywords")));
+    assert.ok(Array.isArray(coverage?.matchedConcepts) && coverage.matchedConcepts.includes("metadescription"));
+    assert.ok(Array.isArray(coverage?.matchedConcepts) && coverage.matchedConcepts.includes("metakeywords"));
+    assert.ok(Array.isArray(coverage?.matchedConcepts) && coverage.matchedConcepts.includes("saves"));
+    assert.ok(Array.isArray(coverage?.missingConcepts) && !coverage.missingConcepts.includes("metadescription"));
+    assert.ok(Array.isArray(coverage?.missingConcepts) && !coverage.missingConcepts.includes("metakeywords"));
   } finally {
     database.close();
   }
@@ -1293,6 +1806,199 @@ test("exact relationship queries include and label graph-connected edges outside
     assert.ok(result.relationships.some((relationship) => relationship.type === "IMPLEMENTS"));
     assert.ok(result.relationships.some((relationship) => relationship.type === "REGISTERS"));
     assert.ok(result.evidence.some((item) => item.recordType === "contextExpansion" && /IMPLEMENTS=1/.test(stringValue(item.message))));
+  } finally {
+    database.close();
+  }
+});
+
+test("relationship queries bridge C# model symbols to Razor value lifecycle edges", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-value-lifecycle-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const files: FileRecord[] = [
+    fileRecord("Kelp2025_WebUI/Models/ProfileHomePortFormModel.cs"),
+    fileRecord("Kelp2025_WebUI/Views/Forms/ProfileHomePort.cshtml"),
+    fileRecord("Kelp2025_WebUI/Views/Persona/Update.cshtml")
+  ];
+  const classId = "symbol:csharp:Kelp2025_WebUI.Models.ProfileHomePortFormModel";
+  const homePortId = "symbol:csharp:Kelp2025_WebUI.Models.ProfileHomePortFormModel.HomePortId";
+  const symbols: SymbolRecord[] = [
+    {
+      recordType: "symbol",
+      id: classId,
+      name: "ProfileHomePortFormModel",
+      fullyQualifiedName: "Kelp2025_WebUI.Models.ProfileHomePortFormModel",
+      kind: "class",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Models/ProfileHomePortFormModel.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: homePortId,
+      name: "HomePortId",
+      fullyQualifiedName: "Kelp2025_WebUI.Models.ProfileHomePortFormModel.HomePortId",
+      kind: "property",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Models/ProfileHomePortFormModel.cs",
+      range: range(),
+      confidence: 1
+    }
+  ];
+  const relationships: RelationshipRecord[] = [
+    {
+      recordType: "relationship",
+      id: "relationship:uses-csharp-symbol:homeport",
+      from: "symbol:razor:Kelp2025_WebUI/Views/Forms/ProfileHomePort.cshtml",
+      to: "symbol:csharp:Model.HomePortId",
+      type: "USES_CSHARP_SYMBOL",
+      file: "Kelp2025_WebUI/Views/Forms/ProfileHomePort.cshtml",
+      range: range(),
+      evidence: "Model.HomePortId",
+      confidence: 0.65
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:binds-model:homeport",
+      from: "symbol:razor:Kelp2025_WebUI/Views/Forms/ProfileHomePort.cshtml:input:HomePortId",
+      to: "model-binding:HomePortId",
+      type: "BINDS_MODEL_PROPERTY",
+      file: "Kelp2025_WebUI/Views/Forms/ProfileHomePort.cshtml",
+      range: range(),
+      evidence: "name=\"HomePortId\"",
+      confidence: 0.75
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:uses-csharp-symbol:update-homeport",
+      from: "symbol:razor:Kelp2025_WebUI/Views/Persona/Update.cshtml",
+      to: "symbol:csharp:Model.BioHomeportId",
+      type: "USES_CSHARP_SYMBOL",
+      file: "Kelp2025_WebUI/Views/Persona/Update.cshtml",
+      range: range(),
+      evidence: "Model.BioHomeportId",
+      confidence: 0.55
+    }
+  ];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const result = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).findRelationships("ProfileHomePortFormModel");
+
+    assert.ok(result.relationships.some((relationship) => relationship.type === "BINDS_MODEL_PROPERTY" && stringValue(relationship.to).includes("HomePortId")));
+    assert.ok(result.relationships.some((relationship) => relationship.type === "USES_CSHARP_SYMBOL" && stringValue(relationship.evidence).includes("Model.HomePortId")));
+    assert.ok(result.files.includes("Kelp2025_WebUI/Views/Forms/ProfileHomePort.cshtml"));
+  } finally {
+    database.close();
+  }
+});
+
+test("relationship queries summarize cross-project datatype usage", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-datatype-projects-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const files: FileRecord[] = [
+    fileRecord("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"),
+    fileRecord("Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs"),
+    fileRecord("KelpApi/Controllers/PageController.cs")
+  ];
+  const requestId = "symbol:csharp:KelpApiDomain.SavePageDraftRequest";
+  const symbols: SymbolRecord[] = [
+    {
+      recordType: "symbol",
+      id: requestId,
+      name: "SavePageDraftRequest",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest",
+      kind: "class",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.PageTitle",
+      name: "PageTitle",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest.PageTitle",
+      kind: "property",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.MetaDescription",
+      name: "MetaDescription",
+      fullyQualifiedName: "KelpApiDomain.SavePageDraftRequest.MetaDescription",
+      kind: "property",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Pages/PageDraftModels.cs",
+      range: range(),
+      confidence: 1
+    }
+  ];
+  const references: ReferenceRecord[] = [
+    {
+      recordType: "reference",
+      id: "reference:csharp:webui-save-page-draft",
+      symbolName: "SavePageDraftRequest",
+      resolvedSymbolId: requestId,
+      file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+      range: range(),
+      context: "type-usage",
+      snippet: "new SavePageDraftRequest",
+      confidence: 0.9
+    },
+    {
+      recordType: "reference",
+      id: "reference:csharp:api-save-page-draft",
+      symbolName: "SavePageDraftRequest",
+      resolvedSymbolId: requestId,
+      file: "KelpApi/Controllers/PageController.cs",
+      range: range(),
+      context: "parameter",
+      snippet: "SavePageDraftRequest request",
+      confidence: 0.9
+    }
+  ];
+  const relationships: RelationshipRecord[] = [{
+    recordType: "relationship",
+    id: "relationship:maps-property:save-page-draft",
+    from: "symbol:csharp:KelpApiDomain.ComposableEditorDocumentViewModel.PageTitle",
+    to: "symbol:csharp:KelpApiDomain.SavePageDraftRequest.PageTitle",
+    type: "MAPS_PROPERTY",
+    file: "Kelp2025_WebUI/Services/ComposableContent/PageComposableContentEditorAdapter.cs",
+    range: range(),
+    evidence: "PageTitle = model.PageTitle",
+    confidence: 0.82
+  }];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols, references, relationships, patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const result = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).findRelationships("SavePageDraftRequest");
+    const usage = result.evidence.find((item) => item.recordType === "datatypeProjectUsage");
+    const roles = result.evidence.find((item) => item.recordType === "nodeRoleSummary");
+    const tags = result.evidence.find((item) => item.recordType === "nodeTagSummary");
+    const members = result.evidence.find((item) => item.recordType === "nodeMemberSummary");
+
+    assert.ok(usage);
+    assert.ok(roles);
+    assert.ok(tags);
+    assert.ok(members);
+    assert.deepStrictEqual(usage?.declaredIn, { KelpApiDomain: 1 });
+    assert.deepStrictEqual(usage?.referencedFrom, { Kelp2025_WebUI: 1, KelpApi: 1 });
+    assert.ok(Array.isArray(roles?.roles));
+    assert.ok((roles?.roles as Array<Record<string, unknown>>).some((role) => role.role === "domain-contract"));
+    assert.ok((roles?.roles as Array<Record<string, unknown>>).some((role) => role.role === "request-dto"));
+    assert.ok(Array.isArray(tags?.tags));
+    assert.ok((tags?.tags as Array<Record<string, unknown>>).some((tag) => tag.tag === "page-draft"));
+    assert.ok((tags?.tags as Array<Record<string, unknown>>).some((tag) => tag.tag === "save-page-draft"));
+    assert.strictEqual(members?.memberCount, 2);
+    assert.ok(Array.isArray(members?.members));
+    assert.ok((members?.members as Array<Record<string, unknown>>).some((member) => member.name === "PageTitle"));
+    assert.ok(result.relationships.some((relationship) => relationship.type === "MAPS_PROPERTY"));
   } finally {
     database.close();
   }

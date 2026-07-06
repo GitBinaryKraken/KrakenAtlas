@@ -69,12 +69,74 @@ export function renderContextPack(response: QueryResponse, options: ContextPackO
     lines.push("## Files", ...response.files.slice(0, 12).map((file) => `- ${file}`), "");
   }
 
+  const sharedContracts = response.evidence.filter((item) => stringValue(item.recordType) === "sharedContractBoundary");
+  if (sharedContracts.length) {
+    lines.push("## Shared Contract Boundaries");
+    for (const item of sharedContracts.slice(0, 4)) {
+      lines.push(`- ${stringValue(item.name) || stringValue(item.nodeId)}: ${truncate(stringValue(item.message), 220)}`);
+      const members = Array.isArray(item.members) ? item.members.map(stringValue).filter(Boolean).slice(0, 8) : [];
+      if (members.length) {
+        lines.push(`  - Members: ${members.join(", ")}`);
+      }
+    }
+    lines.push("");
+  }
+
+  const sharedContractChecklists = response.evidence.filter((item) => stringValue(item.recordType) === "sharedContractChecklist");
+  if (sharedContractChecklists.length) {
+    lines.push("## Shared Contract Checklist");
+    for (const checklist of sharedContractChecklists.slice(0, 3)) {
+      lines.push(`- ${stringValue(checklist.name) || stringValue(checklist.nodeId)}: ${truncate(stringValue(checklist.message), 220)}`);
+      const items = Array.isArray(checklist.items)
+        ? checklist.items.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+        : [];
+      for (const item of items.slice(0, 8)) {
+        const files = Array.isArray(item.files) ? item.files.map(stringValue).filter(Boolean).slice(0, 3) : [];
+        lines.push(`  - ${stringValue(item.label)}: ${truncate(stringValue(item.message), 180)}${files.length ? ` Files: ${files.join(", ")}` : ""}`);
+      }
+    }
+    lines.push("");
+  }
+
+  const contextPruning = response.evidence.filter((item) => stringValue(item.recordType) === "contextPruning");
+  if (contextPruning.length) {
+    lines.push("## Context Focus");
+    for (const item of contextPruning.slice(0, 2)) {
+      const tags = Array.isArray(item.tags) ? item.tags.map(stringValue).filter(Boolean).slice(0, 6) : [];
+      const projects = Array.isArray(item.projects) ? item.projects.map(stringValue).filter(Boolean).slice(0, 6) : [];
+      lines.push(`- ${truncate(stringValue(item.message), 220)}`);
+      if (tags.length || projects.length) {
+        lines.push(`  - Tags: ${tags.length ? tags.join(", ") : "none"}; projects: ${projects.length ? projects.join(", ") : "none"}`);
+      }
+    }
+    lines.push("");
+  }
+
   const fileRecommendations = response.evidence.filter((item) => stringValue(item.recordType) === "fileRecommendation");
   if (fileRecommendations.length) {
     lines.push("## File Recommendations");
     for (const item of fileRecommendations.slice(0, 8)) {
       const reasons = Array.isArray(item.reasons) ? item.reasons.map(stringValue).filter(Boolean).slice(0, 3) : [];
+      const matchedTags = Array.isArray(item.matchedTags) ? item.matchedTags.map(stringValue).filter(Boolean).slice(0, 4) : [];
+      const roles = uniqueStrings([
+        ...(Array.isArray(item.nodeRoles) ? item.nodeRoles.map(stringValue).filter(Boolean) : []),
+        ...(Array.isArray(item.symbolRoles) ? item.symbolRoles.map(stringValue).filter(Boolean) : [])
+      ]).slice(0, 6);
+      const projectHint = item.projectHint && typeof item.projectHint === "object" ? item.projectHint as Record<string, unknown> : {};
+      const project = stringValue(projectHint.project);
+      const memberHints = Array.isArray(item.memberHints)
+        ? item.memberHints.filter((member): member is Record<string, unknown> => Boolean(member) && typeof member === "object").slice(0, 8)
+        : [];
       lines.push(`- ${stringValue(item.file)}${typeof item.score === "number" ? ` (score ${formatScore(item.score)})` : ""}`);
+      if (matchedTags.length) {
+        lines.push(`  - Node tags: ${matchedTags.join(", ")}`);
+      }
+      if (project || roles.length) {
+        lines.push(`  - Guidance: ${project ? `project ${project}` : "project unknown"}${roles.length ? `; roles ${roles.join(", ")}` : ""}`);
+      }
+      if (memberHints.length) {
+        lines.push(`  - Members: ${memberHints.map(formatMemberHint).join(", ")}`);
+      }
       for (const reason of reasons) {
         lines.push(`  - ${truncate(reason, 180)}`);
       }
@@ -299,6 +361,12 @@ function languageForFile(file: string): string {
   if (extension === ".js" || extension === ".mjs" || extension === ".cjs") {
     return "javascript";
   }
+  if (extension === ".jsx") {
+    return "jsx";
+  }
+  if (extension === ".ts" || extension === ".tsx") {
+    return "typescript";
+  }
   if (extension === ".html" || extension === ".htm") {
     return "html";
   }
@@ -310,6 +378,16 @@ function formatRelationshipEdge(edge: Record<string, unknown>): string {
   const evidence = stringValue(edge.evidence);
   const suffix = evidence ? ` Evidence: ${truncate(evidence, 160)}` : "";
   return `- ${stringValue(edge.type)}: ${stringValue(edge.from)} -> ${stringValue(edge.to)} (${location}).${suffix}`;
+}
+
+function formatMemberHint(member: Record<string, unknown>): string {
+  const owner = stringValue(member.owner);
+  const name = stringValue(member.name);
+  const typeName = stringValue(member.typeName);
+  const required = member.required === true ? " required" : "";
+  const nullable = member.nullable === true ? " nullable" : "";
+  const label = `${owner ? `${owner}.` : ""}${name}`;
+  return `${label}${typeName ? `:${typeName}` : ""}${required}${nullable}`;
 }
 
 function formatScore(score: number): string {

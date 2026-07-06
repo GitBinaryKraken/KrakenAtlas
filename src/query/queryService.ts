@@ -1,42 +1,117 @@
 import * as path from "path";
 import { Database } from "sql.js";
 import { openSqliteIndex } from "../storage/sqliteIndex";
+import {
+  contextFromProjectSymbol,
+  inferProjectNameFromFile,
+  inferProjectNameFromSymbol,
+  normalizeQueryContext,
+  resolveContextCandidate,
+  uniqueContexts
+} from "./queryContext";
+import {
+  buildContextPruningResult,
+  ContextProjectRow,
+  ContextTagRow,
+  contextPruningNodeIds
+} from "./queryContextPruning";
+import {
+  averagePatternConfidence,
+  buildPatternMapSummaries,
+  buildReferenceSummary,
+  compactResponse,
+  firstLineRange,
+  inferSyntheticNodeKind,
+  nodeLocation,
+  patternEvidence,
+  referenceEvidence,
+  relationshipEvidence,
+  relationshipFiles,
+  searchEvidence,
+  strongAnchorEvidence,
+  symbolEvidence
+} from "./queryEvidence";
+import {
+  anchorFlowEdges,
+  assessFlowCoverage,
+  buildFlowCoverageCaveats,
+  composeFlowEdges,
+  exactIdentifierAnchors,
+  hasIncompleteBrowserQueryState,
+  isCommonExternalSymbol,
+  isLowValueRelationshipEdge,
+  isRelevantFlowEdge,
+  propertyNamesFromFlow,
+  promoteJavaScriptInteractionPath,
+  rankFlowEdges,
+  relationshipMatchesCrossContextAnchor,
+  semanticFlowAnchors
+} from "./queryFlow";
+import {
+  buildArchitectureHotspots,
+  buildPrecomputedArchitectureHotspots
+} from "./queryHotspots";
+import { looksLikeFileQuery } from "./queryPath";
+import { buildPlanChangeResponse } from "./queryPlanning";
+import { buildReferenceCoverageCaveats, referenceNextQueries } from "./queryReferences";
+import { enrichRecommendationsWithNodeGuidance } from "./queryRecommendationGuidance";
+import { strongAnchorRoleBoost } from "./queryScoring";
+import { buildRecommendationNodeTagEvidence, NodeTagEvidence } from "./queryNodeTags";
+import {
+  isWeakMultiTermSearch,
+  rankSearchRowsForAgent,
+  relationshipTermScore,
+  scorePattern
+} from "./querySearch";
+import {
+  buildSharedContractBoundaryRecords,
+  NodeMemberEvidenceRow,
+  NodeProjectEvidenceRow,
+  NodeRoleEvidenceRow,
+  sharedContractCandidateNodeIds,
+  SymbolEvidenceRow
+} from "./querySharedContracts";
+import {
+  conceptMatchesText,
+  domainFlowTerms,
+  queryCoreTerms,
+  queryTerms,
+  queryVariants,
+  queryWantsBrowserQueryState,
+  queryWantsCompositionRoot,
+  queryWantsJavaScriptInteraction
+} from "./queryText";
+import type {
+  QueryContext,
+  QueryContextAmbiguity,
+  QueryResponse,
+  QueryServiceOptions,
+  RelationshipQueryOptions
+} from "./queryTypes";
+import {
+  booleanValue,
+  mergeSearchRows,
+  numberValue,
+  placeholders,
+  stringValue,
+  sumCounts,
+  uniqueById,
+  uniqueStrings
+} from "./queryUtils";
+import {
+  addRecommendationReason,
+  assessExistingCapabilityEvidence,
+  buildPatternFitEvidence,
+  buildWhereToAddCaveats,
+  calculateWhereToAddConfidence,
+  FileRecommendation,
+  includeViewSurfaceRecommendation,
+  rankFileRecommendations,
+  sortRecommendationReasons
+} from "./whereToAddRanking";
+import { findValueLifecycleRelationships } from "./queryValueLifecycle";
 
-export interface QueryResponse {
-  query: string;
-  answer: string;
-  confidence: number;
-  evidence: Array<Record<string, unknown>>;
-  files: string[];
-  symbols: string[];
-  relationships: Array<Record<string, unknown>>;
-  patterns: Array<Record<string, unknown>>;
-  flow: Array<Record<string, unknown>>;
-  nextQueries: string[];
-  estimatedContextSavings: string;
-}
-
-export interface QueryServiceOptions {
-  projectContext?: string;
-}
-
-export interface RelationshipQueryOptions {
-  edgeTypes?: string[];
-  limit?: number;
-}
-
-interface QueryContext {
-  input: string;
-  name: string;
-  filePrefix: string;
-  symbolPrefix: string;
-  projectSymbolPrefix: string;
-}
-
-interface QueryContextAmbiguity {
-  requested: string;
-  candidates: QueryContext[];
-}
+export type { QueryResponse, QueryServiceOptions, RelationshipQueryOptions } from "./queryTypes";
 
 export async function withQueryService<T>(workspaceRoot: string, callback: (service: QueryService) => T | Promise<T>, options: QueryServiceOptions = {}): Promise<T> {
   const indexPath = path.join(workspaceRoot, ".kraken-atlas", "index.sqlite");
@@ -336,10 +411,24 @@ export class QueryService {
       rows = uniqueById([...connectedRows, ...rows]).slice(0, limit);
     }
 
+    const valueLifecycleRows = findValueLifecycleRelationships({
+      query,
+      symbolIds,
+      edgeTypes,
+      limit,
+      relationshipContext: this.relationshipContextWhere("AND"),
+      readJson: (sql, params = []) => this.execJson(sql, params)
+    });
+    rows = uniqueById([...valueLifecycleRows, ...rows]).slice(0, limit);
+
     const filteredRows = this.withEndpointLocations(filterRelationshipRowsForQuery(rows, query));
     const omittedCount = Math.max(0, rows.length - filteredRows.length);
     const expandedRows = this.queryContext ? filteredRows.filter((row) => !this.relationshipMatchesContext(row)) : [];
     const expandedTypes = countByValues(expandedRows.map((row) => stringValue(row.type)));
+    const datatypeProjectUsage = this.buildDatatypeProjectUsage(query, symbolIds);
+    const datatypeRoleSummary = this.buildNodeRoleSummary(symbolIds);
+    const datatypeTagSummary = this.buildNodeTagSummary(symbolIds);
+    const datatypeMemberSummary = this.buildNodeMemberSummary(symbolIds);
 
     return compactResponse({
       query,
@@ -348,6 +437,10 @@ export class QueryService {
         : "No relationships matched.",
       confidence: filteredRows.length ? 0.9 : 0,
       evidence: [
+        ...(datatypeProjectUsage ? [datatypeProjectUsage] : []),
+        ...(datatypeRoleSummary ? [datatypeRoleSummary] : []),
+        ...(datatypeTagSummary ? [datatypeTagSummary] : []),
+        ...(datatypeMemberSummary ? [datatypeMemberSummary] : []),
         ...(expandedRows.length ? [{
           recordType: "contextExpansion",
           context: this.queryContext?.name,
@@ -374,6 +467,215 @@ export class QueryService {
       files: relationshipFiles(filteredRows),
       nextQueries: relationshipNextQueries(filteredRows)
     });
+  }
+
+  private buildNodeMemberSummary(symbolIds: string[]): Record<string, unknown> | undefined {
+    if (symbolIds.length === 0) {
+      return undefined;
+    }
+
+    try {
+      const rows = this.execRows(
+        `SELECT node_id, member_id, member_name, member_kind, type_name, required, nullable
+         FROM node_members
+         WHERE node_id IN (${placeholders(symbolIds.length)})
+         ORDER BY node_id, member_name
+         LIMIT 40;`,
+        symbolIds
+      );
+      if (rows.length === 0) {
+        return undefined;
+      }
+
+      const memberCounts = this.execRows(
+        `SELECT node_id, COUNT(*) AS member_count
+         FROM node_members
+         WHERE node_id IN (${placeholders(symbolIds.length)})
+         GROUP BY node_id;`,
+        symbolIds
+      );
+
+      return {
+        recordType: "nodeMemberSummary",
+        memberCount: memberCounts.reduce((total, row) => total + numberValue(row.member_count), 0),
+        sampledCount: rows.length,
+        members: rows.map((row) => ({
+          nodeId: stringValue(row.node_id),
+          memberId: stringValue(row.member_id),
+          name: stringValue(row.member_name),
+          kind: stringValue(row.member_kind),
+          typeName: stringValue(row.type_name),
+          required: booleanValue(row.required),
+          nullable: booleanValue(row.nullable)
+        }))
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private buildNodeRoleSummary(symbolIds: string[]): Record<string, unknown> | undefined {
+    if (symbolIds.length === 0) {
+      return undefined;
+    }
+
+    try {
+      const rows = this.execRows(
+        `SELECT role, MAX(confidence) AS confidence, GROUP_CONCAT(DISTINCT source) AS sources, COUNT(*) AS node_count
+         FROM node_roles
+         WHERE node_id IN (${placeholders(symbolIds.length)})
+         GROUP BY role
+         ORDER BY confidence DESC, role
+         LIMIT 12;`,
+        symbolIds
+      );
+      if (rows.length === 0) {
+        return undefined;
+      }
+
+      return {
+        recordType: "nodeRoleSummary",
+        roles: rows.map((row) => ({
+          role: stringValue(row.role),
+          confidence: numberValue(row.confidence),
+          sources: stringValue(row.sources).split(",").filter(Boolean),
+          nodeCount: numberValue(row.node_count)
+        }))
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private buildNodeTagSummary(symbolIds: string[]): Record<string, unknown> | undefined {
+    if (symbolIds.length === 0) {
+      return undefined;
+    }
+
+    try {
+      const rows = this.execRows(
+        `SELECT tag, MAX(confidence) AS confidence, GROUP_CONCAT(DISTINCT source) AS sources, COUNT(DISTINCT node_id) AS node_count
+         FROM node_tags
+         WHERE node_id IN (${placeholders(symbolIds.length)})
+         GROUP BY tag
+         ORDER BY confidence DESC, node_count DESC, tag
+         LIMIT 16;`,
+        symbolIds
+      );
+      if (rows.length === 0) {
+        return undefined;
+      }
+
+      return {
+        recordType: "nodeTagSummary",
+        tags: rows.map((row) => ({
+          tag: stringValue(row.tag),
+          confidence: numberValue(row.confidence),
+          sources: stringValue(row.sources).split(",").filter(Boolean),
+          nodeCount: numberValue(row.node_count)
+        }))
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private buildDatatypeProjectUsage(query: string, symbolIds: string[]): Record<string, unknown> | undefined {
+    if (symbolIds.length === 0) {
+      return undefined;
+    }
+
+    const symbols = this.execJson(
+      `SELECT json FROM symbols WHERE id IN (${placeholders(symbolIds.length)}) LIMIT 80;`,
+      symbolIds
+    );
+    const csharpSymbols = symbols.filter((symbol) => stringValue(symbol.language) === "csharp");
+    if (csharpSymbols.length === 0) {
+      return undefined;
+    }
+
+    const enrichedProjectUsage = this.readNodeProjectUsage(symbolIds);
+    if (enrichedProjectUsage) {
+      return enrichedProjectUsage;
+    }
+
+    const declarationProjects = countByValues(csharpSymbols.map((symbol) => inferProjectNameFromFile(stringValue(symbol.file)) ?? "").filter(Boolean));
+    const referenceRows = this.execRows(
+      `SELECT file FROM references_map
+       WHERE resolved_symbol_id IN (${placeholders(symbolIds.length)})
+          OR resolved_symbol_id LIKE ?
+          OR symbol_name LIKE ?
+       LIMIT 500;`,
+      [...symbolIds, `%${query}%`, `%${query}%`]
+    );
+    const relationshipRows = this.execRows(
+      `SELECT file FROM relationships
+       WHERE from_id IN (${placeholders(symbolIds.length)})
+          OR to_id IN (${placeholders(symbolIds.length)})
+          OR from_id LIKE ?
+          OR to_id LIKE ?
+          OR json LIKE ?
+       LIMIT 500;`,
+      [...symbolIds, ...symbolIds, `%${query}%`, `%${query}%`, `%${query}%`]
+    );
+    const referenceProjects = countByValues(referenceRows.map((row) => inferProjectNameFromFile(stringValue(row.file)) ?? "").filter(Boolean));
+    const relationshipProjects = countByValues(relationshipRows.map((row) => inferProjectNameFromFile(stringValue(row.file)) ?? "").filter(Boolean));
+    const projects = uniqueStrings([
+      ...Object.keys(declarationProjects),
+      ...Object.keys(referenceProjects),
+      ...Object.keys(relationshipProjects)
+    ]);
+
+    if (projects.length <= 1 && Object.keys(referenceProjects).length === 0 && Object.keys(relationshipProjects).length === 0) {
+      return undefined;
+    }
+
+    return {
+      recordType: "datatypeProjectUsage",
+      symbolCount: csharpSymbols.length,
+      declaredIn: declarationProjects,
+      referencedFrom: referenceProjects,
+      relationshipEvidenceFrom: relationshipProjects,
+      projects
+    };
+  }
+
+  private readNodeProjectUsage(symbolIds: string[]): Record<string, unknown> | undefined {
+    try {
+      const rows = this.execRows(
+        `SELECT project, role, SUM(evidence_count) AS evidence_count
+         FROM node_projects
+         WHERE node_id IN (${placeholders(symbolIds.length)})
+         GROUP BY project, role
+         ORDER BY project, role;`,
+        symbolIds
+      );
+      if (rows.length === 0) {
+        return undefined;
+      }
+
+      const byRole = (role: string): Record<string, number> => Object.fromEntries(rows
+        .filter((row) => stringValue(row.role) === role)
+        .map((row) => [stringValue(row.project), numberValue(row.evidence_count)]));
+      const declaredIn = byRole("declared");
+      const referencedFrom = byRole("referenced");
+      const relationshipEvidenceFrom = byRole("related");
+      const projects = uniqueStrings(rows.map((row) => stringValue(row.project)));
+      if (projects.length <= 1 && Object.keys(referencedFrom).length === 0 && Object.keys(relationshipEvidenceFrom).length === 0) {
+        return undefined;
+      }
+
+      return {
+        recordType: "datatypeProjectUsage",
+        symbolCount: symbolIds.length,
+        declaredIn,
+        referencedFrom,
+        relationshipEvidenceFrom,
+        projects
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   public findPatterns(query: string): QueryResponse {
@@ -445,20 +747,10 @@ export class QueryService {
       return ambiguity;
     }
 
-    const context = this.relationshipContextWhere("WHERE");
-    const rows = this.execJson(
-      `SELECT json FROM relationships
-       ${context.sql}
-       ORDER BY file, start_line
-       LIMIT 5000;`,
-      context.params
-    );
     const terms = queryTerms(query).filter((term) => !["hotspot", "hotspots", "architecture", "central", "shared"].includes(term));
-    const scopedRows = terms.length
-      ? rows.filter((row) => terms.some((term) => JSON.stringify(row).toLowerCase().includes(term)))
-      : rows;
-    const activeRows = scopedRows.length || !terms.length ? scopedRows : rows;
-    const hotspots = buildArchitectureHotspots(activeRows).slice(0, 8);
+    const precomputedHotspots = this.findPrecomputedArchitectureHotspots(terms);
+    const activeRows = precomputedHotspots ? [] : this.findHotspotRelationshipRows(terms);
+    const hotspots = precomputedHotspots ?? buildArchitectureHotspots(activeRows).slice(0, 8);
     const files = hotspots.map((hotspot) => stringValue(hotspot.file));
 
     return compactResponse({
@@ -470,7 +762,10 @@ export class QueryService {
       evidence: [
         {
           recordType: "hotspotSummary",
-          message: "Hotspots are ranked from relationship volume, relationship-type diversity, and shared graph endpoints. They are useful for architecture awareness and risk checks."
+          source: precomputedHotspots ? "node_usage_summary" : "relationships",
+          message: precomputedHotspots
+            ? "Hotspots are ranked from rebuild-time usage summaries. They are useful for architecture awareness and risk checks."
+            : "Hotspots are ranked from relationship volume, relationship-type diversity, and shared graph endpoints. They are useful for architecture awareness and risk checks."
         },
         ...hotspots,
         {
@@ -482,6 +777,86 @@ export class QueryService {
       relationships: activeRows.slice(0, 12),
       nextQueries: uniqueStrings(files.slice(0, 6).map((file) => `kraken-atlas query relationships "${file}"`))
     });
+  }
+
+  private findHotspotRelationshipRows(terms: string[]): Array<Record<string, unknown>> {
+    const context = this.relationshipContextWhere("WHERE");
+    const rows = this.execJson(
+      `SELECT json FROM relationships
+       ${context.sql}
+       ORDER BY file, start_line
+       LIMIT 5000;`,
+      context.params
+    );
+    const scopedRows = terms.length
+      ? rows.filter((row) => terms.some((term) => JSON.stringify(row).toLowerCase().includes(term)))
+      : rows;
+    return scopedRows.length || !terms.length ? scopedRows : rows;
+  }
+
+  private findPrecomputedArchitectureHotspots(terms: string[]): Array<Record<string, unknown>> | undefined {
+    try {
+      const rows = this.readUsageHotspotRows(terms);
+      const activeRows = rows.length || !terms.length ? rows : this.readUsageHotspotRows([]);
+      if (activeRows.length === 0) {
+        return [];
+      }
+
+      const files = activeRows.map((row) => stringValue(row.file));
+      const typesByFile = this.readTopRelationshipTypesForFiles(files);
+      return buildPrecomputedArchitectureHotspots(activeRows, typesByFile);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private readUsageHotspotRows(terms: string[]): Array<Record<string, unknown>> {
+    const contextSql = this.queryContext ? "AND f.path LIKE ?" : "";
+    const contextParams = this.queryContext ? [`${this.queryContext.filePrefix}%`] : [];
+    const termSql = terms.length ? `AND (${terms.map(() => "f.path LIKE ?").join(" OR ")})` : "";
+    const termParams = terms.map((term) => `%${term}%`);
+    return this.execRows(
+      `SELECT f.path AS file,
+              u.incoming_count,
+              u.outgoing_count,
+              u.reference_count,
+              u.project_count,
+              u.hotspot_score,
+              u.edit_likelihood,
+              u.avoid_initially
+       FROM node_usage_summary u
+       JOIN files f ON f.id = u.node_id
+       WHERE u.hotspot_score >= 4
+         AND f.is_generated = 0
+         ${contextSql}
+         ${termSql}
+       ORDER BY u.hotspot_score DESC, u.outgoing_count DESC, f.path
+       LIMIT 8;`,
+      [...contextParams, ...termParams]
+    );
+  }
+
+  private readTopRelationshipTypesForFiles(files: string[]): Map<string, Array<Record<string, unknown>>> {
+    if (files.length === 0) {
+      return new Map();
+    }
+
+    const rows = this.execRows(
+      `SELECT file, type, COUNT(*) AS count
+       FROM relationships
+       WHERE file IN (${placeholders(files.length)})
+       GROUP BY file, type
+       ORDER BY file, count DESC, type;`,
+      files
+    );
+    const byFile = new Map<string, Array<Record<string, unknown>>>();
+    for (const row of rows) {
+      const file = stringValue(row.file);
+      const entries = byFile.get(file) ?? [];
+      entries.push({ type: stringValue(row.type), count: numberValue(row.count) });
+      byFile.set(file, entries);
+    }
+    return byFile;
   }
 
   public findOrphans(query = ""): QueryResponse {
@@ -589,10 +964,12 @@ export class QueryService {
     const layeredContext = preferJavaScript ? [] : this.findLayeredFlowContext(query, coreFlow, terms);
     const configurationContext = preferJavaScript ? [] : this.findConfigurationContext(coreFlow, terms);
     const propertyBridgeContext = preferJavaScript ? [] : this.findPropertyBridgeContext([...coreFlow, ...layeredContext]);
+    const requestedPropertyContext = preferJavaScript ? [] : this.findRequestedPropertyContext(exactAnchors);
     const dataFlowContext = preferJavaScript ? [] : this.findDataFlowContext([...coreFlow, ...propertyBridgeContext], terms);
     const projectReferences = preferJavaScript ? [] : this.findProjectReferenceContext(coreFlow);
     const flowEdges = composeFlowEdges(query, [
       ...coreFlow,
+      ...requestedPropertyContext,
       ...layeredContext,
       ...propertyBridgeContext,
       ...configurationContext,
@@ -730,16 +1107,30 @@ export class QueryService {
     const flow = this.findFlow(query);
     const patterns = this.scopePatternsToContext(this.findRelevantPatterns(query));
     const strongAnchors = flow.evidence.filter((item) => item.recordType === "strongAnchor");
-    const rankedRecommendations = rankFileRecommendations(query, searchRows, flow.relationships, patterns, strongAnchors);
+    const rankedRecommendations = enrichRecommendationsWithNodeGuidance(
+      query,
+      this.enrichRecommendationsWithNodeTags(
+        query,
+        this.enrichRecommendationsWithUsageSummary(
+          query,
+          rankFileRecommendations(query, searchRows, flow.relationships, patterns, strongAnchors)
+        )
+      ),
+      (sql, params = []) => this.execRows(sql, params),
+      (sql, params = []) => this.execJson(sql, params)
+    );
     const browserStateFiles = new Set(flow.relationships
       .filter((relationship) => ["READS_QUERY_STRING", "WRITES_QUERY_STRING", "WRITES_BROWSER_HISTORY"].includes(stringValue(relationship.type)))
       .map((relationship) => stringValue(relationship.file))
       .filter(Boolean));
-    const recommendations = (queryWantsBrowserQueryState(query.toLowerCase()) && browserStateFiles.size
+    const candidateRecommendations = queryWantsBrowserQueryState(query.toLowerCase()) && browserStateFiles.size
       ? rankedRecommendations.filter((recommendation) => browserStateFiles.has(recommendation.file))
-      : rankedRecommendations).slice(0, 8);
+      : rankedRecommendations;
+    const recommendations = includeViewSurfaceRecommendation(query, candidateRecommendations.slice(0, 8), candidateRecommendations);
     const capabilityAssessment = assessExistingCapabilityEvidence(query, flow.relationships);
     const patternFit = buildPatternFitEvidence(patterns, recommendations);
+    const sharedContractBoundaries = this.buildSharedContractBoundaryEvidence(query, recommendations, flow.relationships, strongAnchors);
+    const contextPruning = this.pruneRelationshipsForContext(query, recommendations.map((recommendation) => recommendation.file), recommendations, sharedContractBoundaries, flow.relationships.slice(0, 12));
     const caveats = buildWhereToAddCaveats(query, recommendations, flow.relationships);
     const files = recommendations.map((recommendation) => recommendation.file);
     const confidence = Math.min(calculateWhereToAddConfidence(query, recommendations, flow.relationships), flow.confidence);
@@ -750,10 +1141,10 @@ export class QueryService {
         ? `${capabilityAssessment.answerPrefix}Likely edit locations for "${query}" ranked by text matches, feature-flow edges, and detected project patterns.`
         : `No strong edit-location recommendation found for "${query}". Start with search and project queries.`,
       confidence,
-      evidence: [...recommendations, ...capabilityAssessment.evidence, ...patternFit, ...strongAnchors, ...patterns.slice(0, 4).map(patternEvidence), ...caveats],
+      evidence: [...recommendations, ...sharedContractBoundaries, ...contextPruning.evidence, ...capabilityAssessment.evidence, ...patternFit, ...strongAnchors, ...patterns.slice(0, 4).map(patternEvidence), ...caveats],
       files,
       symbols: uniqueStrings(flow.symbols),
-      relationships: flow.relationships.slice(0, 12),
+      relationships: contextPruning.relationships,
       patterns: patterns.slice(0, 5).map(patternEvidence),
       nextQueries: uniqueStrings([
         ...files.slice(0, 5).map((file) => `kraken-atlas query relationships "${file}"`),
@@ -761,6 +1152,231 @@ export class QueryService {
         ...patterns.flatMap((pattern) => (pattern.instances as any[] | undefined)?.slice(0, 2).flatMap((instance) => (instance.symbols ?? []).map((symbol: string) => `kraken-atlas query relationships "${symbol}"`)) ?? [])
       ]).slice(0, 8)
     });
+  }
+
+  private pruneRelationshipsForContext(
+    query: string,
+    files: string[],
+    recommendations: FileRecommendation[],
+    boundaries: Array<Record<string, unknown>>,
+    relationships: Array<Record<string, unknown>>
+  ): { relationships: Array<Record<string, unknown>>; evidence: Array<Record<string, unknown>> } {
+    const nodeIds = contextPruningNodeIds(relationships, boundaries);
+    if (nodeIds.length === 0) {
+      return { relationships, evidence: [] };
+    }
+
+    try {
+      const tagRows: ContextTagRow[] = this.execRows(
+        `SELECT node_id, tag
+         FROM node_tags
+         WHERE node_id IN (${placeholders(nodeIds.length)})
+         ORDER BY node_id, tag;`,
+        nodeIds
+      ).map((row) => ({
+        nodeId: stringValue(row.node_id),
+        tag: stringValue(row.tag)
+      }));
+      const projectRows: ContextProjectRow[] = this.execRows(
+        `SELECT node_id, project
+         FROM node_projects
+         WHERE node_id IN (${placeholders(nodeIds.length)})
+         ORDER BY node_id, project;`,
+        nodeIds
+      ).map((row) => ({
+        nodeId: stringValue(row.node_id),
+        project: stringValue(row.project)
+      }));
+      return buildContextPruningResult(query, files, recommendations, boundaries, relationships, tagRows, projectRows);
+    } catch {
+      return { relationships, evidence: [] };
+    }
+  }
+
+  private buildSharedContractBoundaryEvidence(
+    query: string,
+    recommendations: FileRecommendation[],
+    relationships: Array<Record<string, unknown>>,
+    strongAnchors: Array<Record<string, unknown>>
+  ): Array<Record<string, unknown>> {
+    const nodeIds = sharedContractCandidateNodeIds(recommendations, relationships, strongAnchors);
+    if (nodeIds.length === 0) {
+      return [];
+    }
+
+    try {
+      const roleRows: NodeRoleEvidenceRow[] = this.execRows(
+        `SELECT node_id, role, MAX(confidence) AS confidence
+         FROM node_roles
+         WHERE node_id IN (${placeholders(nodeIds.length)})
+         GROUP BY node_id, role;`,
+        nodeIds
+      ).map((row) => ({
+        nodeId: stringValue(row.node_id),
+        role: stringValue(row.role),
+        confidence: numberValue(row.confidence)
+      }));
+      const projectRows: NodeProjectEvidenceRow[] = this.execRows(
+        `SELECT node_id, project, role, SUM(evidence_count) AS evidence_count
+         FROM node_projects
+         WHERE node_id IN (${placeholders(nodeIds.length)})
+         GROUP BY node_id, project, role;`,
+        nodeIds
+      ).map((row) => ({
+        nodeId: stringValue(row.node_id),
+        project: stringValue(row.project),
+        role: stringValue(row.role),
+        evidenceCount: numberValue(row.evidence_count)
+      }));
+      const memberRows: NodeMemberEvidenceRow[] = this.execRows(
+        `SELECT node_id, member_name
+         FROM node_members
+         WHERE node_id IN (${placeholders(nodeIds.length)})
+         ORDER BY node_id, member_name
+         LIMIT 120;`,
+        nodeIds
+      ).map((row) => ({
+        nodeId: stringValue(row.node_id),
+        name: stringValue(row.member_name)
+      }));
+      const symbolRows: SymbolEvidenceRow[] = this.execJson(
+        `SELECT json FROM symbols WHERE id IN (${placeholders(nodeIds.length)}) LIMIT 120;`,
+        nodeIds
+      ).map((row) => ({
+        id: stringValue(row.id),
+        name: stringValue(row.name),
+        file: stringValue(row.file),
+        kind: stringValue(row.kind)
+      }));
+
+      return buildSharedContractBoundaryRecords(query, nodeIds, roleRows, projectRows, memberRows, symbolRows);
+    } catch {
+      return [];
+    }
+  }
+
+  private enrichRecommendationsWithUsageSummary(query: string, recommendations: FileRecommendation[]): FileRecommendation[] {
+    if (recommendations.length === 0) {
+      return recommendations;
+    }
+
+    try {
+      const nodeIds = recommendations.map((recommendation) => `file:${recommendation.file}`);
+      const rows = this.execRows(
+        `SELECT node_id,
+                incoming_count,
+                outgoing_count,
+                reference_count,
+                project_count,
+                hotspot_score,
+                edit_likelihood,
+                avoid_initially
+         FROM node_usage_summary
+         WHERE node_id IN (${placeholders(nodeIds.length)});`,
+        nodeIds
+      );
+      const byFile = new Map(rows.map((row) => [stringValue(row.node_id).replace(/^file:/u, ""), row]));
+      const lowerQuery = query.toLowerCase();
+      const queryAcceptsCentralFiles = queryWantsCompositionRoot(lowerQuery)
+        || /\b(shared|startup|routing|middleware|configuration|config|options|dependency injection|di)\b/iu.test(lowerQuery);
+
+      for (const recommendation of recommendations) {
+        const row = byFile.get(recommendation.file);
+        if (!row) {
+          continue;
+        }
+
+        const hotspotScore = numberValue(row.hotspot_score);
+        const editLikelihood = numberValue(row.edit_likelihood);
+        const avoidInitially = booleanValue(row.avoid_initially) === true;
+        recommendation.usageSummary = {
+          incomingCount: numberValue(row.incoming_count),
+          outgoingCount: numberValue(row.outgoing_count),
+          referenceCount: numberValue(row.reference_count),
+          projectCount: numberValue(row.project_count),
+          hotspotScore,
+          editLikelihood,
+          avoidInitially
+        };
+
+        if (avoidInitially && !queryAcceptsCentralFiles) {
+          recommendation.score -= Math.min(8, 3 + hotspotScore / 10);
+          addRecommendationReason(recommendation, "Usage summary marks this as central/shared; avoid initially unless changing cross-cutting behavior.");
+        } else if (editLikelihood >= 0.5) {
+          recommendation.score += Math.min(3, editLikelihood * 3);
+          addRecommendationReason(recommendation, "Usage summary suggests this is a plausible edit surface.");
+        }
+
+        sortRecommendationReasons(recommendation);
+      }
+
+      return recommendations
+        .filter((recommendation) => recommendation.score > 0)
+        .sort((left, right) => Number(Boolean(right.strongAnchor)) - Number(Boolean(left.strongAnchor)) || right.score - left.score || left.file.localeCompare(right.file));
+    } catch {
+      return recommendations;
+    }
+  }
+
+  private enrichRecommendationsWithNodeTags(query: string, recommendations: FileRecommendation[]): FileRecommendation[] {
+    if (recommendations.length === 0) {
+      return recommendations;
+    }
+
+    try {
+      const nodeIds = recommendations.map((recommendation) => `file:${recommendation.file}`);
+      const rows = this.execRows(
+        `SELECT node_id,
+                tag,
+                MAX(confidence) AS confidence,
+                GROUP_CONCAT(DISTINCT source) AS sources
+         FROM node_tags
+         WHERE node_id IN (${placeholders(nodeIds.length)})
+         GROUP BY node_id, tag
+         ORDER BY confidence DESC, tag;`,
+        nodeIds
+      );
+      const tagsByFile = new Map<string, NodeTagEvidence[]>();
+      for (const row of rows) {
+        const file = stringValue(row.node_id).replace(/^file:/u, "");
+        const tag = stringValue(row.tag);
+        if (!file || !tag) {
+          continue;
+        }
+
+        const entries = tagsByFile.get(file) ?? [];
+        entries.push({
+          tag,
+          confidence: numberValue(row.confidence),
+          sources: stringValue(row.sources).split(",").filter(Boolean)
+        });
+        tagsByFile.set(file, entries);
+      }
+
+      for (const recommendation of recommendations) {
+        const tagEvidence = buildRecommendationNodeTagEvidence(query, tagsByFile.get(recommendation.file) ?? []);
+        if (tagEvidence.nodeTags.length === 0) {
+          continue;
+        }
+
+        recommendation.nodeTags = tagEvidence.nodeTags;
+        recommendation.matchedTags = tagEvidence.matchedTags;
+        recommendation.matchedTerms = uniqueStrings([...recommendation.matchedTerms, ...tagEvidence.matchedTerms]).slice(0, 8);
+        if (tagEvidence.scoreBoost > 0) {
+          recommendation.score += tagEvidence.scoreBoost;
+        }
+        if (tagEvidence.reason) {
+          addRecommendationReason(recommendation, tagEvidence.reason);
+        }
+        sortRecommendationReasons(recommendation);
+      }
+
+      return recommendations
+        .filter((recommendation) => recommendation.score > 0)
+        .sort((left, right) => Number(Boolean(right.strongAnchor)) - Number(Boolean(left.strongAnchor)) || right.score - left.score || left.file.localeCompare(right.file));
+    } catch {
+      return recommendations;
+    }
   }
 
   public planChange(query: string): QueryResponse {
@@ -772,64 +1388,14 @@ export class QueryService {
     const where = this.whereToAdd(query);
     const hotspots = this.findArchitectureHotspots(query);
     const drift = this.findDrift(query);
-    const files = where.files.slice(0, 6);
-    const fileSet = new Set(files);
-    const fileRecommendations = where.evidence
-      .filter((item) => item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file)))
-      .slice(0, 6);
-    const patternFit = where.evidence.filter((item) => item.recordType === "patternFit").slice(0, 2);
-    const caveats = where.evidence.filter((item) => item.recordType === "caveat").slice(0, 2);
-    const avoidHotspots = hotspots.evidence
-      .filter((item) => item.recordType === "architectureHotspot" && !fileSet.has(stringValue(item.file)))
-      .slice(0, 3)
-      .map((item) => ({
-        recordType: "planAvoidFile",
-        file: item.file,
-        role: item.role,
-        reason: "Central/shared hotspot. Inspect only if this change touches shared setup, configuration, routing, or cross-cutting behavior."
-      }));
-    const driftFindings = drift.evidence
-      .filter((item) => item.recordType === "finding")
-      .slice(0, 3);
-    const contextCommand = `kraken-atlas context plan-change "${query.replace(/"/g, '\\"')}"`;
-
-    return compactResponse({
+    return buildPlanChangeResponse(
       query,
-      answer: files.length
-        ? `Implementation plan for "${query}" with likely edit files, pattern guidance, risk checks, and a bounded context command.`
-        : `No implementation plan found for "${query}". Start with search and project queries.`,
-      confidence: Math.min(where.confidence + (patternFit.length ? 0.05 : 0), 0.92),
-      evidence: [
-        {
-          recordType: "changePlanSummary",
-          editFileCount: files.length,
-          patternFitCount: patternFit.length,
-          driftCount: driftFindings.length,
-          avoidFileCount: avoidHotspots.length,
-          message: "Open likely edit files first, copy the local pattern, avoid central files initially, then export context only after the plan is accepted."
-        },
-        ...caveats,
-        ...patternFit,
-        ...fileRecommendations,
-        ...avoidHotspots,
-        ...driftFindings,
-        {
-          recordType: "contextPackCommand",
-          command: contextCommand,
-          message: "Use this after reviewing the plan to create a bounded context pack for implementation."
-        }
-      ],
-      files,
-      symbols: where.symbols,
-      relationships: where.relationships,
-      patterns: where.patterns,
-      nextQueries: uniqueStrings([
-        contextCommand,
-        ...where.nextQueries.slice(0, 4),
-        "kraken-atlas query hotspots",
-        "kraken-atlas query drift"
-      ]).slice(0, 8)
-    });
+      where,
+      hotspots,
+      drift,
+      (planQuery, files, fileRecommendations, sharedContractBoundaries, relationships) =>
+        this.pruneRelationshipsForContext(planQuery, files, fileRecommendations, sharedContractBoundaries, relationships)
+    );
   }
 
   private findSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>> {
@@ -1222,6 +1788,27 @@ export class QueryService {
     )).slice(0, 8);
   }
 
+  private findRequestedPropertyContext(exactAnchors: string[]): Array<Record<string, unknown>> {
+    const propertyAnchors = exactAnchors
+      .filter((anchor) => /[a-z][A-Z]/.test(anchor) || /(?:title|description|keywords?|summary|tags?|date|time|slug|path)$/i.test(anchor))
+      .slice(0, 8);
+    if (propertyAnchors.length === 0) {
+      return [];
+    }
+
+    const clauses = propertyAnchors.map(() => "(from_id LIKE ? OR to_id LIKE ? OR json LIKE ?)").join(" OR ");
+    const context = this.relationshipContextWhere("AND");
+    return anchorFlowEdges(rankFlowEdges(this.execJson(
+      `SELECT json FROM relationships
+       WHERE type IN ('MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD', 'WRITES', 'QUERIES')
+         AND (${clauses})
+       ${context.sql}
+       ORDER BY type, file, start_line
+       LIMIT 80;`,
+      [...propertyAnchors.flatMap((anchor) => [`%${anchor}%`, `%${anchor}%`, `%${anchor}%`]), ...context.params]
+    )), propertyAnchors).slice(0, 12);
+  }
+
   private findLayeredFlowContext(query: string, flow: Array<Record<string, unknown>>, terms: string[]): Array<Record<string, unknown>> {
     const domainTerms = domainFlowTerms(terms);
     if (domainTerms.length === 0) {
@@ -1573,376 +2160,6 @@ export class QueryService {
   }
 }
 
-function compactResponse(input: Partial<QueryResponse> & { query: string; answer: string; confidence: number }): QueryResponse {
-  return {
-    query: input.query,
-    answer: input.answer,
-    confidence: input.confidence,
-    evidence: input.evidence ?? [],
-    files: uniqueStrings(input.files ?? []),
-    symbols: uniqueStrings(input.symbols ?? []),
-    relationships: input.relationships ?? [],
-    patterns: input.patterns ?? [],
-    flow: input.flow ?? [],
-    nextQueries: uniqueStrings(input.nextQueries ?? []).slice(0, 10),
-    estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
-  };
-}
-
-function symbolEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    id: row.id,
-    name: row.name,
-    kind: row.kind,
-    file: row.file,
-    range: row.range,
-    confidence: row.confidence
-  };
-}
-
-function strongAnchorEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    recordType: "strongAnchor",
-    id: row.id,
-    name: row.name,
-    kind: row.kind,
-    file: row.file,
-    range: row.range,
-    matchedConcepts: row.matchedConcepts,
-    score: row.anchorScore,
-    crossContext: row.crossContext,
-    message: `Strong exact${row.crossContext ? " cross-project" : ""} anchor discovered from: ${(row.matchedConcepts as string[] | undefined)?.join(", ") ?? "query terms"}.`
-  };
-}
-
-function strongAnchorRoleBoost(row: Record<string, unknown>): number {
-  const file = stringValue(row.file).replace(/\\/g, "/").toLowerCase();
-  const kind = stringValue(row.kind).toLowerCase();
-
-  if (kind === "method" && file.includes("/controllers/")) {
-    return 9;
-  }
-  if (kind === "method" && (file.includes("/services/") || file.includes("/repositories/"))) {
-    return 5;
-  }
-  if (kind === "interface" || /\/(service|data|repository)definitions\//.test(file)) {
-    return -2;
-  }
-  if (file.includes("/viewmodels/") || file.includes("/models/")) {
-    return -1;
-  }
-
-  return 0;
-}
-
-function referenceEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    recordType: "reference",
-    id: row.id,
-    symbolName: row.symbolName,
-    resolvedSymbolId: row.resolvedSymbolId,
-    file: row.file,
-    range: row.range,
-    context: row.context,
-    snippet: row.snippet,
-    confidence: row.confidence
-  };
-}
-
-function relationshipFiles(rows: Array<Record<string, unknown>>): string[] {
-  return uniqueStrings(rows.flatMap((row) => {
-    const files = [stringValue(row.file)];
-    const to = stringValue(row.to);
-    if (to.startsWith("file:")) {
-      files.push(to.slice("file:".length));
-    }
-    const from = stringValue(row.from);
-    if (from.startsWith("file:")) {
-      files.push(from.slice("file:".length));
-    }
-    return files.filter(Boolean);
-  }));
-}
-
-function searchEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  const body = stringValue(row.body);
-  const matchKind = stringValue(row.record_type) === "reference" ? body.split(/\s+/u)[0] : stringValue(row.record_type);
-  const snippet = matchKind && body.startsWith(matchKind) ? body.slice(matchKind.length).trim() : body;
-  return {
-    recordId: row.record_id,
-    recordType: row.record_type,
-    title: row.title,
-    path: row.path,
-    line: searchRecordLine(row),
-    matchKind,
-    snippet
-  };
-}
-
-function buildReferenceSummary(
-  sourceReferenceKinds: Record<string, number>,
-  relationshipTypes: Record<string, number>,
-  symbolIds: string[]
-): Record<string, unknown> {
-  return {
-    recordType: "referenceSummary",
-    sourceReferenceCount: sumCounts(sourceReferenceKinds),
-    connectedRelationshipCount: sumCounts(relationshipTypes),
-    resolvedAnchorCount: symbolIds.length,
-    sourceReferenceKinds,
-    relationshipTypes,
-    message: "Source references include literal injections and semantically resolved calls. Connected edges are an expansion around all resolved anchors; an exact single-id relationship query can therefore have a different total. Compact agent output samples the evidence; use --format info or json for all records."
-  };
-}
-
-function sumCounts(counts: Record<string, number>): number {
-  return Object.values(counts).reduce((sum, count) => sum + count, 0);
-}
-
-function searchRecordLine(row: Record<string, unknown>): number | undefined {
-  const recordId = stringValue(row.record_id);
-  const file = stringValue(row.path);
-  const referencePrefix = file ? `reference:web:${file}:` : "";
-  if (referencePrefix && recordId.startsWith(referencePrefix)) {
-    const line = Number.parseInt(recordId.slice(referencePrefix.length).split(":")[0], 10);
-    return Number.isFinite(line) ? line : undefined;
-  }
-  return undefined;
-}
-
-function relationshipEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    id: row.id,
-    type: row.type,
-    from: row.from,
-    to: row.to,
-    fromLocation: row.fromLocation,
-    toLocation: row.toLocation,
-    file: row.file,
-    range: row.range,
-    evidence: row.evidence,
-    confidence: row.confidence
-  };
-}
-
-function nodeLocation(id: string, nodeKind: string, file: string, range: unknown, sourceKind: string, approximate: boolean): Record<string, unknown> {
-  return {
-    recordType: "nodeLocation",
-    id,
-    nodeKind,
-    file,
-    range: normalizeRange(range),
-    sourceKind,
-    approximate
-  };
-}
-
-function normalizeRange(range: unknown): Record<string, number> {
-  if (range && typeof range === "object" && typeof (range as { startLine?: unknown }).startLine === "number") {
-    const typed = range as { startLine: number; startColumn?: number; endLine?: number; endColumn?: number };
-    return {
-      startLine: typed.startLine,
-      startColumn: typeof typed.startColumn === "number" ? typed.startColumn : 1,
-      endLine: typeof typed.endLine === "number" ? typed.endLine : typed.startLine,
-      endColumn: typeof typed.endColumn === "number" ? typed.endColumn : 1
-    };
-  }
-
-  return firstLineRange();
-}
-
-function firstLineRange(): Record<string, number> {
-  return {
-    startLine: 1,
-    startColumn: 1,
-    endLine: 1,
-    endColumn: 1
-  };
-}
-
-function inferSyntheticNodeKind(endpointId: string): string {
-  const prefix = endpointId.split(":", 1)[0];
-  if (prefix) {
-    return prefix;
-  }
-
-  return "synthetic";
-}
-
-function patternEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    id: row.id,
-    name: row.name,
-    category: row.category,
-    language: row.language,
-    confidence: row.confidence,
-    frequency: row.frequency,
-    counterExampleCount: row.counterExampleCount,
-    rulesObserved: row.rulesObserved,
-    agentGuidance: row.agentGuidance,
-    instances: row.instances
-  };
-}
-
-function buildPatternMapSummaries(patterns: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const byCategory = new Map<string, Array<Record<string, unknown>>>();
-  for (const pattern of patterns) {
-    const category = stringValue(pattern.category) || "uncategorized";
-    byCategory.set(category, [...(byCategory.get(category) ?? []), pattern]);
-  }
-
-  return [...byCategory.entries()]
-    .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
-    .map(([category, categoryPatterns]) => {
-      const sorted = [...categoryPatterns].sort((left, right) =>
-        numberValue(right.confidence) - numberValue(left.confidence) ||
-        numberValue(right.frequency) - numberValue(left.frequency) ||
-        stringValue(left.name).localeCompare(stringValue(right.name))
-      );
-      const totalFrequency = sorted.reduce((sum, pattern) => sum + numberValue(pattern.frequency), 0);
-      return {
-        recordType: "patternMapArea",
-        category,
-        patternCount: sorted.length,
-        totalFrequency,
-        averageConfidence: averagePatternConfidence(sorted),
-        patterns: sorted.slice(0, 5).map((pattern) => ({
-          id: pattern.id,
-          name: pattern.name,
-          confidence: pattern.confidence,
-          frequency: pattern.frequency,
-          guidance: pattern.agentGuidance
-        })),
-        message: `${category}: ${sorted.length} pattern(s), ${totalFrequency} observed edge(s).`
-      };
-    });
-}
-
-function buildArchitectureHotspots(relationships: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  interface HotspotStats {
-    file: string;
-    relationshipCount: number;
-    types: Map<string, number>;
-    endpoints: Set<string>;
-  }
-
-  const byFile = new Map<string, HotspotStats>();
-  const endpointCounts = new Map<string, number>();
-
-  for (const relationship of relationships) {
-    const file = stringValue(relationship.file);
-    if (!file || isLikelyTestFile(file)) {
-      continue;
-    }
-
-    const stats = byFile.get(file) ?? {
-      file,
-      relationshipCount: 0,
-      types: new Map<string, number>(),
-      endpoints: new Set<string>()
-    };
-    stats.relationshipCount += 1;
-    const type = stringValue(relationship.type) || "UNKNOWN";
-    stats.types.set(type, (stats.types.get(type) ?? 0) + 1);
-    for (const endpoint of [stringValue(relationship.from), stringValue(relationship.to)]) {
-      if (endpoint && !isCommonExternalSymbol(endpoint)) {
-        stats.endpoints.add(endpoint);
-        endpointCounts.set(endpoint, (endpointCounts.get(endpoint) ?? 0) + 1);
-      }
-    }
-    byFile.set(file, stats);
-  }
-
-  return [...byFile.values()]
-    .map((stats) => {
-      const sharedEndpointCount = [...stats.endpoints].filter((endpoint) => (endpointCounts.get(endpoint) ?? 0) > 1).length;
-      const relationshipTypes = [...stats.types.entries()]
-        .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-        .map(([type, count]) => ({ type, count }));
-      const role = inferHotspotRole(stats.file, relationshipTypes.map((entry) => entry.type));
-      const score = stats.relationshipCount + stats.types.size * 3 + sharedEndpointCount * 2 + hotspotRoleScore(role);
-      return {
-        recordType: "architectureHotspot",
-        file: stats.file,
-        score,
-        role,
-        relationshipCount: stats.relationshipCount,
-        distinctRelationshipTypes: stats.types.size,
-        sharedEndpointCount,
-        topRelationshipTypes: relationshipTypes.slice(0, 5),
-        guidance: hotspotGuidance(role)
-      };
-    })
-    .filter((hotspot) => numberValue(hotspot.score) >= 4)
-    .sort((left, right) =>
-      numberValue(right.score) - numberValue(left.score) ||
-      numberValue(right.relationshipCount) - numberValue(left.relationshipCount) ||
-      stringValue(left.file).localeCompare(stringValue(right.file))
-    );
-}
-
-function inferHotspotRole(file: string, relationshipTypes: string[]): string {
-  const normalized = file.replace(/\\/g, "/");
-  const basename = normalized.split("/").pop() ?? normalized;
-  const types = new Set(relationshipTypes);
-
-  if (/^(Program|Startup)\.cs$/iu.test(basename) || types.has("REGISTERS") || types.has("USES_MIDDLEWARE")) {
-    return "composition-root";
-  }
-  if (/appsettings|config|options|settings/iu.test(normalized) || types.has("USES_CONFIG_KEY") || types.has("BINDS_OPTIONS")) {
-    return "configuration";
-  }
-  if (/(Controller|PageModel|\.cshtml\.cs)$/iu.test(basename) || types.has("MAPS_ROUTE") || types.has("HANDLES_REQUEST")) {
-    return "entry-point";
-  }
-  if (/(Service|Manager|Repository|Adapter)\.cs$/iu.test(basename) || types.has("CALLS_REPOSITORY") || types.has("USES_DBSET")) {
-    return "service-layer";
-  }
-  if (/\.(js|ts|tsx)$/iu.test(basename) || types.has("HANDLES_EVENT") || types.has("WRITES_QUERY_STRING")) {
-    return "client-flow";
-  }
-  return "shared-bridge";
-}
-
-function hotspotRoleScore(role: string): number {
-  switch (role) {
-    case "composition-root":
-    case "configuration":
-      return 4;
-    case "entry-point":
-    case "service-layer":
-      return 2;
-    default:
-      return 0;
-  }
-}
-
-function hotspotGuidance(role: string): string {
-  switch (role) {
-    case "composition-root":
-      return "Avoid editing unless the task is explicitly startup, DI, routing, middleware, or shared setup. Use this for architecture context first.";
-    case "configuration":
-      return "Likely shared configuration/options surface. Check binding and usage before adding new keys or settings.";
-    case "entry-point":
-      return "Likely request or UI entry point. Use it to understand flow, then prefer the matching feature service/model/view files for edits.";
-    case "service-layer":
-      return "Likely shared behavior or data orchestration. Check callers before changing behavior.";
-    case "client-flow":
-      return "Likely browser interaction hub. Check related selectors, events, routes, and state writes before editing.";
-    default:
-      return "Likely bridge file across multiple graph relationships. Use for orientation and risk checks before editing.";
-  }
-}
-
-function averagePatternConfidence(patterns: Array<Record<string, unknown>>): number {
-  if (patterns.length === 0) {
-    return 0;
-  }
-
-  const total = patterns.reduce((sum, pattern) => sum + numberValue(pattern.confidence), 0);
-  return Math.round((total / patterns.length) * 100) / 100;
-}
-
 function patternFiles(pattern: Record<string, unknown>): string[] {
   const instances = Array.isArray(pattern.instances) ? pattern.instances as Array<Record<string, unknown>> : [];
   return instances.flatMap((instance) => Array.isArray(instance.files) ? instance.files.map(stringValue) : []);
@@ -1974,36 +2191,6 @@ function relationshipNextQueries(rows: Array<Record<string, unknown>>): string[]
   );
 }
 
-function referenceNextQueries(query: string, fallbackRows: Array<Record<string, unknown>>): string[] {
-  return uniqueStrings([
-    `kraken-atlas query relationships "${query}"`,
-    `kraken-atlas query search "${query}"`,
-    ...fallbackRows
-      .map((row) => stringValue(row.record_id))
-      .filter(Boolean)
-      .slice(0, 3)
-      .map((id) => `kraken-atlas query relationships "${id}"`)
-  ]);
-}
-
-function buildReferenceCoverageCaveats(query: string, fallbackRows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  return [
-    {
-      recordType: "caveat",
-      message: `No semantic references matched "${query}". Current reference coverage can miss Razor markup, model binding, string-based conventions, reflection, generated code, and dynamic framework usage. Use the fallback records as hints, not proof the symbol is unused.`
-    },
-    ...(fallbackRows.length
-      ? [{
-        recordType: "caveat",
-        message: "Fallback records are bounded map-search matches from symbols, relationships, references, and files. Prefer relationship follow-ups before opening source broadly."
-      }]
-      : [{
-        recordType: "caveat",
-        message: "No fallback map-search records matched either. Retry with a shorter type name, method name, file name, route, selector, or config key."
-      }])
-  ];
-}
-
 function filterRelationshipRowsForQuery(rows: Array<Record<string, unknown>>, query: string): Array<Record<string, unknown>> {
   const lowerQuery = query.toLowerCase();
   if (rows.length === 0 || queryTargetsCommonExternalSymbol(lowerQuery)) {
@@ -2014,1096 +2201,8 @@ function filterRelationshipRowsForQuery(rows: Array<Record<string, unknown>>, qu
   return filtered.length > 0 ? filtered : rows;
 }
 
-function isLowValueRelationshipEdge(row: Record<string, unknown>): boolean {
-  const type = stringValue(row.type);
-  const from = stringValue(row.from);
-  const to = stringValue(row.to);
-
-  if (type === "CALLS" && isCommonExternalSymbol(to)) {
-    return true;
-  }
-
-  return isCommonExternalSymbol(from) || (type !== "RETURNS_TYPE" && isCommonExternalSymbol(to) && type !== "IMPLEMENTS");
-}
-
 function queryTargetsCommonExternalSymbol(lowerQuery: string): boolean {
   return /\b(string|int|long|double|decimal|bool|object|task|ienumerable|ilist|list|dictionary|datetime|guid|iconfiguration|ihttpclientfactory|ilogger|iserviceprovider|pagemodel|controller|controllerbase)\b/i.test(lowerQuery);
-}
-
-function domainFlowTerms(terms: string[]): string[] {
-  const generic = new Set([
-    "image",
-    "images",
-    "render",
-    "rendering",
-    "edit",
-    "editing",
-    "editable",
-    "make",
-    "code",
-    "data",
-    "view",
-    "views",
-    "model",
-    "models"
-  ]);
-  const domainTerms = terms.filter((term) => term.length >= 4 && !generic.has(term));
-  return domainTerms.length ? domainTerms.slice(0, 5) : terms.filter((term) => term.length >= 4).slice(0, 3);
-}
-
-function rankFlowEdges(edges: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const weight: Record<string, number> = {
-    POSTS_TO: 0,
-    HANDLES_EVENT: 1,
-    EMITS_EVENT: 31,
-    SUBSCRIBES_EVENT: 32,
-    WRITES_QUERY_STRING: 1.4,
-    READS_QUERY_STRING: 1.5,
-    WRITES_BROWSER_HISTORY: 1.6,
-    SELECTS_ELEMENT: 2,
-    UPDATES_ELEMENT_STATE: 33,
-    WRITES_FIELD: 3,
-    BINDS_MODEL_PROPERTY: 4,
-    MAPS_PROPERTY: 5,
-    LOADS_SCRIPT: 6,
-    INVOKES_VIEW_COMPONENT: 7,
-    RENDERS_VIEW: 8,
-    CALLS: 9,
-    MAPS_ROUTE: 10,
-    INJECTS: 11,
-    REGISTERS: 12,
-    IMPLEMENTS: 13,
-    WRITES: 14,
-    CALLS_REPOSITORY: 15,
-    USES_DBSET: 16,
-    QUERIES: 17,
-    DBSET_FOR: 18,
-    VALIDATES: 19,
-    USES_VALIDATOR: 20,
-    REQUIRES_AUTH: 21,
-    HANDLES_REQUEST: 22,
-    RUNS_HOSTED_SERVICE: 23,
-    USES_MIDDLEWARE: 24,
-    BINDS_OPTIONS: 25,
-    USES_OPTIONS: 26,
-    USES_CONFIG_KEY: 27,
-    PROJECT_REFERENCES: 28,
-    RETURNS_TYPE: 29,
-    USES_CONFIG: 30
-  };
-
-  return [...edges].sort((left, right) => {
-    const leftWeight = weight[stringValue(left.type)] ?? 99;
-    const rightWeight = weight[stringValue(right.type)] ?? 99;
-    return leftWeight - rightWeight || flowFileWeight(stringValue(left.file)) - flowFileWeight(stringValue(right.file)) || stringValue(left.file).localeCompare(stringValue(right.file));
-  });
-}
-
-function flowFileWeight(file: string): number {
-  const normalized = file.replace(/\\/g, "/").toLowerCase();
-  if (hasPathSegment(normalized, "views") || hasPathSegment(normalized, "pages") || hasPathSegment(normalized, "wwwroot")) {
-    return 0;
-  }
-  if (hasPathSegment(normalized, "controllers")) {
-    return 1;
-  }
-  if (hasPathSegment(normalized, "services")) {
-    return 2;
-  }
-  if (hasPathSegment(normalized, "repositories")) {
-    return 3;
-  }
-  if (hasPathSegment(normalized, "data")) {
-    return 4;
-  }
-  if (hasPathSegment(normalized, "options") || normalized.endsWith("program.cs")) {
-    return 5;
-  }
-  if (hasPathSegment(normalized, "validation") || hasPathSegment(normalized, "validators")) {
-    return 6;
-  }
-  if (hasPathSegment(normalized, "handlers") || hasPathSegment(normalized, "background") || hasPathSegment(normalized, "middleware")) {
-    return 7;
-  }
-
-  return 8;
-}
-
-function capRepeatedFlowNoise(edges: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const typeCounts = new Map<string, number>();
-  return edges.filter((edge) => {
-    const type = stringValue(edge.type);
-    const count = typeCounts.get(type) ?? 0;
-    typeCounts.set(type, count + 1);
-    return type !== "SELECTS_ELEMENT" || count < 2;
-  });
-}
-
-function propertyNamesFromFlow(edges: Array<Record<string, unknown>>): string[] {
-  const names: string[] = [];
-  const pattern = /\b[A-Z][A-Za-z0-9_]*(?:Json|Id|Sid|Url|Name|Title|Caption|Content|Config|Request|Response)\b/g;
-  for (const edge of edges) {
-    const text = [
-      stringValue(edge.from),
-      stringValue(edge.to),
-      stringValue(edge.evidence)
-    ].join(" ");
-    for (const match of text.matchAll(pattern)) {
-      names.push(match[0]);
-    }
-  }
-
-  return uniqueStrings(names).filter((name) => !["String", "Task", "Guid", "Model", "View"].includes(name));
-}
-
-function isRelevantFlowEdge(edge: Record<string, unknown>, terms: string[], seeds: string[]): boolean {
-  if (terms.length === 0) {
-    return true;
-  }
-
-  const from = stringValue(edge.from);
-  const to = stringValue(edge.to);
-  const file = stringValue(edge.file).replace(/\\/g, "/").toLowerCase();
-  const haystack = JSON.stringify(edge).toLowerCase();
-
-  if (isLowValueFrameworkLeaf(edge, terms)) {
-    return false;
-  }
-
-  if (terms.some((term) => haystack.includes(term))) {
-    return true;
-  }
-
-  if (isCommonExternalSymbol(from) || isCommonExternalSymbol(to)) {
-    return false;
-  }
-
-  return seeds.some((seed) => {
-    const normalizedSeed = seed.toLowerCase();
-    return normalizedSeed.length >= 3 && !isCommonExternalSymbol(seed) && (from.toLowerCase().includes(normalizedSeed) || to.toLowerCase().includes(normalizedSeed) || file.includes(normalizedSeed));
-  });
-}
-
-function relationshipMatchesCrossContextAnchor(edge: Record<string, unknown>, anchors: Set<string>): boolean {
-  if (anchors.size === 0) {
-    return false;
-  }
-
-  const allowedTypes = new Set([
-    "MAPS_ROUTE",
-    "POSTS_TO",
-    "CALLS",
-    "REQUIRES_AUTH",
-    "VALIDATES",
-    "USES_VALIDATOR",
-    "HANDLES_REQUEST",
-    "IMPLEMENTS",
-    "INJECTS",
-    "CALLS_REPOSITORY",
-    "QUERIES",
-    "WRITES",
-    "USES_DBSET",
-    "PROJECT_REFERENCES"
-  ]);
-  return allowedTypes.has(stringValue(edge.type))
-    && (anchors.has(stringValue(edge.from)) || anchors.has(stringValue(edge.to)));
-}
-
-function isCommonExternalSymbol(id: string): boolean {
-  return /^symbol:csharp:(string|int|long|double|decimal|bool|object|task|task<|ienumerable<|ilist<|list<|dictionary<|datetime|guid|iconfiguration|ihttpclientfactory|ilogger|ilogger<|iserviceprovider|pagemodel|controller|controllerbase)(\.|$|<)/i.test(id);
-}
-
-function isLowValueFrameworkLeaf(edge: Record<string, unknown>, terms: string[]): boolean {
-  const type = stringValue(edge.type);
-  const to = stringValue(edge.to);
-  if (type !== "CALLS" || !isCommonExternalSymbol(to)) {
-    return false;
-  }
-
-  const target = to.toLowerCase();
-  return !terms.some((term) => target.includes(term));
-}
-
-interface FileRecommendation extends Record<string, unknown> {
-  recordType: "fileRecommendation";
-  file: string;
-  score: number;
-  reasons: string[];
-  matchedTerms: string[];
-  patternsToFollow: string[];
-  relationshipEvidenceCount: number;
-  searchEvidenceCount: number;
-  relationshipDetails: Array<Record<string, unknown>>;
-  anchorDetails: Array<Record<string, unknown>>;
-}
-
-function rankFileRecommendations(
-  query: string,
-  searchRows: Array<Record<string, unknown>>,
-  relationships: Array<Record<string, unknown>>,
-  patterns: Array<Record<string, unknown>>,
-  strongAnchors: Array<Record<string, unknown>> = []
-): FileRecommendation[] {
-  const terms = queryTerms(query);
-  const coreTerms = queryCoreTerms(query);
-  const recommendations = new Map<string, FileRecommendation>();
-  const searchHitCounts = new Map<string, number>();
-  const anchorHitCounts = new Map<string, number>();
-
-  for (const anchor of strongAnchors) {
-    const file = stringValue(anchor.file);
-    if (!file) {
-      continue;
-    }
-
-    const recommendation = getRecommendation(recommendations, file);
-    recommendation.strongAnchor = genericBaseTypePenalty(file, query) === 0;
-    const matchedConcepts = Array.isArray(anchor.matchedConcepts)
-      ? anchor.matchedConcepts.filter((term): term is string => typeof term === "string")
-      : [];
-    const previousAnchors = anchorHitCounts.get(file) ?? 0;
-    anchorHitCounts.set(file, previousAnchors + 1);
-    recommendation.score += previousAnchors === 0
-      ? 25 + matchedConcepts.length * 2 + strongAnchorRoleBoost(anchor)
-      : 3;
-    addReason(recommendation, `Strong symbol anchor: ${stringValue(anchor.name) || stringValue(anchor.id)}.`);
-    recommendation.anchorDetails.push({ id: anchor.id, name: anchor.name, file: anchor.file, range: anchor.range });
-    addTerms(recommendation, matchedConcepts);
-  }
-
-  for (const row of searchRows) {
-    const file = stringValue(row.path);
-    if (!file) {
-      continue;
-    }
-
-    const recommendation = getRecommendation(recommendations, file);
-    const haystack = [row.title, row.body, row.path].map(stringValue).join(" ").toLowerCase();
-    const matchedTerms = terms.filter((term) => haystack.includes(term));
-    const previousHits = searchHitCounts.get(file) ?? 0;
-    searchHitCounts.set(file, previousHits + 1);
-    recommendation.searchEvidenceCount += 1;
-    recommendation.score += previousHits === 0 ? 3 + matchedTerms.length : Math.min(2, 0.75 + matchedTerms.length * 0.25);
-    addReason(recommendation, `Search ${stringValue(row.recordType) || "record"}: ${stringValue(row.title) || stringValue(row.recordId)}${matchedTerms.length ? `; matched ${matchedTerms.join(", ")}` : ""}.`);
-    addTerms(recommendation, matchedTerms);
-  }
-
-  for (const relationship of relationships) {
-    const file = stringValue(relationship.file);
-    if (!file) {
-      continue;
-    }
-
-    const recommendation = getRecommendation(recommendations, file);
-    const type = stringValue(relationship.type);
-    recommendation.score += relationshipWeight(type);
-    recommendation.relationshipEvidenceCount += 1;
-    recommendation.relationshipDetails.push({
-      type: relationship.type,
-      from: relationship.from,
-      to: relationship.to,
-      file: relationship.file,
-      range: relationship.range
-    });
-    addReason(recommendation, relationshipRecommendationReason(relationship));
-    addTerms(recommendation, terms.filter((term) => JSON.stringify(relationship).toLowerCase().includes(term)));
-  }
-
-  for (const pattern of patterns) {
-    const patternName = stringValue(pattern.name) || stringValue(pattern.id);
-    const instances = Array.isArray(pattern.instances) ? pattern.instances as Array<Record<string, unknown>> : [];
-    for (const instance of instances) {
-      const files = Array.isArray(instance.files) ? instance.files.filter((file): file is string => typeof file === "string") : [];
-      const instanceHaystack = JSON.stringify(instance).toLowerCase();
-      for (const file of files) {
-        if (!recommendations.has(file) && terms.length > 0 && !textMatchesAnyTerm(`${file} ${instanceHaystack}`, terms)) {
-          continue;
-        }
-
-        const recommendation = getRecommendation(recommendations, file);
-        recommendation.score += 3 + numberValue(pattern.confidence) * 2;
-        addReason(recommendation, `Follows detected pattern: ${patternName}.`);
-        addPattern(recommendation, `${patternName}: ${stringValue(pattern.agentGuidance)}`);
-      }
-    }
-  }
-
-  for (const recommendation of recommendations.values()) {
-    const distinctCoreMatches = coreTerms.filter((term) => recommendation.matchedTerms.includes(term)).length;
-    recommendation.score += distinctCoreMatches * 2.5 + (distinctCoreMatches >= 3 ? 4 : 0);
-    recommendation.score += roleWeight(recommendation.file, query);
-    const compositionPenalty = compositionRootPenalty(recommendation.file, query);
-    if (compositionPenalty > 0) {
-      recommendation.score -= compositionPenalty;
-      addReason(recommendation, "Composition root; inspect only when the request is about startup, DI, routing, middleware, or config.");
-    }
-    if (isLikelyTestFile(recommendation.file)) {
-      recommendation.score -= 3;
-      addReason(recommendation, "Likely test file; use for validation unless the requested change is test-specific.");
-    }
-    const baseTypePenalty = genericBaseTypePenalty(recommendation.file, query);
-    if (baseTypePenalty > 0) {
-      recommendation.score -= baseTypePenalty;
-      addReason(recommendation, "Shared base type; inspect after the feature-specific controller, view, model, or service unless changing shared behavior.");
-    }
-    recommendation.reasons = recommendation.reasons
-      .sort((left, right) => reasonPriority(left) - reasonPriority(right))
-      .slice(0, 4);
-    recommendation.patternsToFollow = recommendation.patternsToFollow.slice(0, 3);
-    recommendation.matchedTerms = recommendation.matchedTerms.slice(0, 8);
-  }
-
-  return [...recommendations.values()]
-    .filter((recommendation) => recommendation.score > 0)
-    .filter((recommendation) => Boolean(recommendation.strongAnchor) || recommendation.relationshipEvidenceCount > 0 || recommendation.searchEvidenceCount > 0)
-    .filter((recommendation) => !/(^|\/)PageController\.cs$/i.test(recommendation.file) || recommendation.relationshipEvidenceCount > 0)
-    .sort((left, right) => Number(Boolean(right.strongAnchor)) - Number(Boolean(left.strongAnchor)) || right.score - left.score || left.file.localeCompare(right.file));
-}
-
-function buildWhereToAddCaveats(query: string, recommendations: FileRecommendation[], relationships: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const caveats: Array<Record<string, unknown>> = [];
-  if (isBroadWhereToAddQuery(query)) {
-    caveats.push({
-      recordType: "caveat",
-      message: "Query is broad. Treat these as starting points and retry with a specific feature, field, route, error, or UI action before editing."
-    });
-  }
-
-  if (recommendations.length === 0) {
-    caveats.push({
-      recordType: "caveat",
-      message: "No high-confidence edit location found. Run broader project and search queries before editing."
-    });
-  }
-
-  if (!hasConnectedFeatureEvidence(relationships)) {
-    caveats.push({
-      recordType: "caveat",
-      message: "No connected controller/UI/service flow was found. Treat recommendations as text-and-pattern hints, not a complete feature path."
-    });
-  }
-
-  const generatedFiles = recommendations.filter((recommendation) => /(^|\/)(bin|obj|dist|build|generated)(\/|$)/i.test(recommendation.file));
-  if (generatedFiles.length > 0) {
-    caveats.push({
-      recordType: "caveat",
-      message: `Avoid editing generated/build outputs: ${generatedFiles.map((file) => file.file).join(", ")}.`
-    });
-  }
-
-  if (hasIncompleteBrowserQueryState(query, relationships)) {
-    caveats.push({
-      recordType: "caveat",
-      message: "Query-string read behavior was found, but no query-string write edge was detected. Treat this as an incomplete browser-state lifecycle and inspect the top JavaScript file before editing."
-    });
-  }
-
-  return caveats;
-}
-
-function buildPatternFitEvidence(patterns: Array<Record<string, unknown>>, recommendations: FileRecommendation[]): Array<Record<string, unknown>> {
-  if (!patterns.length || !recommendations.length) {
-    return [];
-  }
-
-  const recommendedFiles = new Set(recommendations.map((recommendation) => recommendation.file));
-  const ranked = patterns
-    .map((pattern) => {
-      const instances = Array.isArray(pattern.instances) ? pattern.instances as Array<Record<string, unknown>> : [];
-      const exampleFiles = uniqueStrings(instances.flatMap((instance) =>
-        Array.isArray(instance.files) ? instance.files.filter((file): file is string => typeof file === "string") : []
-      ));
-      const matchedFiles = exampleFiles.filter((file) => recommendedFiles.has(file));
-      const score = matchedFiles.length * 10 + numberValue(pattern.confidence) * 3 + Math.min(3, numberValue(pattern.frequency));
-      return { pattern, exampleFiles, matchedFiles, score };
-    })
-    .filter((entry) => entry.exampleFiles.length > 0)
-    .sort((left, right) =>
-      right.score - left.score ||
-      numberValue(right.pattern.confidence) - numberValue(left.pattern.confidence) ||
-      stringValue(left.pattern.name).localeCompare(stringValue(right.pattern.name))
-    );
-
-  const best = ranked[0];
-  if (!best) {
-    return [];
-  }
-
-  return [{
-    recordType: "patternFit",
-    patternId: best.pattern.id,
-    patternName: best.pattern.name,
-    category: best.pattern.category,
-    confidence: best.pattern.confidence,
-    frequency: best.pattern.frequency,
-    guidance: best.pattern.agentGuidance,
-    matchedFiles: best.matchedFiles.slice(0, 5),
-    exampleFiles: best.exampleFiles.slice(0, 5),
-    message: best.matchedFiles.length
-      ? `Recommended files overlap the ${stringValue(best.pattern.name) || "detected"} pattern.`
-      : `Closest detected pattern is ${stringValue(best.pattern.name) || stringValue(best.pattern.id)}.`
-  }];
-}
-
-function calculateWhereToAddConfidence(query: string, recommendations: FileRecommendation[], relationships: Array<Record<string, unknown>>): number {
-  if (recommendations.length === 0) {
-    return 0.2;
-  }
-
-  const terms = queryCoreTerms(query);
-  const matched = new Set(recommendations[0].matchedTerms);
-  const coveredTerms = terms.filter((term) => matched.has(term));
-  const coverage = terms.length ? coveredTerms.length / terms.length : 0;
-  let confidence = 0.4 + Math.min(0.25, recommendations[0].score / 50);
-
-  if (coverage >= 0.6) {
-    confidence += 0.15;
-  } else if (coverage >= 0.35) {
-    confidence += 0.05;
-  } else {
-    confidence -= 0.1;
-  }
-
-  if (hasConnectedFeatureEvidence(relationships)) {
-    confidence += 0.1;
-  } else {
-    confidence = Math.min(confidence, 0.65);
-  }
-
-  if (isBroadWhereToAddQuery(query)) {
-    confidence = Math.min(confidence, 0.6);
-  }
-
-  if (hasIncompleteBrowserQueryState(query, relationships)) {
-    confidence = Math.min(confidence, 0.65);
-  }
-
-  return Math.max(0.25, Math.min(0.9, Math.round(confidence * 100) / 100));
-}
-
-function hasConnectedFeatureEvidence(relationships: Array<Record<string, unknown>>): boolean {
-  const connectedTypes = new Set([
-    "CALLS",
-    "POSTS_TO",
-    "MAPS_ROUTE",
-    "INJECTS",
-    "HANDLES_EVENT",
-    "READS_QUERY_STRING",
-    "WRITES_QUERY_STRING",
-    "WRITES_BROWSER_HISTORY",
-    "INVOKES_VIEW_COMPONENT",
-    "RENDERS_VIEW"
-  ]);
-  return relationships.some((relationship) => connectedTypes.has(stringValue(relationship.type)));
-}
-
-function hasIncompleteBrowserQueryState(query: string, relationships: Array<Record<string, unknown>>): boolean {
-  if (!queryWantsBrowserQueryState(query.toLowerCase())) {
-    return false;
-  }
-
-  const types = new Set(relationships.map((relationship) => stringValue(relationship.type)));
-  return types.has("READS_QUERY_STRING") && !types.has("WRITES_QUERY_STRING");
-}
-
-function assessExistingCapabilityEvidence(query: string, relationships: Array<Record<string, unknown>>): { answerPrefix: string; evidence: Array<Record<string, unknown>> } {
-  const types = new Set(relationships.map((relationship) => stringValue(relationship.type)));
-  if (queryWantsBrowserQueryWrite(query.toLowerCase()) && !types.has("WRITES_QUERY_STRING") && !types.has("WRITES_BROWSER_HISTORY")) {
-    return {
-      answerPrefix: "",
-      evidence: [{
-        recordType: "capabilityAssessment",
-        status: "adjacent-only",
-        message: "Related browser query-state reads were found, but no browser URL write operation was detected. Treat this as a missing capability, not an existing implementation.",
-        layers: ["browser-query-read"]
-      }]
-    };
-  }
-  const haystack = relationships.map((relationship) => JSON.stringify(relationship).toLowerCase()).join("\n");
-  const domainTerms = domainFlowTerms(queryTerms(query));
-  const hasDomainEvidence = domainTerms.length === 0 || domainTerms.some((term) => haystack.includes(term));
-  const hasUiEvidence = ["HANDLES_EVENT", "SELECTS_ELEMENT", "WRITES_FIELD", "BINDS_MODEL_PROPERTY"].some((type) => types.has(type));
-  const hasMappingEvidence = ["USES_CSHARP_SYMBOL", "BINDS_MODEL_PROPERTY", "MAPS_PROPERTY", "WRITES_FIELD"].some((type) => types.has(type));
-  const hasRenderEvidence = ["INVOKES_VIEW_COMPONENT", "RENDERS_VIEW"].some((type) => types.has(type));
-
-  if (!hasDomainEvidence || !hasUiEvidence || !hasMappingEvidence || !hasRenderEvidence) {
-    return { answerPrefix: "", evidence: [] };
-  }
-
-  return {
-    answerPrefix: `Existing implementation evidence found for "${query}" across UI binding, model/config mapping, and rendering. Treat this as a gap-analysis query before adding duplicate behavior. `,
-    evidence: [{
-      recordType: "capabilityAssessment",
-      status: "likely-existing-or-partial",
-      message: "Atlas found connected UI, model/config, and rendering evidence. Inspect the recommended files for missing UX or integration gaps before creating a new implementation.",
-      layers: ["ui-binding", "model-or-config-mapping", "rendering"]
-    }]
-  };
-}
-
-function rankSearchRowsForAgent(query: string, rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const terms = queryTerms(query);
-  const scored = rows
-    .map((row, index) => ({ row, index, score: searchRowScore(row, terms) }))
-    .sort((left, right) => right.score - left.score || left.index - right.index);
-  const perFile = new Map<string, number>();
-  const selected: Array<Record<string, unknown>> = [];
-  const overflow: Array<Record<string, unknown>> = [];
-
-  for (const entry of scored) {
-    const file = stringValue(entry.row.path);
-    const key = file || stringValue(entry.row.record_id);
-    const count = perFile.get(key) ?? 0;
-    perFile.set(key, count + 1);
-    if (count < 2) {
-      selected.push(entry.row);
-    } else {
-      overflow.push(entry.row);
-    }
-  }
-
-  return [...selected, ...overflow];
-}
-
-function isWeakMultiTermSearch(query: string, rows: Array<Record<string, unknown>>): boolean {
-  const terms = queryTerms(query);
-  if (terms.length < 2 || rows.length === 0) {
-    return false;
-  }
-
-  const topRows = rows.slice(0, 6);
-  if (terms.length >= 3 && !topRows.some((row) => countSearchTermMatches(row, terms) >= terms.length)) {
-    return true;
-  }
-
-  return !topRows.some((row) => countSearchTermMatches(row, terms) >= 2);
-}
-
-function assessFlowCoverage(query: string, flow: Array<Record<string, unknown>>, exactAnchors: string[]): {
-  confidence: number;
-  evidence: Record<string, unknown>;
-  caveats: Array<Record<string, unknown>>;
-} {
-  const concepts = queryCoreTerms(query);
-  const haystack = `${JSON.stringify(flow).toLowerCase()} ${flowSemanticCoverageTerms(flow)}`;
-  const matchedConcepts = concepts.filter((concept) => haystack.includes(concept));
-  const missingConcepts = concepts.filter((concept) => !haystack.includes(concept));
-  const featureCoverage = concepts.length ? matchedConcepts.length / concepts.length : 0;
-  const perEdgeCoverage = flow.map((edge) => {
-    const edgeText = JSON.stringify(edge).toLowerCase();
-    return concepts.length ? concepts.filter((concept) => edgeText.includes(concept)).length / concepts.length : 0;
-  }).sort((left, right) => right - left);
-  const strongestEdges = perEdgeCoverage.slice(0, Math.min(3, perEdgeCoverage.length));
-  const textSimilarity = strongestEdges.length ? strongestEdges.reduce((sum, score) => sum + score, 0) / strongestEdges.length : 0;
-  const graphConnectivity = flowGraphConnectivity(flow);
-  const missingAnchors = exactAnchors.filter((anchor) => !flow.some((edge) => relationshipContainsText(edge, anchor)));
-
-  let confidence = 0.15 + featureCoverage * 0.45 + graphConnectivity * 0.2 + textSimilarity * 0.15;
-  if (featureCoverage < 0.35) {
-    confidence = Math.min(confidence, 0.4);
-  } else if (featureCoverage < 0.6) {
-    confidence = Math.min(confidence, 0.6);
-  }
-  if (missingAnchors.length) {
-    confidence = Math.min(confidence, 0.4);
-  }
-  if (hasIncompleteBrowserQueryState(query, flow)) {
-    confidence = Math.min(confidence, 0.65);
-  }
-  confidence = Math.max(0.2, Math.min(0.9, Math.round(confidence * 100) / 100));
-
-  const scores = {
-    textSimilarity: Math.round(textSimilarity * 100) / 100,
-    graphConnectivity: Math.round(graphConnectivity * 100) / 100,
-    featureCoverage: Math.round(featureCoverage * 100) / 100
-  };
-  const caveats: Array<Record<string, unknown>> = [];
-  if (missingConcepts.length && featureCoverage < 0.75) {
-    caveats.push({
-      recordType: "caveat",
-      message: `Flow matched ${matchedConcepts.length}/${concepts.length} requested concepts. Missing: ${missingConcepts.join(", ")}. Treat this as a partial slice, not proof of the requested behavior.`
-    });
-  }
-  if (hasIncompleteBrowserQueryState(query, flow)) {
-    caveats.push({
-      recordType: "caveat",
-      message: "Browser query-state reads were found, but no browser URL writer was detected. API request query construction does not satisfy browser URL mutation."
-    });
-  }
-
-  return {
-    confidence,
-    evidence: {
-      recordType: "flowCoverage",
-      matchedConcepts,
-      missingConcepts,
-      scores,
-      message: `Feature coverage ${matchedConcepts.length}/${concepts.length}; graph connectivity ${Math.round(graphConnectivity * 100)}%.`
-    },
-    caveats
-  };
-}
-
-function flowSemanticCoverageTerms(flow: Array<Record<string, unknown>>): string {
-  const types = new Set(flow.map((edge) => stringValue(edge.type)));
-  return [
-    types.has("UPDATES_ELEMENT_STATE") ? "highlight highlighted selected selection dom element state" : "",
-    types.has("SUBSCRIBES_EVENT") ? "event listener subscription click selection" : "",
-    types.has("EMITS_EVENT") ? "event emission selection change" : ""
-  ].filter(Boolean).join(" ");
-}
-
-function flowGraphConnectivity(flow: Array<Record<string, unknown>>): number {
-  if (flow.length <= 1) {
-    return flow.length;
-  }
-
-  const parent = new Map<string, string>();
-  const find = (value: string): string => {
-    const current = parent.get(value) ?? value;
-    if (current === value) {
-      parent.set(value, value);
-      return value;
-    }
-    const root = find(current);
-    parent.set(value, root);
-    return root;
-  };
-  const union = (left: string, right: string): void => {
-    const leftRoot = find(left);
-    const rightRoot = find(right);
-    if (leftRoot !== rightRoot) {
-      parent.set(rightRoot, leftRoot);
-    }
-  };
-
-  for (const edge of flow) {
-    const from = stringValue(edge.from);
-    const to = stringValue(edge.to);
-    if (from && to) {
-      union(from, to);
-    }
-  }
-
-  const componentEdges = new Map<string, number>();
-  for (const edge of flow) {
-    const endpoint = stringValue(edge.from) || stringValue(edge.to) || stringValue(edge.id);
-    const root = endpoint ? find(endpoint) : stringValue(edge.id);
-    componentEdges.set(root, (componentEdges.get(root) ?? 0) + 1);
-  }
-
-  return Math.max(...componentEdges.values(), 0) / flow.length;
-}
-
-function buildFlowCoverageCaveats(query: string, flow: Array<Record<string, unknown>>, exactAnchors: string[]): Array<Record<string, unknown>> {
-  const caveats: Array<Record<string, unknown>> = [];
-  if (exactAnchors.length) {
-    const missingAnchors = exactAnchors.filter((anchor) => !flow.some((edge) => relationshipContainsText(edge, anchor)));
-    if (missingAnchors.length) {
-      caveats.push({
-        recordType: "caveat",
-        message: `No visible flow edge matched exact anchor(s): ${missingAnchors.join(", ")}. Treat generic matches as incomplete and retry with a required term, exact file, symbol, or relationship query.`
-      });
-    }
-  }
-
-  const lowerQuery = query.toLowerCase();
-  if (/\b(persist|persistence|save|model binding|binding|configjson)\b/i.test(lowerQuery)) {
-    const types = new Set(flow.map((edge) => stringValue(edge.type)));
-    const missingLayers = [
-      types.has("WRITES_FIELD") ? "" : "browser field write",
-      types.has("BINDS_MODEL_PROPERTY") ? "" : "model binding",
-      types.has("MAPS_PROPERTY") || types.has("WRITES") || types.has("CALLS_REPOSITORY") ? "" : "adapter or persistence mapping"
-    ].filter(Boolean);
-    if (missingLayers.length) {
-      caveats.push({
-        recordType: "caveat",
-        message: `Flow coverage is incomplete for ${missingLayers.join(", ")}. Do not treat this as proof of an end-to-end persistence path.`
-      });
-    }
-  }
-
-  return caveats;
-}
-
-function composeFlowEdges(query: string, edges: Array<Record<string, unknown>>, exactAnchors: string[]): Array<Record<string, unknown>> {
-  const ranked = anchorFlowEdges(rankFlowEdges(uniqueById(edges)), exactAnchors);
-  const lowerQuery = query.toLowerCase();
-  const persistenceQuery = /\b(persist|persistence|save|model binding|binding|configjson)\b/i.test(lowerQuery);
-  const promotedTypes = persistenceQuery
-    ? ["WRITES_FIELD", "BINDS_MODEL_PROPERTY", "MAPS_PROPERTY", "CALLS", "INVOKES_VIEW_COMPONENT", "RENDERS_VIEW"]
-    : queryWantsBrowserQueryState(lowerQuery)
-      ? ["WRITES_QUERY_STRING", "READS_QUERY_STRING", "WRITES_BROWSER_HISTORY", "CALLS", "UPDATES_ELEMENT_STATE"]
-      : ["SUBSCRIBES_EVENT", "CALLS", "EMITS_EVENT", "UPDATES_ELEMENT_STATE", "POSTS_TO", "HANDLES_EVENT", "WRITES_FIELD", "USES_OPTIONS", "INVOKES_VIEW_COMPONENT", "RENDERS_VIEW"];
-  const promoted: Array<Record<string, unknown>> = [];
-
-  promoted.push(...promoteJavaScriptInteractionPath(ranked));
-
-  for (const type of promotedTypes) {
-    const candidates = ranked.filter((edge) => stringValue(edge.type) === type);
-    const exactMatch = candidates.find((edge) => exactAnchors.some((anchor) => relationshipContainsText(edge, anchor)));
-    const candidate = exactMatch ?? candidates[0];
-    if (candidate) {
-      promoted.push(candidate);
-    }
-  }
-
-  return capRepeatedFlowNoise(uniqueById([...promoted, ...ranked])).slice(0, 30);
-}
-
-function promoteJavaScriptInteractionPath(edges: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const calls = edges.filter((edge) => stringValue(edge.type) === "CALLS");
-  const emitters = edges.filter((edge) => stringValue(edge.type) === "EMITS_EVENT");
-  const clickSubscriptions = edges.filter((edge) =>
-    stringValue(edge.type) === "SUBSCRIBES_EVENT" && /click/i.test(`${stringValue(edge.to)} ${stringValue(edge.evidence)}`)
-  );
-  if (!calls.length || !emitters.length || !clickSubscriptions.length) {
-    return [];
-  }
-
-  const emitterByNode = new Map(emitters.map((edge) => [stringValue(edge.from), edge]));
-  let bestPath: Array<Record<string, unknown>> = [];
-  let bestStart: Record<string, unknown> | undefined;
-  for (const start of clickSubscriptions) {
-    const path = findCallPathToEmitter(stringValue(start.from), calls, emitterByNode, 4);
-    if (path.length > bestPath.length) {
-      bestPath = path;
-      bestStart = start;
-    }
-  }
-  if (!bestStart || !bestPath.length) {
-    return [];
-  }
-
-  const terminalNode = stringValue(bestPath[bestPath.length - 1].to);
-  const emitted = emitterByNode.get(terminalNode);
-  const terminalCaller = stringValue(bestPath[bestPath.length - 1].from);
-  const siblingCalls = calls.filter((edge) =>
-    stringValue(edge.from) === terminalCaller && !bestPath.includes(edge)
-  ).sort((left, right) => javascriptInteractionCallWeight(left) - javascriptInteractionCallWeight(right));
-  const eventId = emitted ? stringValue(emitted.to) : "";
-  const subscriptions = eventId
-    ? edges.filter((edge) => stringValue(edge.type) === "SUBSCRIBES_EVENT" && stringValue(edge.to) === eventId && edge !== bestStart)
-    : [];
-  const subscriptionNodes = new Set(subscriptions.map((edge) => stringValue(edge.from)));
-  const subscriptionCallers = calls.filter((edge) => subscriptionNodes.has(stringValue(edge.to)));
-  const pathNodes = new Set([
-    stringValue(bestStart.from),
-    ...bestPath.flatMap((edge) => [stringValue(edge.from), stringValue(edge.to)]),
-    ...subscriptionCallers.map((edge) => stringValue(edge.from))
-  ]);
-  const updates = edges.filter((edge) => stringValue(edge.type) === "UPDATES_ELEMENT_STATE" && pathNodes.has(stringValue(edge.from)));
-  const updatingNodes = new Set(updates.map((edge) => stringValue(edge.from)));
-  const prioritizedSubscriptionCallers = [...subscriptionCallers].sort((left, right) =>
-    Number(updatingNodes.has(stringValue(right.from))) - Number(updatingNodes.has(stringValue(left.from)))
-  );
-
-  return uniqueById([bestStart, ...bestPath, ...siblingCalls.slice(0, 1), ...(emitted ? [emitted] : []), ...subscriptions.slice(0, 2), ...prioritizedSubscriptionCallers.slice(0, 1), ...updates.slice(0, 1)]);
-}
-
-function javascriptInteractionCallWeight(edge: Record<string, unknown>): number {
-  const text = `${stringValue(edge.to)} ${stringValue(edge.evidence)}`;
-  if (/\b(focus|select|highlight|toggle)/iu.test(text)) {
-    return 0;
-  }
-  if (/\b(open|show|render|update)/iu.test(text)) {
-    return 1;
-  }
-  return 5;
-}
-
-function findCallPathToEmitter(
-  start: string,
-  calls: Array<Record<string, unknown>>,
-  emitters: Map<string, Record<string, unknown>>,
-  maxDepth: number
-): Array<Record<string, unknown>> {
-  const queue: Array<{ node: string; path: Array<Record<string, unknown>> }> = [{ node: start, path: [] }];
-  const visitedDepth = new Map<string, number>([[start, 0]]);
-  while (queue.length) {
-    const current = queue.shift()!;
-    if (current.path.length > 0 && emitters.has(current.node)) {
-      return current.path;
-    }
-    if (current.path.length >= maxDepth) {
-      continue;
-    }
-    for (const edge of calls.filter((candidate) => stringValue(candidate.from) === current.node)) {
-      const next = stringValue(edge.to);
-      const depth = current.path.length + 1;
-      if (!next || (visitedDepth.get(next) ?? Number.POSITIVE_INFINITY) <= depth) {
-        continue;
-      }
-      visitedDepth.set(next, depth);
-      queue.push({ node: next, path: [...current.path, edge] });
-    }
-  }
-  return [];
-}
-
-function anchorFlowEdges(edges: Array<Record<string, unknown>>, exactAnchors: string[]): Array<Record<string, unknown>> {
-  if (exactAnchors.length === 0 || edges.length === 0) {
-    return edges;
-  }
-
-  const anchored = edges.filter((edge) => exactAnchors.some((anchor) => relationshipContainsText(edge, anchor)));
-  if (anchored.length === 0) {
-    return edges;
-  }
-
-  const anchoredEndpoints = new Set(anchored.flatMap((edge) => [stringValue(edge.from), stringValue(edge.to)]).filter(Boolean));
-  const adjacent = edges.filter((edge) => !anchored.includes(edge) && (anchoredEndpoints.has(stringValue(edge.from)) || anchoredEndpoints.has(stringValue(edge.to))));
-  return uniqueById([...anchored, ...adjacent, ...edges.filter((edge) => exactAnchors.some((anchor) => fileOrEndpointContainsAnchor(edge, anchor)))]);
-}
-
-function exactIdentifierAnchors(query: string): string[] {
-  const rawTerms = query
-    .split(/[^A-Za-z0-9_]+/u)
-    .map((term) => term.trim())
-    .filter(Boolean);
-  const generic = new Set(["model", "binding", "persistence", "persist", "save", "rendering", "editing", "image", "images", "carousel", "carousels"]);
-  return uniqueStrings(rawTerms.filter((term) => {
-    const lower = term.toLowerCase();
-    return !generic.has(lower) && (/[a-z][A-Z]/.test(term) || /json|config|sid|dto|viewmodel|request|response/i.test(term) || term.length >= 12);
-  }));
-}
-
-function semanticFlowAnchors(query: string): string[] {
-  const lower = query.toLowerCase();
-  const anchors: string[] = [];
-  if (/\b(query string|query-string|location search|browser history|url search params)\b/.test(lower)) {
-    anchors.push("browser-state:query-string");
-  }
-  return anchors;
-}
-
-function relationshipContainsText(edge: Record<string, unknown>, text: string): boolean {
-  return JSON.stringify(edge).toLowerCase().includes(text.toLowerCase());
-}
-
-function fileOrEndpointContainsAnchor(edge: Record<string, unknown>, anchor: string): boolean {
-  const lowerAnchor = anchor.toLowerCase();
-  return [edge.file, edge.from, edge.to].some((value) => stringValue(value).toLowerCase().includes(lowerAnchor));
-}
-
-function countSearchTermMatches(row: Record<string, unknown>, terms: string[]): number {
-  const haystack = [row.title, row.body, row.path, row.record_id].map(stringValue).join(" ").toLowerCase();
-  return terms.filter((term) => haystack.includes(term)).length;
-}
-
-function searchRowScore(row: Record<string, unknown>, terms: string[]): number {
-  const title = stringValue(row.title).toLowerCase();
-  const body = stringValue(row.body).toLowerCase();
-  const file = stringValue(row.path).toLowerCase();
-  const recordType = stringValue(row.record_type);
-  let score = 0;
-
-  for (const term of terms) {
-    if (title.includes(term)) {
-      score += 8;
-    }
-    if (file.includes(term)) {
-      score += 6;
-    }
-    if (body.includes(term)) {
-      score += 3;
-    }
-  }
-
-  if (recordType === "file") {
-    score += 5;
-  } else if (recordType === "relationship") {
-    score += 4;
-  } else if (recordType === "symbol") {
-    score += 2;
-  } else if (recordType === "pattern") {
-    score += 1;
-  }
-
-  if (/(basecontroller|controllerbase|base\.cs$)/i.test(file)) {
-    score -= 4;
-  }
-
-  return score;
-}
-
-function relationshipTermScore(row: Record<string, unknown>, terms: string[]): number {
-  const haystack = [row.from_id, row.to_id, row.type, row.file, row.json].map(stringValue).join(" ").toLowerCase();
-  const matchedTerms = terms.filter((term) => haystack.includes(term));
-  return matchedTerms.length * 10 + relationshipWeight(stringValue(row.type));
-}
-
-function isBroadWhereToAddQuery(query: string): boolean {
-  return queryTerms(query).length <= 1;
-}
-
-function queryCoreTerms(query: string): string[] {
-  const stopWords = new Set(["add", "new", "the", "for", "and", "with", "field", "property", "feature", "change", "update", "keep", "when", "while", "truthful"]);
-  if (queryWantsBrowserQueryState(query.toLowerCase())) {
-    stopWords.add("string");
-  }
-  return uniqueStrings(query
-    .toLowerCase()
-    .split(/[^a-z0-9]+/i)
-    .map((term) => term.trim())
-    .filter((term) => term.length >= 3 && !stopWords.has(term)));
-}
-
-function queryTerms(query: string): string[] {
-  const terms = queryCoreTerms(query);
-  return uniqueStrings(terms.flatMap((term) => [term, ...termVariants(term)]));
-}
-
-function termVariants(term: string): string[] {
-  if (term.length > 4 && term.endsWith("ies")) {
-    return [`${term.slice(0, -3)}y`];
-  }
-  if (term.length > 4 && term.length <= 10 && term.endsWith("s") && !term.endsWith("ss")) {
-    return [term.slice(0, -1)];
-  }
-
-  return [];
-}
-
-function conceptMatchesText(concept: string, text: string): boolean {
-  if (text.includes(concept)) {
-    return true;
-  }
-  return termVariants(concept).some((variant) => text.includes(variant));
-}
-
-function queryVariants(query: string): string[] {
-  const terms = queryTerms(query);
-  if (terms.length <= 1) {
-    return [query].filter(Boolean);
-  }
-
-  const dashed = terms.join("-");
-  const compact = terms.join("");
-  const pascal = terms.map((term) => `${term.slice(0, 1).toUpperCase()}${term.slice(1)}`).join("");
-  return uniqueStrings([query, dashed, compact, pascal]);
-}
-
-function inferProjectNameFromFile(filePath: string): string | undefined {
-  const normalized = filePath.replace(/\\/g, "/");
-  const firstSegment = normalized.split("/")[0];
-  return firstSegment && firstSegment !== normalized ? firstSegment : undefined;
-}
-
-function inferProjectNameFromSymbol(symbolId: string): string | undefined {
-  if (symbolId.startsWith("symbol:csharp:")) {
-    const body = symbolId.slice("symbol:csharp:".length);
-    return body.split(".")[0] || undefined;
-  }
-
-  if (symbolId.startsWith("symbol:dotnet-project:")) {
-    const projectPath = symbolId.slice("symbol:dotnet-project:".length);
-    return projectPath.split("/")[0] || undefined;
-  }
-
-  return undefined;
-}
-
-function normalizeQueryContext(projectContext: string | undefined): QueryContext | undefined {
-  const trimmed = projectContext?.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const normalized = trimmed.replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/+$/u, "");
-  const lastSegment = normalized.split("/").filter(Boolean).pop() ?? normalized;
-  const name = lastSegment.endsWith(".csproj") ? lastSegment.slice(0, -".csproj".length) : lastSegment;
-  if (!name) {
-    return undefined;
-  }
-
-  return {
-    input: trimmed,
-    name,
-    filePrefix: normalized.endsWith(".csproj") ? normalized.split("/").slice(0, -1).join("/") || name : name,
-    symbolPrefix: `symbol:csharp:${name}.`,
-    projectSymbolPrefix: `symbol:dotnet-project:${name}/`
-  };
-}
-
-function contextFromProjectSymbol(name: string, file: string): QueryContext | undefined {
-  const normalizedFile = file.replace(/\\/g, "/");
-  const folder = normalizedFile.endsWith(".csproj") ? normalizedFile.split("/").slice(0, -1).join("/") : "";
-  return normalizeQueryContext(folder || name);
-}
-
-function uniqueContexts(contexts: QueryContext[]): QueryContext[] {
-  const seen = new Set<string>();
-  const unique: QueryContext[] = [];
-  for (const context of contexts) {
-    const key = context.filePrefix.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      unique.push(context);
-    }
-  }
-
-  return unique;
-}
-
-function resolveContextCandidate(requested: QueryContext, candidates: QueryContext[]): { context?: QueryContext; ambiguity?: QueryContext[] } {
-  const scored = candidates
-    .map((candidate) => ({ candidate, score: contextMatchScore(requested, candidate) }))
-    .filter((entry) => entry.score > 0)
-    .sort((left, right) => right.score - left.score || left.candidate.filePrefix.length - right.candidate.filePrefix.length);
-
-  const top = scored[0];
-  if (!top) {
-    return {};
-  }
-
-  const closeMatches = scored.filter((entry) => entry.score === top.score || top.score - entry.score <= 10);
-  if (top.score < 100 && closeMatches.length > 1) {
-    return { ambiguity: closeMatches.map((entry) => entry.candidate) };
-  }
-
-  const exactMatches = scored.filter((entry) => entry.score === 100);
-  if (exactMatches.length > 1) {
-    return { ambiguity: exactMatches.map((entry) => entry.candidate) };
-  }
-
-  return { context: top.candidate };
-}
-
-function contextMatchScore(requested: QueryContext, candidate: QueryContext): number {
-  const requestedValues = contextMatchValues(requested);
-  const candidateValues = contextMatchValues(candidate);
-  let score = 0;
-
-  for (const requestedValue of requestedValues) {
-    for (const candidateValue of candidateValues) {
-      if (requestedValue === candidateValue) {
-        score = Math.max(score, 100);
-      } else if (candidateValue.startsWith(requestedValue)) {
-        score = Math.max(score, 80);
-      } else if (candidateValue.includes(requestedValue)) {
-        score = Math.max(score, 70);
-      } else if (compactContextValue(candidateValue).includes(compactContextValue(requestedValue))) {
-        score = Math.max(score, 60);
-      }
-    }
-  }
-
-  return score;
-}
-
-function contextMatchValues(context: QueryContext): string[] {
-  return uniqueStrings([
-    context.input,
-    context.name,
-    context.filePrefix,
-    ...context.filePrefix.split("/"),
-    path.basename(context.filePrefix)
-  ].map((value) => value.toLowerCase()).filter(Boolean));
-}
-
-function compactContextValue(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 function parseCSharpMethodSymbolId(symbolId: string): { typeName: string; signature: string } | undefined {
@@ -3124,145 +2223,6 @@ function parseCSharpMethodSymbolId(symbolId: string): { typeName: string; signat
   };
 }
 
-function scorePattern(pattern: Record<string, unknown>, terms: string[]): number {
-  const haystack = [
-    pattern.id,
-    pattern.name,
-    pattern.category,
-    pattern.language,
-    pattern.agentGuidance,
-    ...(Array.isArray(pattern.rulesObserved) ? pattern.rulesObserved : [])
-  ].map(stringValue).join(" ").toLowerCase();
-  return terms.filter((term) => haystack.includes(term)).length + numberValue(pattern.confidence);
-}
-
-function getRecommendation(recommendations: Map<string, FileRecommendation>, file: string): FileRecommendation {
-  const existing = recommendations.get(file);
-  if (existing) {
-    return existing;
-  }
-
-  const recommendation: FileRecommendation = {
-    recordType: "fileRecommendation",
-    file,
-    score: 0,
-    reasons: [],
-      matchedTerms: [],
-      patternsToFollow: [],
-      relationshipEvidenceCount: 0,
-      searchEvidenceCount: 0,
-      relationshipDetails: [],
-      anchorDetails: []
-  };
-  recommendations.set(file, recommendation);
-  return recommendation;
-}
-
-function looksLikeFileQuery(query: string): boolean {
-  if (!query || /\s/u.test(query)) {
-    return false;
-  }
-  if (query.includes("/")) {
-    return true;
-  }
-  return /(?:^|\/)[^/]+\.(?:cs|cshtml|razor|js|mjs|cjs|jsx|ts|tsx|html?|css|scss|json|xml|csproj|sln|md|yml|yaml)$/iu.test(query);
-}
-
-function addReason(recommendation: FileRecommendation, reason: string): void {
-  if (!recommendation.reasons.includes(reason)) {
-    recommendation.reasons.push(reason);
-  }
-}
-
-function reasonPriority(reason: string): number {
-  if (/^[A-Z][A-Z_]+:/u.test(reason) || reason.startsWith("Strong symbol anchor:")) {
-    return 0;
-  }
-  if (reason.startsWith("Search ")) {
-    return 1;
-  }
-  if (reason.startsWith("Follows detected pattern:")) {
-    return 3;
-  }
-  return 2;
-}
-
-function addPattern(recommendation: FileRecommendation, pattern: string): void {
-  if (pattern && !recommendation.patternsToFollow.includes(pattern)) {
-    recommendation.patternsToFollow.push(pattern);
-  }
-}
-
-function addTerms(recommendation: FileRecommendation, terms: string[]): void {
-  recommendation.matchedTerms = uniqueStrings([...recommendation.matchedTerms, ...terms]);
-}
-
-function textMatchesAnyTerm(text: string, terms: string[]): boolean {
-  const haystack = text.toLowerCase();
-  return terms.some((term) => haystack.includes(term));
-}
-
-function relationshipWeight(type: string): number {
-  const weights: Record<string, number> = {
-    READS_QUERY_STRING: 6,
-    WRITES_QUERY_STRING: 7,
-    WRITES_BROWSER_HISTORY: 5,
-    MAPS_ROUTE: 5,
-    POSTS_TO: 5,
-    CALLS: 4,
-    INJECTS: 4,
-    REGISTERS: 4,
-    IMPLEMENTS: 3,
-    USES_DBSET: 3,
-    QUERIES: 4,
-    WRITES: 5,
-    CALLS_REPOSITORY: 4,
-    VALIDATES: 5,
-    USES_VALIDATOR: 4,
-    REQUIRES_AUTH: 5,
-    HANDLES_REQUEST: 5,
-    RUNS_HOSTED_SERVICE: 5,
-    USES_MIDDLEWARE: 4,
-    DBSET_FOR: 3,
-    BINDS_OPTIONS: 3,
-    USES_OPTIONS: 3,
-    USES_CONFIG_KEY: 2,
-    PROJECT_REFERENCES: 3,
-    HANDLES_EVENT: 3,
-    EMITS_EVENT: 5,
-    SUBSCRIBES_EVENT: 5,
-    UPDATES_ELEMENT_STATE: 4,
-    SELECTS_ELEMENT: 2,
-    WRITES_FIELD: 4,
-    BINDS_MODEL_PROPERTY: 4,
-    MAPS_PROPERTY: 5,
-    LOADS_SCRIPT: 2,
-    CONTAINS: 1
-  };
-  return weights[type] ?? 1;
-}
-
-function relationshipRecommendationReason(relationship: Record<string, unknown>): string {
-  const type = stringValue(relationship.type) || "RELATIONSHIP";
-  const from = compactRelationshipEndpoint(stringValue(relationship.from));
-  const to = compactRelationshipEndpoint(stringValue(relationship.to));
-  const range = relationship.range && typeof relationship.range === "object" ? relationship.range as Record<string, unknown> : {};
-  const line = numberValue(range.startLine);
-  return `${type}: ${from} -> ${to}${line > 0 ? ` at line ${line}` : ""}.`;
-}
-
-function compactRelationshipEndpoint(value: string): string {
-  const clean = value
-    .replace(/^symbol:csharp:/u, "")
-    .replace(/^symbol:(?:razor|javascript):/u, "")
-    .replace(/^route:(?:csharp|web):/u, "");
-  const parameterIndex = clean.indexOf("(");
-  const withoutParameters = parameterIndex >= 0 ? clean.slice(0, parameterIndex) : clean;
-  const parts = withoutParameters.split(/[/.]/u);
-  const compact = parts.slice(-3).join(".") || value;
-  return parameterIndex >= 0 ? `${compact}(...)` : compact;
-}
-
 function countByValues(values: string[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const value of values.filter(Boolean)) {
@@ -3275,180 +2235,7 @@ function formatCountMap(counts: Record<string, number>): string {
   return Object.entries(counts).map(([key, count]) => `${key}=${count}`).join(", ");
 }
 
-function roleWeight(file: string, query: string): number {
-  const normalized = file.replace(/\\/g, "/").toLowerCase();
-  const lowerQuery = query.toLowerCase();
-  const wantsValidation = queryWantsValidationOrAuth(lowerQuery);
-  const wantsFormOrProfile = queryWantsFormOrProfile(lowerQuery);
-  const wantsBrowserQueryState = queryWantsBrowserQueryState(lowerQuery);
-  let score = 0;
-
-  if (hasPathSegment(normalized, "controllers")) {
-    score += lowerQuery.includes("endpoint") || lowerQuery.includes("route") || lowerQuery.includes("api") ? 8 : wantsValidation || wantsFormOrProfile ? 16 : 2;
-  }
-  if (isIdentityAccountPageModel(normalized)) {
-    score += queryWantsIdentityAccountFlow(lowerQuery) ? 24 : 2;
-  }
-  if (hasPathSegment(normalized, "services")) {
-    score += wantsValidation || wantsFormOrProfile ? 8 : 3;
-  }
-  if (hasPathSegment(normalized, "validation") || hasPathSegment(normalized, "validators") || normalized.endsWith("validator.cs")) {
-    score += wantsValidation ? 80 : 3;
-  }
-  if (hasPathSegment(normalized, "handlers") || normalized.endsWith("handler.cs")) {
-    score += lowerQuery.includes("handler") || lowerQuery.includes("command") || (lowerQuery.includes("query") && !wantsBrowserQueryState) ? 70 : lowerQuery.includes("request") ? 35 : 2;
-  }
-  if (hasPathSegment(normalized, "background") || normalized.endsWith("worker.cs") || normalized.endsWith("hostedservice.cs")) {
-    score += lowerQuery.includes("background") || lowerQuery.includes("hosted") || lowerQuery.includes("worker") || lowerQuery.includes("digest") || lowerQuery.includes("sync") ? 70 : 2;
-  }
-  if (hasPathSegment(normalized, "middleware") || normalized.endsWith("middleware.cs")) {
-    score += lowerQuery.includes("middleware") || lowerQuery.includes("pipeline") ? 70 : lowerQuery.includes("request") && !wantsValidation ? 12 : 2;
-  }
-  if (hasPathSegment(normalized, "repositories")) {
-    score += lowerQuery.includes("field") || lowerQuery.includes("data") || lowerQuery.includes("persist") || lowerQuery.includes("save") ? 8 : 1;
-  }
-  if (hasPathSegment(normalized, "data")) {
-    score += lowerQuery.includes("field") || lowerQuery.includes("data") || lowerQuery.includes("persist") || lowerQuery.includes("save") ? 36 : 1;
-  }
-  if (hasPathSegment(normalized, "options") || normalized.endsWith("options.cs")) {
-    score += lowerQuery.includes("setting") || lowerQuery.includes("config") || lowerQuery.includes("option") ? 22 : 2;
-  }
-  if (wantsBrowserQueryState && /\.(?:js|mjs|cjs)$/i.test(normalized)) {
-    score += 20;
-  }
-  if (normalized.endsWith("program.cs")) {
-    score += queryWantsCompositionRoot(lowerQuery) ? 28 : 0;
-  }
-  if (hasPathSegment(normalized, "models") || /model\.cs$/i.test(normalized) || /request\.cs$/i.test(normalized)) {
-    score += wantsValidation || wantsFormOrProfile ? 18 : 1;
-  }
-  if (wantsFormOrProfile && /(?:^|\/|\.)(forms?|profile|profiles|account|identity|registration|register)(?:\/|\.|$|[a-z])/i.test(normalized)) {
-    score += 18;
-  }
-  if (hasPathSegment(normalized, "views") || normalized.endsWith(".cshtml") || normalized.endsWith(".html")) {
-    score += wantsFormOrProfile ? 30 : lowerQuery.includes("form") || lowerQuery.includes("field") || lowerQuery.includes("ui") ? 25 : 1;
-  }
-  if (hasPathSegment(normalized, "wwwroot") || normalized.endsWith(".js")) {
-    score += lowerQuery.includes("button") || lowerQuery.includes("form") || lowerQuery.includes("ajax") || lowerQuery.includes("fetch") ? 8 : 1;
-  }
-
-  return score;
-}
-
-function isIdentityAccountPageModel(normalizedFile: string): boolean {
-  return /(^|\/)areas\/identity\/pages\/account\//.test(normalizedFile) && normalizedFile.endsWith(".cshtml.cs");
-}
-
-function queryWantsIdentityAccountFlow(lowerQuery: string): boolean {
-  return /\b(user|account|identity|register|registration|login|external|profile|persona|create|creation|initial|setup|sign)\b/i.test(lowerQuery);
-}
-
-function queryWantsBrowserQueryState(lowerQuery: string): boolean {
-  return /\b(query string|query-string|location search|browser history|url search params|urlsearchparams)\b/i.test(lowerQuery);
-}
-
-function queryWantsJavaScriptInteraction(lowerQuery: string): boolean {
-  return /\b(click|highlight|dom|browser|javascript|client-side|event|selection|selected)\b/u.test(lowerQuery)
-    && /\b(map|result|controller|button|element|search|selection|selected)\b/u.test(lowerQuery);
-}
-
 function isJavaScriptAnchor(anchor: Record<string, unknown>): boolean {
   return stringValue(anchor.id).startsWith("symbol:javascript:")
     || /\.(?:js|mjs|cjs)$/iu.test(stringValue(anchor.file));
-}
-
-
-function queryWantsBrowserQueryWrite(lowerQuery: string): boolean {
-  return queryWantsBrowserQueryState(lowerQuery) && /\b(write|writes|writing|change|changes|update|updates|sync|store|persist|push|replace|add|set)\b/i.test(lowerQuery);
-}
-
-function compositionRootPenalty(file: string, query: string): number {
-  const normalized = file.replace(/\\/g, "/").toLowerCase();
-  if (!/(^|\/)(program|startup)\.cs$/.test(normalized)) {
-    return 0;
-  }
-
-  const lowerQuery = query.toLowerCase();
-  if (queryWantsCompositionRoot(lowerQuery)) {
-    return 0;
-  }
-
-  return queryWantsValidationOrAuth(lowerQuery) || queryWantsFormOrProfile(lowerQuery) || queryWantsIdentityAccountFlow(lowerQuery) ? 90 : 28;
-}
-
-function genericBaseTypePenalty(file: string, query: string): number {
-  const normalized = file.replace(/\\/g, "/").toLowerCase();
-  if (!/(basecontroller|controllerbase|base\.cs$|base\/)/i.test(normalized)) {
-    return 0;
-  }
-
-  return /\b(base|shared|abstract|infrastructure|framework|composable|editor)\b/i.test(query) ? 0 : 36;
-}
-
-function queryWantsCompositionRoot(lowerQuery: string): boolean {
-  if (/\b(startup|program|middleware|pipeline|route|routing|endpoint|config|configuration|setting|settings|option|options|hosted|worker)\b/i.test(lowerQuery)) {
-    return true;
-  }
-
-  const mentionsRegistration = /\b(register|registered|registering|registration)\b/i.test(lowerQuery);
-  const mentionsComposition = /\b(di|dependency|dependencies|inject|injection|service|services|container|composition)\b/i.test(lowerQuery);
-  return mentionsRegistration && mentionsComposition;
-}
-
-function queryWantsValidationOrAuth(lowerQuery: string): boolean {
-  return /\b(valid|validate|validation|validator|rule|rules|auth|authorize|authorization|policy|permission|required)\b/i.test(lowerQuery);
-}
-
-function queryWantsFormOrProfile(lowerQuery: string): boolean {
-  return /\b(form|forms|field|fields|input|inputs|view|views|ui|profile|persona|setup|registration|register|account)\b/i.test(lowerQuery);
-}
-
-function hasPathSegment(file: string, segment: string): boolean {
-  return file.split("/").includes(segment);
-}
-
-function isLikelyTestFile(file: string): boolean {
-  return /(^|\/)(test|tests|specs?)(\/|$)|(\.|-)(test|spec)\./i.test(file.replace(/\\/g, "/"));
-}
-
-function placeholders(count: number): string {
-  return new Array(Math.max(count, 1)).fill("?").join(", ");
-}
-
-function stringValue(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-
-function numberValue(value: unknown): number {
-  return typeof value === "number" ? value : 0;
-}
-
-function uniqueStrings(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function mergeSearchRows(...groups: Array<Array<Record<string, unknown>>>): Array<Record<string, unknown>> {
-  const seen = new Set<string>();
-  return groups.flat().filter((row) => {
-    const id = stringValue(row.record_id);
-    if (!id || seen.has(id)) {
-      return false;
-    }
-    seen.add(id);
-    return true;
-  });
-}
-
-function uniqueById(rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const seen = new Set<string>();
-  const unique: Array<Record<string, unknown>> = [];
-  for (const row of rows) {
-    const id = stringValue(row.id) || JSON.stringify(row);
-    if (!seen.has(id)) {
-      seen.add(id);
-      unique.push(row);
-    }
-  }
-
-  return unique;
 }

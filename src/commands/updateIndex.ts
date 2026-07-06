@@ -41,7 +41,7 @@ export function shouldUpdateOnSave(document: vscode.TextDocument): boolean {
     return false;
   }
 
-  return new Set([".cs", ".csproj", ".sln", ".props", ".targets", ".js", ".mjs", ".cjs", ".html", ".htm", ".cshtml", ".razor"]).has(
+  return new Set([".cs", ".csproj", ".sln", ".props", ".targets", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".html", ".htm", ".cshtml", ".razor"]).has(
     path.extname(document.uri.fsPath).toLowerCase()
   );
 }

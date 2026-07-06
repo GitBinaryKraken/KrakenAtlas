@@ -18,14 +18,17 @@ export function renderAgentResponse(response: QueryResponse): string {
     const fileEvidence = evidence.filter((item) => item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file)));
     const caveats = evidence.filter((item) => item.recordType === "caveat");
     const capability = evidence.filter((item) => item.recordType === "capabilityAssessment");
+    const sharedContracts = evidence.filter((item) => item.recordType === "sharedContractBoundary");
+    const sharedContractChecklists = evidence.filter((item) => item.recordType === "sharedContractChecklist");
+    const contextPruning = evidence.filter((item) => item.recordType === "contextPruning");
     const patternFit = evidence.filter((item) => item.recordType === "patternFit");
     const planSummary = evidence.filter((item) => item.recordType === "changePlanSummary");
     const avoidFiles = evidence.filter((item) => item.recordType === "planAvoidFile");
     const drift = evidence.filter((item) => item.recordType === "finding" && item.kind === "pattern-drift");
     const contextPack = evidence.filter((item) => item.recordType === "contextPackCommand");
     evidence = isChangePlan
-      ? [...planSummary, ...caveats, ...capability, ...patternFit, ...fileEvidence, ...avoidFiles, ...drift, ...contextPack]
-      : [...caveats, ...capability, ...patternFit, ...fileEvidence];
+      ? [...planSummary, ...caveats, ...sharedContracts, ...sharedContractChecklists, ...contextPruning, ...capability, ...patternFit, ...fileEvidence, ...avoidFiles, ...drift, ...contextPack]
+      : [...caveats, ...sharedContracts, ...contextPruning, ...capability, ...patternFit, ...fileEvidence];
   }
   const lines = [
     "Answer",
@@ -142,7 +145,7 @@ function selectEvidence(response: QueryResponse): Array<Record<string, unknown>>
     const anchors = response.evidence.filter((item) => item.recordType === "strongAnchor");
     return [...summaries, ...response.flow, ...anchors];
   }
-  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "patternFit", "changePlanSummary", "planAvoidFile", "contextPackCommand", "reference", "referenceSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "architectureHotspot", "hotspotSummary", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
+  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "patternFit", "changePlanSummary", "sharedContractBoundary", "sharedContractChecklist", "contextPruning", "planAvoidFile", "contextPackCommand", "reference", "referenceSummary", "datatypeProjectUsage", "nodeRoleSummary", "nodeTagSummary", "nodeMemberSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "architectureHotspot", "hotspotSummary", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
     return response.evidence;
   }
   if (response.relationships.length) {
@@ -177,13 +180,26 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
     const prefix = fileNumbers.has(file) ? `${fileNumbers.get(file)}.` : `- ${file}:`;
     const relationship = firstRecord(item.relationshipDetails);
     const anchor = firstRecord(item.anchorDetails);
+    const matchedTags = Array.isArray(item.matchedTags) ? item.matchedTags.filter((tag): tag is string => typeof tag === "string").slice(0, 3) : [];
+    const roles = uniqueStrings([
+      ...(Array.isArray(item.nodeRoles) ? item.nodeRoles.filter((role): role is string => typeof role === "string") : []),
+      ...(Array.isArray(item.symbolRoles) ? item.symbolRoles.filter((role): role is string => typeof role === "string") : [])
+    ]).slice(0, 3);
+    const projectHint = item.projectHint && typeof item.projectHint === "object" ? item.projectHint as Record<string, unknown> : {};
+    const project = stringValue(projectHint.project);
+    const memberHints = Array.isArray(item.memberHints) ? item.memberHints.filter((member): member is Record<string, unknown> => Boolean(member) && typeof member === "object").slice(0, 3) : [];
+    const tagSuffix = matchedTags.length ? `; tags ${matchedTags.join(", ")}` : "";
+    const roleSuffix = roles.length ? `; roles ${roles.join(", ")}` : "";
+    const projectSuffix = project ? `; project ${project}` : "";
+    const memberSuffix = memberHints.length ? `; members ${memberHints.map((member) => stringValue(member.name)).filter(Boolean).join(", ")}` : "";
+    const guidanceSuffix = `${tagSuffix}${projectSuffix}${roleSuffix}${memberSuffix}`;
     if (relationship) {
-      return `${prefix} ${stringValue(relationship.type)}: ${compactId(stringValue(relationship.from))} -> ${compactId(stringValue(relationship.to))}${formatLocation(relationship)}`;
+      return `${prefix} ${stringValue(relationship.type)}: ${compactId(stringValue(relationship.from))} -> ${compactId(stringValue(relationship.to))}${formatLocation(relationship)}${guidanceSuffix}`;
     }
     if (anchor) {
-      return `${prefix} anchor: ${compactId(stringValue(anchor.name) || stringValue(anchor.id))}${formatLocation(anchor)}`;
+      return `${prefix} anchor: ${compactId(stringValue(anchor.name) || stringValue(anchor.id))}${formatLocation(anchor)}${guidanceSuffix}`;
     }
-    return `${prefix} ${compactReason(reasons[0] ?? "ranked text match")}`;
+    return `${prefix} ${compactReason(reasons[0] ?? "ranked text match")}${guidanceSuffix}`;
   }
 
   if (item.recordType === "caveat") {
@@ -294,8 +310,51 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
     return `- Pattern fit: ${stringValue(item.patternName) || stringValue(item.patternId)} (${stringValue(item.category)}). ${truncate(stringValue(item.guidance), 140)}${exampleText}`;
   }
 
+  if (item.recordType === "sharedContractBoundary") {
+    const roles = Array.isArray(item.roles) ? item.roles.filter((value): value is string => typeof value === "string") : [];
+    const usedFrom = Array.isArray(item.usedFrom) ? item.usedFrom.filter((value): value is string => typeof value === "string") : [];
+    const members = Array.isArray(item.members) ? item.members.filter((value): value is string => typeof value === "string") : [];
+    const memberText = members.length ? ` Members: ${members.slice(0, 5).join(", ")}.` : "";
+    return `- Shared contract: ${compactId(stringValue(item.nodeId))}${roles.length ? ` [${roles.join(", ")}]` : ""}; declared ${formatCounts(item.declaredIn)}; used ${usedFrom.join(", ") || formatCounts(item.referencedFrom)}. ${truncate(stringValue(item.message), 150)}${memberText}`;
+  }
+
+  if (item.recordType === "sharedContractChecklist") {
+    const checklistItems = Array.isArray(item.items) ? item.items.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
+    const labels = checklistItems.slice(0, 6).map((entry) => stringValue(entry.label)).filter(Boolean);
+    return `- Contract checklist: ${stringValue(item.name) || compactId(stringValue(item.nodeId))}; ${labels.join("; ")}. ${truncate(stringValue(item.message), 120)}`;
+  }
+
+  if (item.recordType === "contextPruning") {
+    const tags = Array.isArray(item.tags) ? item.tags.filter((value): value is string => typeof value === "string") : [];
+    const projects = Array.isArray(item.projects) ? item.projects.filter((value): value is string => typeof value === "string") : [];
+    return `- Context focus: kept ${item.keptRelationshipCount ?? 0}/${item.originalRelationshipCount ?? 0} relationship(s)${tags.length ? `; tags ${tags.slice(0, 4).join(", ")}` : ""}${projects.length ? `; projects ${projects.slice(0, 4).join(", ")}` : ""}.`;
+  }
+
   if (item.recordType === "referenceSummary") {
     return `- Breakdown: source ${formatCounts(item.sourceReferenceKinds)}; edges ${formatCounts(item.relationshipTypes)}; anchors ${item.resolvedAnchorCount ?? 0}. Evidence is sampled; exact single-ID follow-ups may differ.`;
+  }
+
+  if (item.recordType === "datatypeProjectUsage") {
+    return `- Datatype projects: declared ${formatCounts(item.declaredIn)}; references ${formatCounts(item.referencedFrom)}; relationship evidence ${formatCounts(item.relationshipEvidenceFrom)}.`;
+  }
+
+  if (item.recordType === "nodeRoleSummary") {
+    const roles = Array.isArray(item.roles) ? item.roles.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
+    const labels = roles.slice(0, 6).map((role) => `${stringValue(role.role)} ${formatDecimal(role.confidence)}`).filter((value) => value.trim());
+    return `- Node roles: ${labels.length ? labels.join(", ") : "none"}.`;
+  }
+
+  if (item.recordType === "nodeTagSummary") {
+    const tags = Array.isArray(item.tags) ? item.tags.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
+    const labels = tags.slice(0, 10).map((tag) => stringValue(tag.tag)).filter(Boolean);
+    return `- Node tags: ${labels.length ? labels.join(", ") : "none"}.`;
+  }
+
+  if (item.recordType === "nodeMemberSummary") {
+    const members = Array.isArray(item.members) ? item.members.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
+    const labels = members.slice(0, 12).map(formatMemberLabel).filter(Boolean);
+    const count = typeof item.memberCount === "number" ? item.memberCount : labels.length;
+    return `- Datatype members: ${count} member(s)${labels.length ? `; ${labels.join(", ")}` : ""}${count > labels.length ? ", ..." : ""}.`;
   }
 
   if (item.recordType === "reference" && !item.recordId) {
@@ -370,6 +429,16 @@ function compactId(value: string): string {
     return `js:selector:${jsSelector[1]}`;
   }
 
+  const reactSymbol = /^symbol:react:.+:(component|hook|store|context|function|route):([^:]+)$/u.exec(value);
+  if (reactSymbol) {
+    return `react:${reactSymbol[1]}:${reactSymbol[2]}`;
+  }
+
+  const reactProp = /^prop:react:(.+)$/u.exec(value);
+  if (reactProp) {
+    return `prop:${reactProp[1]}`;
+  }
+
   const route = /^route:(?:web|csharp):(.+)$/u.exec(value);
   if (route) {
     return `route:${route[1]}`;
@@ -377,6 +446,7 @@ function compactId(value: string): string {
 
   return truncate(value
     .replace(/^symbol:javascript:/u, "js:")
+    .replace(/^symbol:react:/u, "react:")
     .replace(/^symbol:razor:/u, "razor:")
     .replace(/^symbol:dotnet-project:/u, "project:")
     .replace(/^file:/u, ""), 70);
@@ -446,6 +516,18 @@ function formatEndpointLocation(value: unknown): string {
 function formatSnippet(value: unknown): string {
   const text = stringValue(value);
   return text ? `; ${truncate(text, 80)}` : "";
+}
+
+function formatMemberLabel(member: Record<string, unknown>): string {
+  const name = stringValue(member.name);
+  if (!name) {
+    return "";
+  }
+
+  const typeName = stringValue(member.typeName);
+  const required = member.required === true ? " required" : "";
+  const nullable = member.nullable === true ? " nullable" : "";
+  return `${name}${typeName ? `:${typeName}` : ""}${required}${nullable}`;
 }
 
 function stringValue(value: unknown): string {
