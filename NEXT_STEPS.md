@@ -97,7 +97,7 @@ High-priority semantic slices:
 2. Done: resolve React/TypeScript imports through TypeScript's compiler module resolver using discovered `tsconfig` settings, including alias imports to barrel files and implementation files.
 3. In progress: add a broader TypeScript compiler-backed analyzer path for `.ts`, `.tsx`, `.js`, and `.jsx` symbols/types, keeping the current parser as a fallback for incomplete or dependency-light workspaces. First compiler-AST declaration pass now emits queryable interfaces, object type aliases, scalar type aliases, enums, enum members, and member summaries.
 4. In progress: expand import/export graphs through TypeScript module resolution, including package `exports`, default exports, namespace imports, and type-only imports. Type-only imports now emit distinct `TYPE_IMPORTS_MODULE` relationships and `typescript-type-import` references, namespace JSX member usage resolves through barrel re-exports, `package.json` export surfaces are queryable package-export nodes, package-subpath imports can resolve through workspace package exports, default imports can follow default barrel re-exports, JSX default import aliases can resolve back to the actual component, and named import/re-export aliases are covered for React barrel files. Deeper external package resolution and more default export alias semantics remain.
-5. In progress: use TypeScript semantics to connect JSX props to declared prop types, inferred props, generic components, union/intersection props, `ComponentProps<>`, and imported type aliases. JSX props now resolve to known declared prop member nodes, intersection aliases with inline object members are mapped, first-pass `ComponentProps<typeof Component>` aliases can point back to their source component, imported prop type aliases can resolve to shared prop declarations, inherited props now emit `EXTENDS_PROPS` plus inherited `PASSES_PROP` edges, first-pass utility props for `Pick`, `Omit`, `Partial`, `Required`, `Readonly`, finite-key `Record`, and simple mapped types can resolve to prop members, and untyped destructured component parameters now emit inferred prop nodes for top-level, nested, rest, and simple default-value cases; full type-checker-backed inference, broad index signatures, complex mapped types, and generic prop expansion remain.
+5. In progress: use TypeScript semantics to connect JSX props to declared prop types, inferred props, generic components, union/intersection props, `ComponentProps<>`, and imported type aliases. JSX props now resolve to known declared prop member nodes, intersection aliases with inline object members are mapped, first-pass `ComponentProps<typeof Component>` aliases can point back to their source component, imported prop type aliases can resolve to shared prop declarations, inherited props now emit `EXTENDS_PROPS` plus inherited `PASSES_PROP` edges, first-pass utility props for `Pick`, `Omit`, `Partial`, `Required`, `Readonly`, finite-key `Record`, broad `Record<string, T>`, finite template-literal keys, TypeScript index signatures, and simple mapped types can resolve to prop members, generic function components can emit type-parameter nodes, JSX type-argument edges, concrete type-argument substitutions in JSX prop-flow evidence, defaulted generic substitutions when JSX omits explicit type arguments, first-pass generic props-alias parameter remapping, and local/imported nested generic type-alias expansion in prop-flow evidence, and untyped destructured component parameters now emit inferred prop nodes for top-level, nested, rest, and simple default-value cases; full type-checker-backed inference, complex mapped types, value-derived JSX generic inference, and checker-backed generic constraints remain.
 6. In progress: emit semantic nodes for interfaces, type aliases, enum/object literal contracts, generic type parameters, discriminated unions, and exported API/client types. Interfaces, object type aliases, scalar type aliases, literal union values, enums, enum members, member summaries, generic type parameters, first-pass discriminated-union variants, exported API/client contract patterns, local `REFERENCES_TYPE` edges, and generic argument edges are covered; deeper checker-backed generic expansion remains.
 7. In progress: map call graphs from resolved symbols rather than name-only matches, including hooks, service helpers, API clients, route handlers, and state-store actions. Imported function calls, namespace imported calls, and imported hook/store calls now prefer compiler/import-resolved declarations and emit resolved references; full checker-backed call graph resolution remains.
 8. In progress: add semantic relationship confidence fields/evidence so query output can distinguish compiler-resolved edges from convention or text-derived edges. First-pass import-resolved evidence markers now appear on resolved React call and hook relationships.
@@ -105,8 +105,8 @@ High-priority semantic slices:
 
 TypeScript/React coverage gaps to close:
 
-- High priority: deepen utility-prop expansion beyond first-pass finite-key `Record<K, V>` and simple mapped types, including broad index signatures, key remapping, template-literal keys, conditional mapped types, and checker-backed optionality/value types.
-- High priority: expand generic props beyond first-pass names, including generic components, generic type aliases, generic constraints/defaults, and concrete JSX type arguments.
+- High priority: deepen utility-prop expansion beyond first-pass finite-key/broad `Record`, finite template-literal keys, and simple index-signature support, including key remapping, conditional mapped types, referenced template-literal aliases, numeric/symbol/template index fallback, and checker-backed optionality/value types.
+- High priority: expand generic props beyond first-pass generic function components, JSX type-argument edges, explicit/defaulted JSX substitution evidence, simple props-alias parameter remapping, and local/imported nested generic type aliases, including value-derived JSX generic inference and checker-backed constraints.
 - High priority: deepen inferred component props beyond the current first-pass destructuring support, especially checker-backed inferred prop types, richer default-value refinement, nested arrays, alias/default pattern edge cases, and generic component inference.
 - High priority: resolve higher-order component wrappers beyond `memo` and `forwardRef`, including local wrapper helpers and common provider/layout wrappers.
 - Medium priority: deepen checker-backed call graph resolution for callbacks, imported object methods, hook-return methods, service clients, and async action functions.
@@ -137,6 +137,23 @@ Why now:
 - Future agent work on Atlas often starts in query behavior, and one very large service increases context load.
 - Smaller modules make it safer to keep adding role-aware ranking, context-pruning, and React/TypeScript support later.
 - This is an enabling refactor, not a feature detour: the immediate feature target is agent-readable planning with less context load.
+
+### Agent-Maintainability Slice: File-Size Guardrails
+
+Audit from 2026-07-06:
+
+- `src/analyzers/reactAnalyzer.ts`: 2,645 lines / 108.1 KB. This is now the largest production file and is carrying TypeScript declaration discovery, import/re-export resolution, React declaration discovery, prop/member extraction, utility/generic prop expansion, JSX composition, type/reference edge emission, route/store/context detection, and semantic evidence formatting.
+- `src/query/queryService.ts`: 2,037 lines / 88.8 KB. The earlier helper extractions helped, but `withQueryService` still spans roughly the whole file and remains expensive for agents to read safely.
+- `src/storage/sqliteIndex.ts`: 1,059 lines / 37.3 KB. Monitor for now; it is below the immediate split threshold but should not absorb more unrelated enrichment behavior.
+- Test hotspots: `test/queryService.test.ts` is 1,981 lines and `test/webAnalyzer.test.ts` is 1,348 lines. Split these after the related production modules are extracted so scenario coverage remains easy to find.
+
+Refactor queue:
+
+1. In progress: split `reactAnalyzer.ts` into behavior-preserving modules before adding more broad React/TypeScript semantics. Extracted shared analyzer types, type-text helpers, import/re-export name helpers, generic prop substitution/type-alias evidence helpers, and prop utility/index-signature expansion into focused modules, reducing `reactAnalyzer.ts` to 2,177 lines / 91.4 KB. Next extractions should target TypeScript declaration/member discovery, JSX composition/prop evidence, and route/store/context conventions.
+2. Next: continue the `queryService.ts` split by extracting remaining `withQueryService` command branches into intent handlers, targeting a service file below roughly 1,200 lines before the next major query feature and below roughly 800 lines over time.
+3. Next: split `test/webAnalyzer.test.ts` into React/TypeScript, Razor/HTML, JavaScript-flow, and route/workflow suites once the analyzer modules are extracted.
+4. Next: split `test/queryService.test.ts` by query intent after the remaining `queryService.ts` handlers move out.
+5. Ongoing: treat any production file above roughly 1,500 lines or any test file above roughly 1,200 lines as a next-step refactor candidate unless it is deliberately generated or table-driven.
 
 ### 0. SQLite Node Enrichment
 
@@ -376,8 +393,18 @@ Atlas is improving if:
 8. Next: validate React/Next query quality on a larger real project or convert alpha misses into fixture variants.
 9. Done: add first-pass inferred props for nested destructuring, rest props, and simple default-value type/optionality hints.
 10. Next: deepen checker-backed inferred prop types, richer default-value refinement, nested arrays, alias/default pattern edge cases, and generic component inference.
-11. Next: deepen utility-prop coverage for broad index signatures, key remapping, template-literal keys, conditional mapped types, and checker-backed value/optional types.
-12. Next: expand generic prop coverage for generic components, generic type aliases, constraints/defaults, and concrete JSX type arguments.
-13. Next: add a workspace/package-manager fixture for pnpm/yarn/npm package boundaries, generated declarations, package exports, project references, path aliases, and mixed JS/TS package boundaries.
-14. Next: add .NET Minimal API route-group and endpoint-filter fixture coverage.
-15. Optional: continue command-handler splits if React work shows `queryService.ts` is still too dense for agent edits.
+11. Done: add first-pass broad `Record<string, T>` and TypeScript index-signature prop members, with JSX fallback edges for string-indexed attributes.
+12. Done: add finite template-literal key expansion for inline literal-union utility props.
+13. Next: deepen utility-prop coverage for key remapping, conditional mapped types, referenced template-literal aliases, numeric/symbol/template index fallback, and checker-backed value/optional types.
+14. Done: add first-pass generic function component parsing with type-parameter nodes, typed props ownership, and JSX type-argument edges.
+15. Done: add first-pass JSX type-argument substitution in generic prop-flow evidence for explicit generic component usages.
+16. Done: add first-pass generic props-alias parameter remapping when component props bind alias type parameters.
+17. Done: add first-pass local generic type-alias expansion in generic prop-flow evidence.
+18. Done: expand imported nested generic type aliases in generic prop-flow evidence.
+19. Done: use declared generic defaults for JSX prop-flow evidence when explicit type arguments are omitted.
+20. In progress: continue the behavior-preserving `reactAnalyzer.ts` split. Completed the shared type/text/import helper, generic prop evidence, and prop utility/index-signature extractions; next split should extract TypeScript declaration/member discovery or JSX composition/prop evidence.
+21. Next: continue the `queryService.ts` split by extracting remaining `withQueryService` command branches into intent handlers.
+22. Next: infer value-derived JSX generic substitutions and add checker-backed generic constraints.
+23. Next: add a workspace/package-manager fixture for pnpm/yarn/npm package boundaries, generated declarations, package exports, project references, path aliases, and mixed JS/TS package boundaries.
+24. Next: add .NET Minimal API route-group and endpoint-filter fixture coverage.
+25. Next: split `test/webAnalyzer.test.ts` and `test/queryService.test.ts` by scenario after the related production modules are extracted.

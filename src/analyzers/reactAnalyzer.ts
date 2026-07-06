@@ -1,106 +1,37 @@
 import * as path from "path";
 import * as ts from "typescript";
 import { FileRecord, ReferenceRecord, RelationshipRecord, SourceRange, SymbolRecord } from "../model/records";
+import { genericSubstitutionsForJsx, genericSubstitutionsForProp, jsxPropEvidence } from "./reactGenericProps";
+import { declarationNamesForImport, resolveReExportedFile } from "./reactImportResolution";
+import {
+  filterMembersForPropUtility,
+  indexSignatureAcceptsPropName,
+  propUtilitiesFromTypeNode,
+  syntheticMembersForPropUtilities,
+  syntheticMembersForPropUtility
+} from "./reactPropUtilities";
+import {
+  ImportBinding,
+  ReactDeclaration,
+  ReactMember,
+  ReactSource,
+  TypeScriptInferredProp,
+  TypeScriptPropUtility,
+  TypeScriptTypeParameter,
+  TypeScriptUnionVariant
+} from "./reactAnalyzerTypes";
+import { escapeRegExp, simpleTypeName, slug, splitTopLevelGenericArgs } from "./reactTypeText";
 import { rangeFromIndex } from "./textLocation";
 import { resolveTypeScriptModuleFile, TypeScriptProjectContext } from "./typescriptProjectAnalyzer";
 import { WebAnalyzerResult } from "./webAnalyzerTypes";
 
-export interface ReactSource {
-  file: FileRecord;
-  text: string;
-}
-
-interface ReactDeclaration {
-  id: string;
-  name: string;
-  kind: "component" | "hook" | "store" | "context" | "function" | "props" | "interface" | "type" | "enum" | "route";
-  file: string;
-  language: string;
-  range: SourceRange;
-  start: number;
-  bodyStart: number;
-  end: number;
-  declaration: string;
-  body: string;
-  propsType?: string;
-  runtime?: "client" | "server-action" | "server-component";
-  exported?: boolean;
-  typeParameters?: TypeScriptTypeParameter[];
-  unionVariants?: TypeScriptUnionVariant[];
-  componentPropsType?: string;
-  extendsTypes?: string[];
-  propUtilities?: TypeScriptPropUtility[];
-  inferredProps?: TypeScriptInferredProp[];
-}
-
-interface TypeScriptPropUtility {
-  utility: "Pick" | "Omit" | "Partial" | "Required" | "Readonly" | "Record" | "Mapped";
-  targetType?: string;
-  keys?: string[];
-  keyType?: string;
-  valueType?: string;
-  optional?: boolean;
-}
-
-interface TypeScriptInferredProp {
-  name: string;
-  typeName: string;
-  optional: boolean;
-  readonly: boolean;
-  rest?: boolean;
-  range: SourceRange;
-  declaration: string;
-}
-
-interface TypeScriptTypeParameter {
-  name: string;
-  summary: string;
-  range: SourceRange;
-  declaration: string;
-}
-
-interface TypeScriptUnionVariant {
-  name: string;
-  discriminator: string;
-  range: SourceRange;
-  declaration: string;
-  variantKind: "discriminated-object" | "literal";
-}
-
-interface ImportBinding {
-  name: string;
-  importedName?: string;
-  source: string;
-  resolvedFile?: string;
-  resolution?: "typescript" | "convention";
-  range: SourceRange;
-  snippet: string;
-  kind: "import" | "re-export";
-  importStyle: "default" | "named" | "namespace";
-  typeOnly: boolean;
-}
+export type { ReactSource } from "./reactAnalyzerTypes";
 
 interface ImportSpecifier {
   name: string;
   importedName?: string;
   importStyle: ImportBinding["importStyle"];
   typeOnly: boolean;
-}
-
-interface ReactMember {
-  id: string;
-  parentId: string;
-  parentName: string;
-  name: string;
-  kind: "property" | "enum-member";
-  file: string;
-  language: string;
-  range: SourceRange;
-  declaration: string;
-  typeName?: string;
-  optional: boolean;
-  readonly: boolean;
-  rest?: boolean;
 }
 
 const reactExtensions = new Set([".jsx", ".tsx", ".ts"]);
@@ -317,7 +248,7 @@ export function analyzeReactSources(sources: ReactSource[], result: WebAnalyzerR
   for (const source of sources) {
     const fileDeclarations = declarations.filter((declaration) => declaration.file === source.file.path);
     for (const declaration of fileDeclarations) {
-      analyzeDeclarationBody(source, declaration, declarationsByName, membersByParentId, importsByFile, reExportsByFile, result);
+    analyzeDeclarationBody(source, declaration, declarationsByName, membersByParentId, importsByFile, reExportsByFile, typeParameterIdsByName, result);
     }
     analyzeRoutes(source, fileDeclarations, declarationsByName, result);
   }
@@ -408,36 +339,6 @@ function emitImportBinding(
 
   result.references.push(reference(importBinding.name, `file:${barrelTarget}`, source.file.path, importBinding.range, importBinding.typeOnly ? "barrel-type-import" : "barrel-import", importBinding.snippet, 0.78));
   result.relationships.push(relationship(moduleId, `file:${barrelTarget}`, importRelationship, source.file.path, importBinding.range, `${importBinding.snippet} via ${importBinding.resolvedFile}`, 0.78));
-}
-
-function resolveReExportedFile(
-  importBinding: ImportBinding,
-  reExportsByFile: Map<string, ImportBinding[]>,
-  visited = new Set<string>()
-): string | undefined {
-  if (!importBinding.resolvedFile || visited.has(importBinding.resolvedFile)) {
-    return undefined;
-  }
-
-  visited.add(importBinding.resolvedFile);
-  const reExports = reExportsByFile.get(importBinding.resolvedFile) ?? [];
-  const requestedName = importBinding.importedName ?? importBinding.name;
-  const match = reExports.find((reExport) =>
-    reExport.name === importBinding.name ||
-    reExport.name === requestedName ||
-    reExport.name === "*" ||
-    (importBinding.importStyle === "default" && reExport.name === "default")
-  );
-  if (!match?.resolvedFile) {
-    return undefined;
-  }
-
-  return resolveReExportedFile(match, reExportsByFile, visited) ?? match.resolvedFile;
-}
-
-function declarationNamesForImport(name: string, importBinding: ImportBinding | undefined): string[] {
-  const names = [importBinding?.importedName, name].filter((candidate): candidate is string => Boolean(candidate) && candidate !== "*" && candidate !== "default");
-  return [...new Set(names)];
 }
 
 function importSpecifiers(specifierText: string): ImportSpecifier[] {
@@ -713,84 +614,6 @@ function cleanHeritageTypeName(value: string): string | undefined {
   return simple?.endsWith("Props") ? simple : undefined;
 }
 
-function propUtilitiesFromTypeNode(sourceFile: ts.SourceFile, node: ts.TypeNode): TypeScriptPropUtility[] {
-  if (ts.isIntersectionTypeNode(node) || ts.isUnionTypeNode(node)) {
-    return node.types.flatMap((child) => propUtilitiesFromTypeNode(sourceFile, child));
-  }
-  if (ts.isParenthesizedTypeNode(node)) {
-    return propUtilitiesFromTypeNode(sourceFile, node.type);
-  }
-  if (ts.isMappedTypeNode(node)) {
-    const keys = propUtilityKeysFromTypeNode(sourceFile, node.typeParameter.constraint);
-    const keyType = propUtilityKeyTypeFromTypeNode(sourceFile, node.typeParameter.constraint);
-    return keys?.length || keyType ? [{
-      utility: "Mapped",
-      keys,
-      keyType,
-      valueType: node.type?.getText(sourceFile) ?? "unknown",
-      optional: Boolean(node.questionToken)
-    }] : [];
-  }
-  if (!ts.isTypeReferenceNode(node)) {
-    return [];
-  }
-
-  const utility = propUtilityName(node.typeName.getText(sourceFile));
-  if (!utility || !node.typeArguments?.length) {
-    return [];
-  }
-
-  if (utility === "Record") {
-    const keys = propUtilityKeysFromTypeNode(sourceFile, node.typeArguments[0]);
-    const keyType = propUtilityKeyTypeFromTypeNode(sourceFile, node.typeArguments[0]);
-    return keys?.length || keyType ? [{
-      utility,
-      keys,
-      keyType,
-      valueType: node.typeArguments[1]?.getText(sourceFile) ?? "unknown",
-      optional: false
-    }] : [];
-  }
-
-  const targetType = cleanHeritageTypeName(node.typeArguments[0].getText(sourceFile));
-  if (!targetType) {
-    return [];
-  }
-
-  return [{
-    utility,
-    targetType,
-    keys: propUtilityKeysFromTypeNode(sourceFile, node.typeArguments[1])
-  }];
-}
-
-function propUtilityName(typeName: string): TypeScriptPropUtility["utility"] | undefined {
-  const simple = typeName.split(".").pop();
-  return simple === "Pick" || simple === "Omit" || simple === "Partial" || simple === "Required" || simple === "Readonly" || simple === "Record"
-    ? simple
-    : undefined;
-}
-
-function propUtilityKeysFromTypeNode(sourceFile: ts.SourceFile, node: ts.TypeNode | undefined): string[] | undefined {
-  if (!node) {
-    return undefined;
-  }
-  if (ts.isUnionTypeNode(node)) {
-    return node.types.flatMap((child) => propUtilityKeysFromTypeNode(sourceFile, child) ?? []);
-  }
-  if (ts.isLiteralTypeNode(node)) {
-    const literal = node.literal;
-    if (ts.isStringLiteral(literal) || ts.isNumericLiteral(literal)) {
-      return [literal.text];
-    }
-  }
-  return undefined;
-}
-
-function propUtilityKeyTypeFromTypeNode(sourceFile: ts.SourceFile, node: ts.TypeNode | undefined): string | undefined {
-  return node && ts.isTypeReferenceNode(node) ? simpleTypeName(node.getText(sourceFile)) : undefined;
-}
-
 function componentPropsTypeFromTypeNode(sourceFile: ts.SourceFile, node: ts.TypeNode): string | undefined {
   if (ts.isTypeReferenceNode(node)) {
     const typeName = node.typeName.getText(sourceFile);
@@ -832,6 +655,36 @@ function typeParametersFromNode(source: ReactSource, sourceFile: ts.SourceFile, 
       name,
       summary,
       range: rangeFromIndex(source.text, parameter.getStart(sourceFile), parameter.end - parameter.getStart(sourceFile)),
+      declaration: parameter.getText(sourceFile)
+    };
+  });
+}
+
+function typeParametersFromGenericText(source: ReactSource, genericText: string | undefined, genericStart: number): TypeScriptTypeParameter[] {
+  if (!genericText) {
+    return [];
+  }
+
+  const sourceFile = ts.createSourceFile("__atlas__.tsx", `function __atlas__${genericText}() {}`, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isFunctionDeclaration(statement) || !statement.typeParameters) {
+    return [];
+  }
+
+  const offset = `function __atlas__`.length;
+  return statement.typeParameters.map((parameter) => {
+    const name = parameter.name.text;
+    const constraint = parameter.constraint?.getText(sourceFile);
+    const defaultType = parameter.default?.getText(sourceFile);
+    const summary = [
+      constraint ? `constraint: ${constraint}` : undefined,
+      defaultType ? `default: ${defaultType}` : undefined
+    ].filter(Boolean).join("; ");
+    const start = genericStart + Math.max(0, parameter.getStart(sourceFile) - offset);
+    return {
+      name,
+      summary,
+      range: rangeFromIndex(source.text, start, Math.max(1, parameter.end - parameter.getStart(sourceFile))),
       declaration: parameter.getText(sourceFile)
     };
   });
@@ -923,7 +776,49 @@ function discoverInterfaceMembers(source: ReactSource, declaration: ReactDeclara
     members.push(...discoverNestedObjectMembers(source, declaration, name, match, Boolean(match[4]), Boolean(match[2])));
     seen.add(name);
   }
+  for (const member of discoverIndexSignatureMembers(source, declaration)) {
+    if (seen.has(member.name)) {
+      continue;
+    }
+    members.push(member);
+    seen.add(member.name);
+  }
 
+  return members;
+}
+
+function discoverIndexSignatureMembers(source: ReactSource, declaration: ReactDeclaration): ReactMember[] {
+  const members: ReactMember[] = [];
+  for (const match of matchAll(declaration.body, /(^|[;\n])\s*(readonly\s+)?\[\s*([A-Za-z_$][\w$]*)\s*:\s*([^\]]+)\]\s*:\s*([^;\n]+)/g)) {
+    const textAfterBoundary = match[0].slice(match[1].length);
+    const offsetWithinMatch = textAfterBoundary.search(/\S/u);
+    const memberBodyOffset = match.index + match[1].length + Math.max(0, offsetWithinMatch);
+    if (braceDepthAt(declaration.body, memberBodyOffset) !== 0) {
+      continue;
+    }
+
+    const keyName = match[3];
+    const keyType = cleanTypeName(match[4]);
+    const name = `[${keyName}: ${keyType}]`;
+    const snippet = textAfterBoundary.trim();
+    const snippetStart = declaration.bodyStart + memberBodyOffset;
+    members.push({
+      id: `${declaration.id}.${slug(name)}`,
+      parentId: declaration.id,
+      parentName: declaration.name,
+      name,
+      kind: "property",
+      file: declaration.file,
+      language: declaration.language,
+      range: rangeFromIndex(source.text, snippetStart, snippet.length),
+      declaration: snippet,
+      typeName: cleanTypeName(match[5]),
+      optional: false,
+      readonly: Boolean(match[2]),
+      indexSignature: true,
+      keyType
+    });
+  }
   return members;
 }
 
@@ -1067,7 +962,7 @@ function discoverContexts(source: ReactSource): ReactDeclaration[] {
 function discoverFunctions(source: ReactSource): ReactDeclaration[] {
   const declarations: ReactDeclaration[] = [];
   const seen = new Set<string>();
-  const functionPattern = /\b(?:export\s+default\s+|export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(([^)]*)\)\s*(?::\s*(?:[^{}]|\{[^{}]*\})+)?\{/g;
+  const functionPattern = /\b(?:export\s+default\s+|export\s+)?(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*(<[^>\n]+>)?\s*\(([^)]*)\)\s*(?::\s*(?:[^{}]|\{[^{}]*\})+)?\{/g;
   for (const match of matchAll(source.text, functionPattern)) {
     const openBrace = match.index + match[0].lastIndexOf("{");
     const closeBrace = findMatchingBrace(source.text, openBrace);
@@ -1081,7 +976,7 @@ function discoverFunctions(source: ReactSource): ReactDeclaration[] {
     const key = `${kind}:${name}:${match.index}`;
     seen.add(key);
     const explicitPropsType = propsTypeFromDeclaration(match[0]);
-    const inferredProps = kind === "component" && !explicitPropsType ? inferredPropsFromParameters(source, match[2], paramsStartFromMatch(match, 2)) : [];
+    const inferredProps = kind === "component" && !explicitPropsType ? inferredPropsFromParameters(source, match[3], paramsStartFromMatch(match, 3)) : [];
     const propsType = explicitPropsType ?? (inferredProps.length ? inferredPropsName(name) : undefined);
     declarations.push({
       id: reactDeclarationId(source.file.path, kind, name),
@@ -1096,7 +991,9 @@ function discoverFunctions(source: ReactSource): ReactDeclaration[] {
       declaration: match[0].slice(0, 160),
       body,
       propsType,
-      exported: /\bexport\b/u.test(match[0])
+      propsTypeArguments: explicitPropsType ? propsTypeArgumentsFromDeclaration(match[0]) : undefined,
+      exported: /\bexport\b/u.test(match[0]),
+      typeParameters: typeParametersFromGenericText(source, match[2], paramsStartFromMatch(match, 2))
     });
     declarations.push(...inferredPropsDeclaration(source, name, match.index, match[0], inferredProps));
   }
@@ -1133,6 +1030,7 @@ function discoverFunctions(source: ReactSource): ReactDeclaration[] {
       declaration: match[0].slice(0, 160),
       body,
       propsType,
+      propsTypeArguments: explicitPropsType ? propsTypeArgumentsFromDeclaration(match[0]) : undefined,
       exported: /\bexport\b/u.test(match[0])
     });
     declarations.push(...inferredPropsDeclaration(source, name, match.index, match[0], inferredProps));
@@ -1172,6 +1070,7 @@ function discoverFunctions(source: ReactSource): ReactDeclaration[] {
       declaration: match[0].slice(0, 160),
       body,
       propsType: propsTypeFromWrapper(match[2], match[3], match[0]),
+      propsTypeArguments: propsTypeArgumentsFromDeclaration(match[0]),
       exported: /\bexport\b/u.test(match[0])
     });
   }
@@ -1588,6 +1487,11 @@ function propsTypeFromDeclaration(declaration: string): string | undefined {
   return propsWithChildren ? propsTypeFromTypeExpression(propsWithChildren) : undefined;
 }
 
+function propsTypeArgumentsFromDeclaration(declaration: string): string[] {
+  const directProps = /:\s*[A-Za-z_$][\w$]*Props\s*<([^>\n]+)>/u.exec(declaration)?.[1];
+  return directProps ? splitTopLevelGenericArgs(directProps) : [];
+}
+
 function propsTypeFromWrapper(wrapperName: string, genericText: string | undefined, declaration: string): string | undefined {
   const declaredProps = propsTypeFromDeclaration(declaration);
   if (declaredProps) {
@@ -1607,29 +1511,6 @@ function propsTypeFromWrapper(wrapperName: string, genericText: string | undefin
   }
 
   return genericArgs.map(propsTypeFromTypeExpression).find((name): name is string => Boolean(name?.endsWith("Props")));
-}
-
-function splitTopLevelGenericArgs(value: string): string[] {
-  const args: string[] = [];
-  let start = 0;
-  let depth = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value[index];
-    if (char === "<") {
-      depth += 1;
-    } else if (char === ">") {
-      depth = Math.max(0, depth - 1);
-    } else if (char === "," && depth === 0) {
-      args.push(value.slice(start, index).trim());
-      start = index + 1;
-    }
-  }
-  args.push(value.slice(start).trim());
-  return args.filter(Boolean);
-}
-
-function simpleTypeName(value: string | undefined): string | undefined {
-  return value?.trim().match(/^([A-Za-z_$][\w$]*)\b/u)?.[1];
 }
 
 function propsTypeFromTypeExpression(value: string | undefined): string | undefined {
@@ -1662,6 +1543,7 @@ function analyzeDeclarationBody(
   membersByParentId: Map<string, ReactMember[]>,
   importsByFile: Map<string, ImportBinding[]>,
   reExportsByFile: Map<string, ImportBinding[]>,
+  typeParameterIdsByName: Map<string, string>,
   result: WebAnalyzerResult
 ): void {
   if (declaration.propsType) {
@@ -1676,7 +1558,7 @@ function analyzeDeclarationBody(
 
   analyzeHookUsage(source, declaration, declarationsByName, importsByFile, reExportsByFile, result);
   analyzeContextUsage(source, declaration, declarationsByName, result);
-  analyzeComponentComposition(source, declaration, declarationsByName, membersByParentId, importsByFile, reExportsByFile, result);
+  analyzeComponentComposition(source, declaration, declarationsByName, membersByParentId, importsByFile, reExportsByFile, typeParameterIdsByName, result);
   analyzeKnownFunctionCalls(source, declaration, declarationsByName, importsByFile, reExportsByFile, result);
   analyzeApiCalls(source, declaration, result);
 }
@@ -1744,15 +1626,17 @@ function analyzeComponentComposition(
   membersByParentId: Map<string, ReactMember[]>,
   importsByFile: Map<string, ImportBinding[]>,
   reExportsByFile: Map<string, ImportBinding[]>,
+  typeParameterIdsByName: Map<string, string>,
   result: WebAnalyzerResult
 ): void {
   if (declaration.kind !== "component" && declaration.kind !== "hook") {
     return;
   }
 
-  for (const match of matchAll(declaration.body, /<([A-Z][A-Za-z0-9_]*)(?:\.([A-Z][A-Za-z0-9_]*))?\b([^>]*)>/g)) {
+  for (const match of matchAll(declaration.body, /<([A-Z][A-Za-z0-9_]*)(?:\.([A-Z][A-Za-z0-9_]*))?(?:<([^>\n]+)>)?\s*([^>]*)>/g)) {
     const tagName = match[1];
     const memberName = match[2];
+    const typeArguments = match[3];
     const componentName = memberName ?? tagName;
     const jsxName = memberName ? `${tagName}.${memberName}` : tagName;
     if (tagName.endsWith("Context")) {
@@ -1764,14 +1648,17 @@ function analyzeComponentComposition(
     const target = component?.id ?? `symbol:react-component:${jsxName}`;
     result.references.push(reference(jsxName, target, declaration.file, range, memberName ? "jsx-namespace-component" : "jsx-component", match[0], component ? 0.88 : 0.62));
     result.relationships.push(relationship(declaration.id, target, "RENDERS_COMPONENT", declaration.file, range, match[0], component ? 0.88 : 0.65));
+    emitJsxTypeArgumentEdges(declaration.id, typeArguments, declaration.file, range, declarationsByName, typeParameterIdsByName, result);
+    const componentSubstitutions = genericSubstitutionsForJsx(component, typeArguments);
 
-    for (const attr of jsxAttributeNames(match[3])) {
+    for (const attr of jsxAttributeNames(match[4])) {
       if (ignoredJsxAttributes.has(attr)) {
         continue;
       }
       const propMember = component ? resolveComponentPropMember(component, attr, declarationsByName, membersByParentId, importsByFile, reExportsByFile) : undefined;
       const propTarget = propMember?.id ?? `prop:react:${componentName}.${attr}`;
-      const propEvidence = propMember ? `<${jsxName} ${attr}=... -> ${propMember.parentName}.${propMember.name}` : `<${jsxName} ${attr}=...`;
+      const propSubstitutions = propMember ? genericSubstitutionsForProp(component, propMember, componentSubstitutions, declarationsByName) : componentSubstitutions;
+      const propEvidence = propMember ? jsxPropEvidence(jsxName, attr, propMember, propSubstitutions, declarationsByName, importsByFile, reExportsByFile) : `<${jsxName} ${attr}=...`;
       const propConfidence = propMember ? 0.84 : 0.68;
       if (propMember) {
         result.references.push(reference(attr, propMember.id, declaration.file, range, "jsx-prop", match[0], propConfidence));
@@ -1883,8 +1770,9 @@ function resolveComponentPropMember(
     return undefined;
   }
 
-  return membersForPropsDeclaration(propsDeclaration, declarationsByName, membersByParentId, importsByFile, reExportsByFile)
-    .find((member) => member.name === propName);
+  const members = membersForPropsDeclaration(propsDeclaration, declarationsByName, membersByParentId, importsByFile, reExportsByFile);
+  return members.find((member) => member.name === propName)
+    ?? members.find((member) => indexSignatureAcceptsPropName(member, propName));
 }
 
 function membersForPropsDeclaration(
@@ -1950,79 +1838,6 @@ function membersForPropsDeclaration(
   return members;
 }
 
-function syntheticMembersForPropUtility(
-  propsDeclaration: ReactDeclaration,
-  utility: TypeScriptPropUtility,
-  declarationsByName: Map<string, ReactDeclaration[]>
-): ReactMember[] {
-  const keys = utility.keys ?? keysFromLocalLiteralUnion(utility.keyType, declarationsByName);
-  return keys.map((key) => ({
-    id: `${propsDeclaration.id}.${slug(key)}`,
-    parentId: propsDeclaration.id,
-    parentName: propsDeclaration.name,
-    name: key,
-    kind: "property" as const,
-    file: propsDeclaration.file,
-    language: propsDeclaration.language,
-    range: propsDeclaration.range,
-    declaration: `${key}: ${utility.valueType ?? "unknown"}`,
-    typeName: utility.valueType ?? "unknown",
-    optional: Boolean(utility.optional),
-    readonly: false
-  }));
-}
-
-function syntheticMembersForPropUtilities(
-  propsDeclaration: ReactDeclaration,
-  declarationsByName: Map<string, ReactDeclaration[]>
-): ReactMember[] {
-  if (propsDeclaration.kind !== "props") {
-    return [];
-  }
-
-  const members: ReactMember[] = [];
-  const seen = new Set<string>();
-  for (const utility of propsDeclaration.propUtilities ?? []) {
-    if (utility.utility !== "Record" && utility.utility !== "Mapped") {
-      continue;
-    }
-    for (const member of syntheticMembersForPropUtility(propsDeclaration, utility, declarationsByName)) {
-      if (seen.has(member.name)) {
-        continue;
-      }
-      members.push(member);
-      seen.add(member.name);
-    }
-  }
-  return members;
-}
-
-function keysFromLocalLiteralUnion(typeName: string | undefined, declarationsByName: Map<string, ReactDeclaration[]>): string[] {
-  if (!typeName) {
-    return [];
-  }
-
-  const declaration = declarationsByName.get(typeName)?.find((candidate) => candidate.kind === "type");
-  return (declaration?.unionVariants ?? [])
-    .filter((variant) => variant.variantKind === "literal")
-    .map((variant) => literalUnionKeyName(variant));
-}
-
-function literalUnionKeyName(variant: TypeScriptUnionVariant): string {
-  return variant.declaration.replace(/^["']|["']$/gu, "");
-}
-
-function filterMembersForPropUtility(members: ReactMember[], utility: TypeScriptPropUtility): ReactMember[] {
-  const keys = new Set(utility.keys ?? []);
-  if (utility.utility === "Pick" && keys.size > 0) {
-    return members.filter((member) => keys.has(member.name));
-  }
-  if (utility.utility === "Omit" && keys.size > 0) {
-    return members.filter((member) => !keys.has(member.name));
-  }
-  return members;
-}
-
 function resolvePropsDeclaration(
   propsType: string,
   filePath: string,
@@ -2054,7 +1869,7 @@ function resolvePropsDeclaration(
 
 function jsxAttributeNames(attributeText: string): string[] {
   const names: string[] = [];
-  for (const match of matchAll(attributeText, /\s([A-Za-z_$][\w$:-]*)\s*=/g)) {
+  for (const match of matchAll(attributeText, /(?:^|\s)([A-Za-z_$][\w$:-]*)\s*=/g)) {
     names.push(match[1]);
   }
   return [...new Set(names)];
@@ -2193,6 +2008,38 @@ function emitGenericTypeArgumentEdges(
         result.references.push(reference(identifier, targetId, file, range, "typescript-generic-argument", match[0], argumentTarget ? 0.76 : 0.72));
         result.relationships.push(relationship(fromId, targetId, "USES_TYPE_ARGUMENT", file, range, match[0], argumentTarget ? 0.76 : 0.72));
       }
+    }
+  }
+}
+
+function emitJsxTypeArgumentEdges(
+  fromId: string,
+  typeArguments: string | undefined,
+  file: string,
+  range: SourceRange,
+  declarationsByName: Map<string, ReactDeclaration[]>,
+  typeParameterIdsByName: Map<string, string>,
+  result: WebAnalyzerResult
+): void {
+  if (!typeArguments) {
+    return;
+  }
+
+  const parentId = parentDeclarationId(fromId);
+  for (const argument of splitTopLevelGenericArgs(typeArguments)) {
+    for (const identifier of typeIdentifiers(argument)) {
+      const argumentTarget = declarationsByName.get(identifier)?.find((candidate) =>
+        candidate.kind === "props" ||
+        candidate.kind === "interface" ||
+        candidate.kind === "type" ||
+        candidate.kind === "enum"
+      );
+      const targetId = argumentTarget?.id ?? typeParameterIdsByName.get(`${parentId}:${identifier}`);
+      if (!targetId || targetId === fromId) {
+        continue;
+      }
+      result.references.push(reference(identifier, targetId, file, range, "jsx-type-argument", typeArguments, argumentTarget ? 0.76 : 0.72));
+      result.relationships.push(relationship(fromId, targetId, "USES_TYPE_ARGUMENT", file, range, `<${typeArguments}>`, argumentTarget ? 0.76 : 0.72));
     }
   }
 }
@@ -2394,9 +2241,11 @@ function patternsForMember(member: ReactMember): string[] {
     return ["typescript-enum-member"];
   }
   if (member.parentId.includes(":props:")) {
-    return ["react-prop-member", "typescript-property"];
+    return member.indexSignature
+      ? ["react-prop-member", "typescript-property", "typescript-index-signature"]
+      : ["react-prop-member", "typescript-property"];
   }
-  return ["typescript-member"];
+  return member.indexSignature ? ["typescript-member", "typescript-index-signature"] : ["typescript-member"];
 }
 
 function symbol(
@@ -2468,7 +2317,8 @@ function memberSummary(member: ReactMember): string {
     `type: ${member.typeName ?? "unknown"}`,
     member.optional ? "optional" : "required",
     member.readonly ? "readonly" : undefined,
-    member.rest ? "rest" : undefined
+    member.rest ? "rest" : undefined,
+    member.indexSignature ? `index: ${member.keyType ?? "unknown"}` : undefined
   ].filter(Boolean).join("; ");
 }
 
@@ -2542,12 +2392,4 @@ function findMatchingPair(text: string, openIndex: number, openToken: string, cl
 type IndexedMatch = RegExpExecArray & { index: number };
 function matchAll(text: string, pattern: RegExp): IndexedMatch[] {
   return [...text.matchAll(pattern)] as IndexedMatch[];
-}
-
-function slug(value: string): string {
-  return value.replace(/[^A-Za-z0-9_.:/-]+/g, "_");
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

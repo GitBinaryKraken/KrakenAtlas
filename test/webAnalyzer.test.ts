@@ -273,6 +273,198 @@ test("analyzeVanillaWeb infers nested, defaulted, and rest React props from dest
   ));
 });
 
+test("analyzeVanillaWeb maps broad Record and index-signature React props", async () => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const fixtureRoot = path.join(projectRoot, "test-fixtures", "react-utility-props");
+  const files = await scanWorkspaceFiles(fixtureRoot, { outputFolder: ".kraken-atlas" });
+  const result = await analyzeVanillaWeb(fixtureRoot, files);
+
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/UtilityPanels.tsx:props:TokenPanelProps._key:_string_" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: string; required; index: string" &&
+    symbol.patterns?.includes("typescript-index-signature")
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/UtilityPanels.tsx:props:SlotPanelProps._slot:_string_" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: string | undefined; required; index: string" &&
+    symbol.patterns?.includes("typescript-index-signature")
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "DECLARES_PROP" &&
+    relationship.from === "symbol:react:src/UtilityPanels.tsx:component:TokenPanel" &&
+    relationship.to === "symbol:react:src/UtilityPanels.tsx:props:TokenPanelProps._key:_string_"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/UtilityPanels.tsx:props:TokenPanelProps._key:_string_" &&
+    /<TokenPanel[^>]+data-tone=/u.test(relationship.evidence ?? "")
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/UtilityPanels.tsx:props:SlotPanelProps._slot:_string_" &&
+    /<SlotPanel[^>]+footer=/u.test(relationship.evidence ?? "")
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/UtilityPanels.tsx:props:SlotPanelProps.highlighted"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/UtilityPanels.tsx:props:MetricPanelProps.data-tone" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: string; required"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/UtilityPanels.tsx:props:MetricPanelProps.data-size" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: string; required"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/UtilityPanels.tsx:props:MetricPanelProps.data-tone"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/UtilityPanels.tsx:props:MetricPanelProps.data-size"
+  ));
+});
+
+test("analyzeVanillaWeb maps generic React component props and JSX type arguments", async () => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const fixtureRoot = path.join(projectRoot, "test-fixtures", "react-generic-props");
+  const files = await scanWorkspaceFiles(fixtureRoot, { outputFolder: ".kraken-atlas" });
+  const result = await analyzeVanillaWeb(fixtureRoot, files);
+
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/GenericPicker.tsx:component:GenericPicker" &&
+    symbol.kind === "component" &&
+    symbol.summary === "GenericPickerProps"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/GenericPicker.tsx:component:GenericPicker:type-parameter:TValue" &&
+    symbol.kind === "type-parameter" &&
+    symbol.summary === "constraint: PickerValue; default: PickerValue"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "HAS_TYPE_PARAMETER" &&
+    relationship.from === "symbol:react:src/GenericPicker.tsx:component:GenericPicker" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:component:GenericPicker:type-parameter:TValue"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "DECLARES_PROPS" &&
+    relationship.from === "symbol:react:src/GenericPicker.tsx:component:GenericPicker" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:GenericPickerProps"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "DECLARES_PROP" &&
+    relationship.from === "symbol:react:src/GenericPicker.tsx:component:GenericPicker" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:GenericPickerProps.value"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/GenericPicker.tsx:props:GenericPickerProps.options" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: PickerOptionList<TValue>; required"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/GenericPicker.tsx:component:AliasPicker:type-parameter:TItem" &&
+    symbol.kind === "type-parameter" &&
+    symbol.summary === "constraint: PickerValue; default: PickerValue"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "DECLARES_PROPS" &&
+    relationship.from === "symbol:react:src/GenericPicker.tsx:component:AliasPicker" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:AliasPickerProps"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/GenericPicker.tsx:props:AliasPickerProps.choices" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: ImportedPickerOptionList<TOption>; required"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/PickerTypes.ts:type:ImportedPickerOptionList" &&
+    symbol.kind === "type"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/GenericPicker.tsx:component:DefaultedPicker:type-parameter:TSelection" &&
+    symbol.kind === "type-parameter" &&
+    symbol.summary === "constraint: PickerValue; default: PickerValue"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "DECLARES_PROPS" &&
+    relationship.from === "symbol:react:src/GenericPicker.tsx:component:DefaultedPicker" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:DefaultedPickerProps"
+  ));
+  assert.ok(result.references.some((reference) =>
+    reference.context === "jsx-type-argument" &&
+    reference.symbolName === "PickerValue" &&
+    reference.resolvedSymbolId === "symbol:react:src/GenericPicker.tsx:type:PickerValue"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "USES_TYPE_ARGUMENT" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:type:PickerValue"
+  ));
+  const valuePropPass = result.relationships.find((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:GenericPickerProps.value"
+  );
+  assert.ok(valuePropPass);
+  assert.ok(valuePropPass.evidence?.includes("TValue=PickerValue"));
+  assert.ok(valuePropPass.evidence?.includes("type: PickerValue"));
+
+  const optionsPropPass = result.relationships.find((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:GenericPickerProps.options"
+  );
+  assert.ok(optionsPropPass);
+  assert.ok(optionsPropPass.evidence?.includes("TValue=PickerValue"));
+  assert.ok(optionsPropPass.evidence?.includes("type: PickerValue[]"));
+
+  const aliasSelectedPropPass = result.relationships.find((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:AliasPickerProps.selected"
+  );
+  assert.ok(aliasSelectedPropPass);
+  assert.ok(aliasSelectedPropPass.evidence?.includes("TOption=PickerValue"));
+  assert.ok(aliasSelectedPropPass.evidence?.includes("type: PickerValue"));
+
+  const aliasChoicesPropPass = result.relationships.find((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:AliasPickerProps.choices"
+  );
+  assert.ok(aliasChoicesPropPass);
+  assert.ok(aliasChoicesPropPass.evidence?.includes("TOption=PickerValue"));
+  assert.ok(aliasChoicesPropPass.evidence?.includes("type: PickerValue[]"));
+
+  const defaultedCurrentPropPass = result.relationships.find((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:DefaultedPickerProps.current"
+  );
+  assert.ok(defaultedCurrentPropPass);
+  assert.ok(defaultedCurrentPropPass.evidence?.includes("TChoice=PickerValue"));
+  assert.ok(defaultedCurrentPropPass.evidence?.includes("type: PickerValue"));
+
+  const defaultedEntriesPropPass = result.relationships.find((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/GenericPicker.tsx:props:DefaultedPickerProps.entries"
+  );
+  assert.ok(defaultedEntriesPropPass);
+  assert.ok(defaultedEntriesPropPass.evidence?.includes("TChoice=PickerValue"));
+  assert.ok(defaultedEntriesPropPass.evidence?.includes("type: PickerValue[]"));
+});
+
 test("analyzeVanillaWeb maps React, JSX, and TypeScript component relationships", async (t) => {
   const projectRoot = path.resolve(__dirname, "..", "..");
   const fixtureRoot = path.resolve(projectRoot, "..", "test-projects", "ReactAgentDashboard");

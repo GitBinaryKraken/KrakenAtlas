@@ -3,7 +3,16 @@
 ## Unreleased
 
 - Refreshed React/TypeScript roadmap, feedback, known-limits, and handoff docs so they distinguish shipped compiler-backed slices from remaining first-pass semantic gaps.
+- Started a behavior-preserving `reactAnalyzer.ts` split by extracting shared analyzer types, generic prop evidence helpers, prop utility/index-signature helpers, import/re-export name helpers, and type-text utilities into focused modules.
 - Expanded inferred React prop extraction for nested destructured parameters, rest props, and simple default-value type/optionality hints, backed by a repo-local React fixture.
+- Added first-pass broad `Record<string, T>` and TypeScript index-signature prop members, including JSX fallback edges for attributes covered by string index signatures.
+- Added finite template-literal key expansion for utility props such as ``Record<`data-${"tone" | "size"}`, string>``.
+- Added first-pass generic React function component parsing with type-parameter nodes, typed props ownership, and JSX type-argument edges.
+- Added first-pass JSX type-argument substitution in generic React prop-flow evidence, so prop pass edges show concrete use-site types such as `TValue=PickerValue` and `type: PickerValue[]`.
+- Added first-pass generic props-alias parameter remapping so component generics such as `AliasPicker<TItem>` can substitute props members declared on `AliasPickerProps<TOption>`.
+- Added first-pass local generic type-alias expansion in React prop-flow evidence, so aliases such as `PickerOptionList<TOption>` can resolve to concrete use-site types.
+- Added imported nested generic type-alias expansion in React prop-flow evidence, following type imports before recursively expanding alias chains.
+- Added defaulted generic JSX substitution in React prop-flow evidence when a component omits explicit type arguments but declares generic defaults.
 - Added queryable TypeScript generic type-parameter nodes and `HAS_TYPE_PARAMETER` relationships for React/TypeScript semantic declarations.
 - Added first-pass discriminated-union variant nodes and `HAS_UNION_VARIANT` relationships for object-literal union type aliases.
 - Added exported API/client contract patterns for exported TypeScript interfaces, aliases, props, and enums under `types`, `api`, or `services` folders.
@@ -23,6 +32,7 @@
 - Added first-pass TypeScript utility-prop member resolution for `Pick`, `Omit`, `Partial`, `Required`, and `Readonly`, preserving JSX prop edges to the underlying source prop members.
 - Added first-pass inferred React props for untyped destructured component parameters, including JavaScript/JSX components, so `DECLARES_PROP` and JSX `PASSES_PROP` edges can target inferred prop nodes.
 - Added finite-key `Record<K, V>` and simple mapped-type prop member resolution, including keys sourced from local literal-union aliases.
+- Validated the expanded React/TypeScript semantic coverage and analyzer refactor slices with 87 automated tests.
 
 ## 0.2.2
 
