@@ -213,6 +213,66 @@ test("analyzeVanillaWeb composes JavaScript controller calls, injected history, 
   assert.ok(result.relationships.some((item) => item.type === "UPDATES_ELEMENT_STATE" && item.to.includes("search-result-card")));
 });
 
+test("analyzeVanillaWeb infers nested, defaulted, and rest React props from destructured parameters", async () => {
+  const projectRoot = path.resolve(__dirname, "..", "..");
+  const fixtureRoot = path.join(projectRoot, "test-fixtures", "react-inferred-props");
+  const files = await scanWorkspaceFiles(fixtureRoot, { outputFolder: ".kraken-atlas" });
+  const result = await analyzeVanillaWeb(fixtureRoot, files);
+
+  assert.ok(files.some((file) => file.path === "src/WorkflowStatusBadge.tsx" && file.language === "typescript"));
+  assert.ok(result.symbols.some((symbol) => symbol.kind === "component" && symbol.name === "WorkflowStatusBadge"));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: object; required"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata.owner" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: object; required"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata.owner.name" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: string; optional"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata.flags" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: object; optional"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata.flags.urgent" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: boolean; optional"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata.tags" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: array; optional"
+  ));
+  assert.ok(result.symbols.some((symbol) =>
+    symbol.id === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.badgeProps" &&
+    symbol.kind === "property" &&
+    symbol.summary === "type: object; optional; rest"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "DECLARES_PROP" &&
+    relationship.from === "symbol:react:src/WorkflowStatusBadge.tsx:component:WorkflowStatusBadge" &&
+    relationship.to === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata.owner.name"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.metadata"
+  ));
+  assert.ok(result.relationships.some((relationship) =>
+    relationship.type === "PASSES_PROP" &&
+    relationship.from === "symbol:react:src/App.tsx:component:App" &&
+    relationship.to === "symbol:react:src/WorkflowStatusBadge.tsx:props:WorkflowStatusBadgeInferredProps.density"
+  ));
+});
+
 test("analyzeVanillaWeb maps React, JSX, and TypeScript component relationships", async (t) => {
   const projectRoot = path.resolve(__dirname, "..", "..");
   const fixtureRoot = path.resolve(projectRoot, "..", "test-projects", "ReactAgentDashboard");

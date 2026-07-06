@@ -42,7 +42,7 @@ Unreleased work now extends the semantic path with:
 - Default/named import and re-export aliases through React barrels.
 - Imported prop type aliases, inherited props with `EXTENDS_PROPS`, `ComponentProps<typeof Component>` aliases, and JSX prop resolution through inherited or shared prop declarations.
 - Utility-prop expansion for `Pick`, `Omit`, `Partial`, `Required`, `Readonly`, finite-key `Record`, and simple mapped types.
-- Inferred prop nodes for untyped destructured component parameters in TypeScript and JavaScript/JSX components.
+- Inferred prop nodes for untyped destructured component parameters in TypeScript and JavaScript/JSX components, including first-pass nested destructuring, rest prop, and simple default-value type/optionality hints.
 
 ## Documentation Alignment
 
@@ -55,7 +55,7 @@ Docs should use this wording split:
 ## Recommended Next Steps
 
 1. Validate React/Next query quality on a larger real project or convert alpha misses into fixtures.
-2. Deepen inferred props for nested destructuring, rest props, default-value refinement, and checker-backed inferred prop types.
+2. Continue inferred prop work with checker-backed inferred types, richer default-value refinement, nested arrays, alias/default pattern edge cases, and generic component inference.
 3. Deepen utility-prop coverage for broad index signatures, key remapping, template-literal keys, conditional mapped types, and checker-backed value/optional types.
 4. Expand generic props beyond first-pass names, including generic components, generic type aliases, constraints/defaults, and concrete JSX type arguments.
 5. Add workspace/package-manager fixture coverage for pnpm/yarn/npm package boundaries, generated declarations, package exports, project references, path aliases, and mixed JS/TS package boundaries.
@@ -66,4 +66,4 @@ Docs should use this wording split:
 
 ## Validation
 
-`npm test` passed on 2026-07-06 with 84/84 tests after the React/TypeScript documentation alignment.
+`npm test` passed on 2026-07-06 with 85/85 tests after the inferred React props expansion.

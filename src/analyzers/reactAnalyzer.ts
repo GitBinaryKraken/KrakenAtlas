@@ -47,6 +47,7 @@ interface TypeScriptInferredProp {
   typeName: string;
   optional: boolean;
   readonly: boolean;
+  rest?: boolean;
   range: SourceRange;
   declaration: string;
 }
@@ -99,6 +100,7 @@ interface ReactMember {
   typeName?: string;
   optional: boolean;
   readonly: boolean;
+  rest?: boolean;
 }
 
 const reactExtensions = new Set([".jsx", ".tsx", ".ts"]);
@@ -938,7 +940,8 @@ function inferredPropMember(declaration: ReactDeclaration, prop: TypeScriptInfer
     declaration: prop.declaration,
     typeName: prop.typeName,
     optional: prop.optional,
-    readonly: prop.readonly
+    readonly: prop.readonly,
+    rest: prop.rest
   };
 }
 
@@ -1231,44 +1234,73 @@ function inferredPropsFromParameters(source: ReactSource, paramsText: string | u
   const seen = new Set<string>();
   const props: TypeScriptInferredProp[] = [];
   for (const element of parameter.name.elements) {
-    const prop = inferredPropFromBindingElement(source, sourceFile, element, paramsStart, prefix.length);
-    if (!prop || seen.has(prop.name)) {
-      continue;
+    for (const prop of inferredPropsFromBindingElement(source, sourceFile, element, paramsStart, prefix.length)) {
+      if (seen.has(prop.name)) {
+        continue;
+      }
+      seen.add(prop.name);
+      props.push(prop);
     }
-    seen.add(prop.name);
-    props.push(prop);
   }
   return props;
 }
 
-function inferredPropFromBindingElement(
+function inferredPropsFromBindingElement(
   source: ReactSource,
   sourceFile: ts.SourceFile,
   element: ts.BindingElement,
   paramsStart: number,
-  prefixLength: number
-): TypeScriptInferredProp | undefined {
+  prefixLength: number,
+  parentName?: string,
+  parentOptional = false
+): TypeScriptInferredProp[] {
   if (element.dotDotDotToken) {
-    return undefined;
+    const restName = bindingPropertyName(element.name);
+    if (!restName) {
+      return [];
+    }
+    const sourceOffset = paramsStart + Math.max(0, element.getStart(sourceFile) - prefixLength);
+    const elementEnd = paramsStart + Math.max(0, element.end - prefixLength);
+    const declaration = source.text.slice(sourceOffset, Math.min(source.text.length, elementEnd)).trim().replace(/,$/u, "");
+    return [{
+      name: parentName ? `${parentName}.${restName}` : restName,
+      typeName: "object",
+      optional: true,
+      readonly: false,
+      rest: true,
+      range: rangeFromIndex(source.text, sourceOffset, Math.max(1, declaration.length)),
+      declaration: declaration || `...${restName}`
+    }];
   }
 
   const sourceName = element.propertyName ?? element.name;
   const name = bindingPropertyName(sourceName);
   if (!name) {
-    return undefined;
+    return [];
   }
 
   const sourceOffset = paramsStart + Math.max(0, sourceName.getStart(sourceFile) - prefixLength);
   const elementEnd = paramsStart + Math.max(0, element.end - prefixLength);
   const declaration = source.text.slice(sourceOffset, Math.min(source.text.length, elementEnd)).trim().replace(/,$/u, "");
-  return {
-    name,
-    typeName: inferredTypeFromInitializer(element.initializer),
-    optional: Boolean(element.initializer),
+  const fullName = parentName ? `${parentName}.${name}` : name;
+  const optional = parentOptional || Boolean(element.initializer);
+  const prop: TypeScriptInferredProp = {
+    name: fullName,
+    typeName: inferredTypeFromBindingElement(element),
+    optional,
     readonly: false,
     range: rangeFromIndex(source.text, sourceOffset, Math.max(1, declaration.length)),
     declaration: declaration || name
   };
+
+  if (ts.isObjectBindingPattern(element.name)) {
+    const nested = element.name.elements.flatMap((child) =>
+      inferredPropsFromBindingElement(source, sourceFile, child, paramsStart, prefixLength, fullName, optional)
+    );
+    return [prop, ...nested];
+  }
+
+  return [prop];
 }
 
 function bindingPropertyName(node: ts.BindingName | ts.PropertyName): string | undefined {
@@ -1298,6 +1330,16 @@ function inferredTypeFromInitializer(initializer: ts.Expression | undefined): st
     return "object";
   }
   return "unknown";
+}
+
+function inferredTypeFromBindingElement(element: ts.BindingElement): string {
+  if (ts.isObjectBindingPattern(element.name)) {
+    return "object";
+  }
+  if (ts.isArrayBindingPattern(element.name)) {
+    return "array";
+  }
+  return inferredTypeFromInitializer(element.initializer);
 }
 
 function paramsStartFromMatch(match: IndexedMatch, groupIndex: number): number {
@@ -2425,7 +2467,8 @@ function memberSummary(member: ReactMember): string {
   return [
     `type: ${member.typeName ?? "unknown"}`,
     member.optional ? "optional" : "required",
-    member.readonly ? "readonly" : undefined
+    member.readonly ? "readonly" : undefined,
+    member.rest ? "rest" : undefined
   ].filter(Boolean).join("; ");
 }
 

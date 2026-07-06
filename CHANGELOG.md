@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Refreshed React/TypeScript roadmap, feedback, known-limits, and handoff docs so they distinguish shipped compiler-backed slices from remaining first-pass semantic gaps.
+- Expanded inferred React prop extraction for nested destructured parameters, rest props, and simple default-value type/optionality hints, backed by a repo-local React fixture.
 - Added queryable TypeScript generic type-parameter nodes and `HAS_TYPE_PARAMETER` relationships for React/TypeScript semantic declarations.
 - Added first-pass discriminated-union variant nodes and `HAS_UNION_VARIANT` relationships for object-literal union type aliases.
 - Added exported API/client contract patterns for exported TypeScript interfaces, aliases, props, and enums under `types`, `api`, or `services` folders.
