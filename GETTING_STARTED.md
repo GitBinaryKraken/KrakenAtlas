@@ -26,7 +26,7 @@ From this repository:
 ```powershell
 npm install
 npm run release:vsix
-code --install-extension ..\pack-artifacts\kraken-atlas-0.2.2.vsix --force
+code --install-extension ..\pack-artifacts\kraken-atlas-0.2.3.vsix --force
 code --list-extensions --show-versions | Select-String kraken-atlas
 ```
 
@@ -209,7 +209,7 @@ From a temporary test workspace:
 
 ```powershell
 npm init -y
-npm install ..\kraken-atlas\kraken-atlas-0.2.2.tgz
+npm install ..\kraken-atlas\kraken-atlas-0.2.3.tgz
 ```
 
 For a project copied into the temp workspace as `.\AdminTools`, run:

@@ -13,6 +13,44 @@ Instead of asking an agent to scan the whole repository, ask Kraken Atlas first:
 
 Kraken Atlas is currently an **alpha feedback build** focused first on **C#/.NET Core**, **ASP.NET Core**, **Razor/HTML**, **vanilla JavaScript**, and first-pass **React/TypeScript** projects. Its code atlas prioritizes fast command and CLI queries that help agents find the right files, understand relationships, and work with focused context before making changes.
 
+## What's New In 0.2.3
+
+- Refreshed React/TypeScript roadmap, feedback, known-limits, and handoff docs so they distinguish shipped compiler-backed slices from remaining first-pass semantic gaps.
+- Started a behavior-preserving `reactAnalyzer.ts` split by extracting shared analyzer types, generic prop evidence helpers, prop utility/index-signature helpers, import/re-export name helpers, and type-text utilities into focused modules.
+- Expanded inferred React prop extraction for nested destructured parameters, rest props, and simple default-value type/optionality hints, backed by a repo-local React fixture.
+- Added first-pass broad `Record<string, T>` and TypeScript index-signature prop members, including JSX fallback edges for attributes covered by string index signatures.
+- Added finite template-literal key expansion for utility props such as ``Record<`data-${"tone" | "size"}`, string>``.
+- Added first-pass generic React function component parsing with type-parameter nodes, typed props ownership, and JSX type-argument edges.
+- Added first-pass JSX type-argument substitution in generic React prop-flow evidence, so prop pass edges show concrete use-site types such as `TValue=PickerValue` and `type: PickerValue[]`.
+- Added first-pass generic props-alias parameter remapping so component generics such as `AliasPicker<TItem>` can substitute props members declared on `AliasPickerProps<TOption>`.
+- Added first-pass local generic type-alias expansion in React prop-flow evidence, so aliases such as `PickerOptionList<TOption>` can resolve to concrete use-site types.
+- Added imported nested generic type-alias expansion in React prop-flow evidence, following type imports before recursively expanding alias chains.
+- Added defaulted generic JSX substitution in React prop-flow evidence when a component omits explicit type arguments but declares generic defaults.
+- Added queryable TypeScript generic type-parameter nodes and `HAS_TYPE_PARAMETER` relationships for React/TypeScript semantic declarations.
+- Added first-pass discriminated-union variant nodes and `HAS_UNION_VARIANT` relationships for object-literal union type aliases.
+- Added exported API/client contract patterns for exported TypeScript interfaces, aliases, props, and enums under `types`, `api`, or `services` folders.
+- Resolved React/TypeScript function calls through imported module bindings when possible, emitting `react-imported-call` references for compiler-resolved call graph evidence.
+- Added `REFERENCES_TYPE` edges from TypeScript member and generic parameter nodes to known local type declarations.
+- Added first-pass `ComponentProps<typeof Component>` alias relationships so derived prop aliases can point back to the component whose props they mirror.
+- Resolved namespace imported function calls such as `WorkflowClient.fetchWorkflowSnapshot()` to imported declarations instead of relying on global name matching.
+- Added literal union value nodes for scalar TypeScript unions such as `"ready" | "blocked"`.
+- Added declaration-level `REFERENCES_TYPE`, `USES_GENERIC_TYPE`, and `USES_TYPE_ARGUMENT` edges so aliases and generic contracts point at their composed local types.
+- Resolved imported hook and store calls through import bindings, including namespace-style calls, before falling back to name-only hook matching.
+- Resolved JSX default import aliases through default barrel re-exports so aliased tags such as `<ShellViaDefault />` point back to the actual component and prop members.
+- Added first-pass mixed JavaScript/TypeScript React fixture coverage with a `.jsx` component exported through a TypeScript barrel.
+- Added import-resolved evidence markers to resolved React call and hook relationships so agent queries can distinguish stronger semantic edges from local name matches.
+- Resolved named import and re-export aliases such as `WorkflowShell as ShellFromBarrel` and `LegacyWorkflowNote as LegacyNote` through React barrel files.
+- Resolved imported React prop type aliases such as `WorkflowSummaryCardProps as SummaryCardProps` so component prop ownership and JSX `PASSES_PROP` edges point at shared prop declarations.
+- Added first-pass inherited React props mapping with `EXTENDS_PROPS` edges and JSX prop resolution through inherited prop members.
+- Added first-pass TypeScript utility-prop member resolution for `Pick`, `Omit`, `Partial`, `Required`, and `Readonly`, preserving JSX prop edges to the underlying source prop members.
+- Added first-pass inferred React props for untyped destructured component parameters, including JavaScript/JSX components, so `DECLARES_PROP` and JSX `PASSES_PROP` edges can target inferred prop nodes.
+- Added finite-key `Record<K, V>` and simple mapped-type prop member resolution, including keys sourced from local literal-union aliases.
+- Validated the expanded React/TypeScript semantic coverage and analyzer refactor slices with 87 automated tests.
+
+Version `0.2.3` is a public alpha intended for real-project feedback. It has 87 automated tests.
+
+## Release History
+
 ## What's New In 0.2.2
 
 - Added TypeScript project discovery that emits queryable `tsconfig.json`, package, path-alias, and TypeScript project-reference map facts as the first foundation slice for compiler-backed semantic analysis.
@@ -29,8 +67,6 @@ Kraken Atlas is currently an **alpha feedback build** focused first on **C#/.NET
 - Verified the full suite at 84 passing tests after the TypeScript semantic-analysis expansion.
 
 Version `0.2.2` is a public alpha intended for real-project feedback. It has 84 automated tests.
-
-## Release History
 
 ## What's New In 0.2.1
 
@@ -615,7 +651,7 @@ For alpha release builds, follow [RELEASE_PROCESS.md](RELEASE_PROCESS.md) before
 npm install
 npm test
 npm run release:vsix
-code --install-extension ..\pack-artifacts\kraken-atlas-0.2.2.vsix --force
+code --install-extension ..\pack-artifacts\kraken-atlas-0.2.3.vsix --force
 ```
 
 Development commands without linking:

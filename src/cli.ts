@@ -31,7 +31,7 @@ async function main(): Promise<number> {
   const positional = args.filter((arg, index) => !isOptionArg(args, index));
 
   if (args.includes("--version") || positional[0] === "version") {
-    console.log("kraken-atlas 0.2.2");
+    console.log("kraken-atlas 0.2.3");
     return 0;
   }
 
@@ -481,7 +481,7 @@ function toMarkdown(response: any): string {
 }
 
 function printUsage(error: boolean): void {
-  const output = `Kraken Atlas 0.2.2
+  const output = `Kraken Atlas 0.2.3
 
 Usage:
   kraken-atlas rebuild [--workspace <path>] [--format json|info|md|agent] [--quiet]

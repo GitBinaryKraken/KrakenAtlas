@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.2.3
+
 - Refreshed React/TypeScript roadmap, feedback, known-limits, and handoff docs so they distinguish shipped compiler-backed slices from remaining first-pass semantic gaps.
 - Started a behavior-preserving `reactAnalyzer.ts` split by extracting shared analyzer types, generic prop evidence helpers, prop utility/index-signature helpers, import/re-export name helpers, and type-text utilities into focused modules.
 - Expanded inferred React prop extraction for nested destructured parameters, rest props, and simple default-value type/optionality hints, backed by a repo-local React fixture.

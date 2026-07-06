@@ -87,7 +87,7 @@ Next work:
 
 Move the React/TypeScript mapper from convention-based parsing toward compiler-backed semantic analysis while preserving the lightweight, query-first Atlas output model.
 
-Current status: `0.2.2` packaged the semantic foundation: TypeScript project discovery, compiler-backed import resolution, compiler-AST declaration/member nodes, type-only imports, package export facts, namespace/default barrel resolution, and first-pass JSX prop edges to declared members. The `Unreleased` queue now extends that foundation with generic/type relationships, imported function/hook/store call resolution, imported prop aliases, inherited and utility props, inferred destructured props including nested/rest/default hints, and mixed JavaScript/TypeScript fixture coverage.
+Current status: `0.2.3` packages the semantic foundation plus the next React/TypeScript hardening wave: TypeScript project discovery, compiler-backed import resolution, compiler-AST declaration/member nodes, type-only imports, package export facts, namespace/default barrel resolution, JSX prop edges to declared/inferred members, generic/type relationships, imported function/hook/store call resolution, imported prop aliases, inherited and utility props, destructured props including nested/rest/default hints, and mixed JavaScript/TypeScript fixture coverage.
 
 Keep the next slices fixture-backed. The remaining gap is not "React exists" anymore; it is how accurately Atlas follows TypeScript semantics without flooding query output.
 

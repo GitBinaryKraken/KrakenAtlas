@@ -812,5 +812,5 @@ function getWorkspaceRoot(): string | undefined {
 
 function extensionVersion(): string {
   const extension = vscode.extensions.getExtension("BinaryKraken.kraken-atlas");
-  return extension?.packageJSON?.version ?? "0.2.2";
+  return extension?.packageJSON?.version ?? "0.2.3";
 }

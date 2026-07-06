@@ -4,7 +4,7 @@ Date: 2026-07-06
 
 ## Current Checkpoint
 
-Use `git log -1 --oneline` for the current committed checkpoint. The release-prep checkpoint captures the Unreleased React/TypeScript semantic-analysis work, fixture coverage, and analyzer refactor slices. Public/package docs currently present `0.2.2` as the latest packaged alpha until the next explicit release bump.
+Use `git log -1 --oneline` for the current committed checkpoint. The release-prep checkpoint captures the `0.2.3` React/TypeScript semantic-analysis work, fixture coverage, and analyzer refactor slices. Public/package docs now present `0.2.3` as the latest packaged alpha.
 
 The main product thread has moved from the earlier pattern-planning slice into `0.2.x` React/TypeScript hardening. Atlas should still describe this as first-pass React/TypeScript support, but not as purely convention-based anymore: some compiler-backed project, import, declaration, prop, and call slices are now in place.
 
@@ -28,7 +28,7 @@ Packaged `0.2.2` added the TypeScript semantic foundation:
 - JSX `PASSES_PROP` edges to declared prop member nodes when the rendered component has a known props type.
 - First-pass intersection props and parallel React relationship evidence preservation.
 
-Unreleased work now extends the semantic path with:
+Packaged `0.2.3` now extends the semantic path with:
 
 - A behavior-preserving `reactAnalyzer.ts` split is underway: shared analyzer types, type-text helpers, import/re-export name helpers, generic prop substitution/type-alias evidence helpers, and prop utility/index-signature expansion now live in focused modules. `reactAnalyzer.ts` is still oversized at roughly 2,177 lines, so further extraction remains queued.
 - Type-parameter nodes, discriminated-union variants, literal union values, exported API/client contract patterns, local `REFERENCES_TYPE`, and `USES_TYPE_ARGUMENT` edges.

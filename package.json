@@ -2,7 +2,7 @@
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
   "description": "Maps C#/.NET Core, React/TypeScript, vanilla JavaScript, and HTML/Razor codebases into local queryable code facts for AI context reduction.",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",

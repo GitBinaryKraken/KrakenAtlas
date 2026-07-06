@@ -89,13 +89,13 @@ npm run release:vsix
 The command prints the final artifact path, size, and install command. Expected artifact for the current version:
 
 ```powershell
-..\pack-artifacts\kraken-atlas-0.2.2.vsix
+..\pack-artifacts\kraken-atlas-0.2.3.vsix
 ```
 
 Confirm the artifact exists:
 
 ```powershell
-Get-Item ..\pack-artifacts\kraken-atlas-0.2.2.vsix | Select-Object FullName, Length, LastWriteTime
+Get-Item ..\pack-artifacts\kraken-atlas-0.2.3.vsix | Select-Object FullName, Length, LastWriteTime
 ```
 
 ## Local Smoke Install
@@ -103,7 +103,7 @@ Get-Item ..\pack-artifacts\kraken-atlas-0.2.2.vsix | Select-Object FullName, Len
 Install the VSIX into VS Code using the command printed by `release:vsix`, for example:
 
 ```powershell
-code --install-extension ..\pack-artifacts\kraken-atlas-0.2.2.vsix --force
+code --install-extension ..\pack-artifacts\kraken-atlas-0.2.3.vsix --force
 code --list-extensions --show-versions | Select-String kraken-atlas
 ```
 
