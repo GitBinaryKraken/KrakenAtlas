@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Continued the behavior-preserving `reactAnalyzer.ts` split by extracting shared source-text scanning and ID helpers, route/store/context conventions, compiler-AST TypeScript declaration/type-parameter discovery, JSX composition/prop evidence, and TypeScript prop/interface/enum member discovery into focused modules.
+- Continued the next `queryService.ts` split by extracting project metadata, symbol lookup, code-health, references, relationships, pattern, pattern-map, hotspots, search, exact-file, flow-context, endpoint-location, and where-to-add orchestration helpers into focused modules.
+- Split the oversized query-service test file into core, where-to-add/context-pruning, and search/reference/relationship/flow suites.
+- Split the oversized web-analyzer test file into Razor/HTML, JavaScript-flow, React prop/type, and React route/workflow suites.
+
 ## 0.2.3
 
 - Refreshed React/TypeScript roadmap, feedback, known-limits, and handoff docs so they distinguish shipped compiler-backed slices from remaining first-pass semantic gaps.

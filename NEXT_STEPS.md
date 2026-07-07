@@ -51,11 +51,16 @@ Progress:
 - Done: extracted shared query text/intent helpers into `queryText.ts`.
 - Done: extracted path and scoring helpers into `queryPath.ts` and `queryScoring.ts`.
 - Done: extracted `where-to-add` ranking, caveats, pattern-fit evidence, confidence scoring, and file recommendation types into `whereToAddRanking.ts`.
+- Done: extracted `where-to-add` response orchestration, usage/node-tag enrichment, shared-contract boundary loading, and context pruning into `queryWhereToAdd.ts`.
 - Done: extracted flow edge ranking, composition, JavaScript interaction promotion, flow coverage scoring, flow caveats, and shared graph predicates into `queryFlow.ts`.
-- Done: extracted search row ranking, weak-match detection, relationship-term scoring, pattern scoring, and reference fallback guidance into `querySearch.ts` and `queryReferences.ts`.
+- Done: extracted flow context expansion for layered, configuration, data, property, requested-property, and project-reference edges into `queryFlowContext.ts`.
+- Done: extracted relationship endpoint-location enrichment into `queryNodeLocations.ts`.
+- Done: extracted search row ranking, weak-match detection, search/exact-file query response composition, relationship-term scoring, pattern scoring, and reference fallback guidance into `querySearch.ts` and `queryReferences.ts`.
 - Done: extracted hotspot and architecture-risk summary construction, role scoring, usage-summary shaping, and guidance text into `queryHotspots.ts`.
 - Done: extracted `plan-change` response composition, shared-contract checklist assembly, avoid-hotspot shaping, and context-pack command generation into `queryPlanning.ts`, reducing `queryService.ts` to query orchestration for that command.
 - Done: extracted value-lifecycle relationship lookup, C# symbol/member anchor discovery, and identifier term helpers into `queryValueLifecycle.ts`, keeping Razor/model-binding/C# property bridge behavior stable.
+- Done: extracted references and relationships query response composition, reference coverage fallback, relationship filters, value-lifecycle integration, and datatype/member/role/tag summaries into `queryRelationships.ts`.
+- Done: extracted pattern, pattern-map, and architecture-hotspot query response composition plus hotspot row readers into `queryPatterns.ts`.
 
 Next work:
 
@@ -142,17 +147,17 @@ Why now:
 
 Audit from 2026-07-06:
 
-- `src/analyzers/reactAnalyzer.ts`: 2,645 lines / 108.1 KB. This is now the largest production file and is carrying TypeScript declaration discovery, import/re-export resolution, React declaration discovery, prop/member extraction, utility/generic prop expansion, JSX composition, type/reference edge emission, route/store/context detection, and semantic evidence formatting.
-- `src/query/queryService.ts`: 2,037 lines / 88.8 KB. The earlier helper extractions helped, but `withQueryService` still spans roughly the whole file and remains expensive for agents to read safely.
-- `src/storage/sqliteIndex.ts`: 1,059 lines / 37.3 KB. Monitor for now; it is below the immediate split threshold but should not absorb more unrelated enrichment behavior.
-- Test hotspots: `test/queryService.test.ts` is 1,981 lines and `test/webAnalyzer.test.ts` is 1,348 lines. Split these after the related production modules are extracted so scenario coverage remains easy to find.
+- `src/analyzers/reactAnalyzer.ts`: 2,645 lines / 108.1 KB at audit time. It was the largest production file and carried TypeScript declaration discovery, import/re-export resolution, React declaration discovery, prop/member extraction, utility/generic prop expansion, JSX composition, type/reference edge emission, route/store/context detection, and semantic evidence formatting. Current post-`0.2.3` development has reduced it below the immediate guardrail to roughly 1,229 lines / 49.1 KB.
+- `src/query/queryService.ts`: currently roughly 899 lines / 37.2 KB. The earlier helper extractions helped, and post-`0.2.3` development has now extracted project metadata, symbol lookup, code-health, references, relationships, pattern, pattern-map, hotspots, search, exact-file, flow-context, endpoint-location, and where-to-add helpers into focused modules. The service is below the near-term 1,200-line target and close to the long-term 800-line target.
+- `src/storage/sqliteIndex.ts`: currently roughly 1,187 lines / 38.2 KB. Monitor for now; it is below the immediate split threshold but should not absorb more unrelated enrichment behavior.
+- Test hotspots: `test/queryService.test.ts` has been split into core, where-to-add/context-pruning, and search/reference/relationship/flow suites under the guardrail. `test/webAnalyzer.test.ts` has been split into Razor/HTML, JavaScript-flow, React prop/type, and React route/workflow suites; no test file is currently above the 1,200-line guardrail.
 
 Refactor queue:
 
-1. In progress: split `reactAnalyzer.ts` into behavior-preserving modules before adding more broad React/TypeScript semantics. Extracted shared analyzer types, type-text helpers, import/re-export name helpers, generic prop substitution/type-alias evidence helpers, and prop utility/index-signature expansion into focused modules, reducing `reactAnalyzer.ts` to 2,177 lines / 91.4 KB. Next extractions should target TypeScript declaration/member discovery, JSX composition/prop evidence, and route/store/context conventions.
-2. Next: continue the `queryService.ts` split by extracting remaining `withQueryService` command branches into intent handlers, targeting a service file below roughly 1,200 lines before the next major query feature and below roughly 800 lines over time.
-3. Next: split `test/webAnalyzer.test.ts` into React/TypeScript, Razor/HTML, JavaScript-flow, and route/workflow suites once the analyzer modules are extracted.
-4. Next: split `test/queryService.test.ts` by query intent after the remaining `queryService.ts` handlers move out.
+1. Done: split `reactAnalyzer.ts` into behavior-preserving modules before adding more broad React/TypeScript semantics. Extracted shared analyzer types, source-text scanning and ID helpers, type-text helpers, import/re-export name helpers, route/store/context conventions, compiler-AST TypeScript declaration/type-parameter discovery, JSX composition/prop evidence, generic prop substitution/type-alias evidence helpers, prop utility/index-signature expansion, and TypeScript prop/interface/enum member discovery into focused modules, reducing `reactAnalyzer.ts` below the immediate guardrail to roughly 1,229 lines / 49.1 KB. Monitor it and extract call/type-reference emission only if it grows again.
+2. In progress: continue the `queryService.ts` split by extracting remaining command branches into intent handlers. Project metadata and symbol lookup now live in `queryBasic.ts`, code-health queries now live in `queryCodeHealth.ts`, references/relationships now live in `queryRelationships.ts`, pattern/pattern-map/hotspots now live in `queryPatterns.ts`, search/exact-file query handling now lives in `querySearch.ts`, flow-context helpers now live in `queryFlowContext.ts`, endpoint-location enrichment now lives in `queryNodeLocations.ts`, and where-to-add orchestration now lives in `queryWhereToAdd.ts`. The service is below the near-term 1,200-line target and close to the long-term 800-line target; pause further service extraction unless it grows again.
+3. Done: split `test/webAnalyzer.test.ts` into Razor/HTML, JavaScript-flow, React prop/type, and React route/workflow suites once the analyzer modules were extracted.
+4. Done: split `test/queryService.test.ts` by query intent after the remaining `queryService.ts` handlers moved out. The resulting files are `queryService.test.ts`, `queryService.whereToAdd.test.ts`, and `queryService.discovery.test.ts`, with shared helper construction in `test-support/queryTestHelpers.ts`.
 5. Ongoing: treat any production file above roughly 1,500 lines or any test file above roughly 1,200 lines as a next-step refactor candidate unless it is deliberately generated or table-driven.
 
 ### 0. SQLite Node Enrichment
@@ -402,9 +407,9 @@ Atlas is improving if:
 17. Done: add first-pass local generic type-alias expansion in generic prop-flow evidence.
 18. Done: expand imported nested generic type aliases in generic prop-flow evidence.
 19. Done: use declared generic defaults for JSX prop-flow evidence when explicit type arguments are omitted.
-20. In progress: continue the behavior-preserving `reactAnalyzer.ts` split. Completed the shared type/text/import helper, generic prop evidence, and prop utility/index-signature extractions; next split should extract TypeScript declaration/member discovery or JSX composition/prop evidence.
-21. Next: continue the `queryService.ts` split by extracting remaining `withQueryService` command branches into intent handlers.
+20. Done: complete the immediate behavior-preserving `reactAnalyzer.ts` split. Completed the shared type/text/import/ID helper, source-text scanning helper, route/store/context conventions, compiler-AST TypeScript declaration/type-parameter discovery, JSX composition/prop evidence, generic prop evidence, prop utility/index-signature, and TypeScript member-discovery extractions; `reactAnalyzer.ts` is now below the immediate size guardrail.
+21. In progress: continue the `queryService.ts` split by extracting remaining command branches into intent handlers. Done: project metadata and symbol lookup moved to `queryBasic.ts`; code-health queries moved to `queryCodeHealth.ts`; references/relationships moved to `queryRelationships.ts`; pattern/pattern-map/hotspots moved to `queryPatterns.ts`; search/exact-file query handling moved to `querySearch.ts`; flow-context helpers moved to `queryFlowContext.ts`; endpoint-location enrichment moved to `queryNodeLocations.ts`; where-to-add orchestration moved to `queryWhereToAdd.ts`; query-service tests split by intent. Next: pause additional query-service extraction unless it grows again, and resume React/TypeScript semantic hardening.
 22. Next: infer value-derived JSX generic substitutions and add checker-backed generic constraints.
 23. Next: add a workspace/package-manager fixture for pnpm/yarn/npm package boundaries, generated declarations, package exports, project references, path aliases, and mixed JS/TS package boundaries.
 24. Next: add .NET Minimal API route-group and endpoint-filter fixture coverage.
-25. Next: split `test/webAnalyzer.test.ts` and `test/queryService.test.ts` by scenario after the related production modules are extracted.
+25. Done: split `test/webAnalyzer.test.ts` by scenario after the related production modules were extracted. `test/queryService.test.ts` has also been split by query intent.

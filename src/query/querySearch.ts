@@ -1,6 +1,60 @@
+import { compactResponse, searchEvidence } from "./queryEvidence";
+import { looksLikeFileQuery } from "./queryPath";
 import { relationshipWeight } from "./queryScoring";
 import { queryTerms } from "./queryText";
-import { numberValue, stringValue } from "./queryUtils";
+import { QueryResponse } from "./queryTypes";
+import { numberValue, stringValue, uniqueStrings } from "./queryUtils";
+
+interface QueryWhere {
+  sql: string;
+  params: string[];
+}
+
+interface SearchQueryDependencies {
+  ambiguousContextResponse(queryType: string, query: string): QueryResponse | undefined;
+  execRows(sql: string, params?: unknown[]): Array<Record<string, unknown>>;
+  fileContextWhere(prefix: "AND" | "WHERE"): QueryWhere;
+  findSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>>;
+}
+
+export function findSearchQuery(query: string, dependencies: SearchQueryDependencies): QueryResponse {
+  const ambiguity = dependencies.ambiguousContextResponse("search", query);
+  if (ambiguity) {
+    return ambiguity;
+  }
+
+  const exactFileResponse = exactFileSearch(query, dependencies);
+  if (exactFileResponse) {
+    return exactFileResponse;
+  }
+
+  const candidateRows = rankSearchRowsForAgent(query, dependencies.findSearchRowsByTerms(query, 80));
+  const rows = candidateRows.slice(0, 20);
+  const weakMatch = isWeakMultiTermSearch(query, rows);
+  const evidence = rows.map(searchEvidence);
+
+  return compactResponse({
+    query,
+    answer: rows.length ? `Showing ${rows.length} ranked search result(s).` : "No search results matched.",
+    confidence: rows.length ? weakMatch ? 0.4 : 0.7 : 0,
+    evidence: [
+      ...(candidateRows.length > rows.length ? [{
+        recordType: "searchSummary",
+        shownCount: rows.length,
+        candidateCount: candidateRows.length,
+        candidateCountIsLowerBound: candidateRows.length === 80,
+        message: `Showing ${rows.length} of ${candidateRows.length === 80 ? "at least " : ""}${candidateRows.length} matched candidates; compact evidence is sampled.`
+      }] : []),
+      ...(weakMatch ? [{
+        recordType: "caveat",
+        message: "Search hits are weak because top results match only part of the query. Retry with an exact symbol, route, file name, error text, or more specific feature term."
+      }] : []),
+      ...evidence
+    ],
+    files: uniqueStrings(rows.map((row) => stringValue(row.path))),
+    nextQueries: rows.slice(0, 5).map((row) => `kraken-atlas query relationships "${row.record_id}"`)
+  });
+}
 
 export function rankSearchRowsForAgent(query: string, rows: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
   const terms = queryTerms(query);
@@ -56,6 +110,54 @@ export function scorePattern(pattern: Record<string, unknown>, terms: string[]):
     ...(Array.isArray(pattern.rulesObserved) ? pattern.rulesObserved : [])
   ].map(stringValue).join(" ").toLowerCase();
   return terms.filter((term) => haystack.includes(term)).length + numberValue(pattern.confidence);
+}
+
+function exactFileSearch(query: string, dependencies: SearchQueryDependencies): QueryResponse | undefined {
+  const normalized = query.trim().replace(/\\/g, "/");
+  if (!looksLikeFileQuery(normalized)) {
+    return undefined;
+  }
+
+  const context = dependencies.fileContextWhere("AND");
+  const rows = dependencies.execRows(
+    `SELECT json FROM files
+     WHERE (LOWER(path) = LOWER(?) OR LOWER(path) LIKE LOWER(?))
+     ${context.sql}
+     ORDER BY CASE WHEN LOWER(path) = LOWER(?) THEN 0 ELSE 1 END, path
+     LIMIT 20;`,
+    [normalized, `%/${normalized}`, ...context.params, normalized]
+  ).map((row) => JSON.parse(stringValue(row.json)) as Record<string, unknown>);
+
+  if (!rows.length) {
+    return compactResponse({
+      query,
+      answer: `No exact indexed file match for "${query}".`,
+      confidence: 1,
+      evidence: [{
+        recordType: "exactFileSearch",
+        requestedPath: normalized,
+        found: false,
+        message: "The filename-shaped query was checked against indexed file paths before fuzzy search."
+      }],
+      nextQueries: ["kraken-atlas query project"]
+    });
+  }
+
+  return compactResponse({
+    query,
+    answer: `Found ${rows.length} exact indexed file match(es).`,
+    confidence: 1,
+    evidence: rows.map((row) => ({
+      recordType: "exactFileSearch",
+      requestedPath: normalized,
+      found: true,
+      file: row.path,
+      language: row.language,
+      extension: row.extension
+    })),
+    files: rows.map((row) => stringValue(row.path)),
+    nextQueries: rows.map((row) => `kraken-atlas query relationships "${stringValue(row.path)}"`)
+  });
 }
 
 function countSearchTermMatches(row: Record<string, unknown>, terms: string[]): number {

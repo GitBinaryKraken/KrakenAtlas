@@ -30,7 +30,7 @@ Packaged `0.2.2` added the TypeScript semantic foundation:
 
 Packaged `0.2.3` now extends the semantic path with:
 
-- A behavior-preserving `reactAnalyzer.ts` split is underway: shared analyzer types, type-text helpers, import/re-export name helpers, generic prop substitution/type-alias evidence helpers, and prop utility/index-signature expansion now live in focused modules. `reactAnalyzer.ts` is still oversized at roughly 2,177 lines, so further extraction remains queued.
+- A behavior-preserving `reactAnalyzer.ts` split has brought the file below the immediate guardrail: shared analyzer types, source-text scanning and ID helpers, type-text helpers, import/re-export name helpers, route/store/context conventions, compiler-AST TypeScript declaration/type-parameter discovery, JSX composition/prop evidence, generic prop substitution/type-alias evidence helpers, prop utility/index-signature expansion, and TypeScript prop/interface/enum member discovery now live in focused modules. `reactAnalyzer.ts` is roughly 1,229 lines / 49.1 KB after the split.
 - Type-parameter nodes, discriminated-union variants, literal union values, exported API/client contract patterns, local `REFERENCES_TYPE`, and `USES_TYPE_ARGUMENT` edges.
 - Imported function, hook, and store call resolution through import bindings, including namespace-style calls.
 - Import-resolved evidence markers for React call and hook relationships.
@@ -52,7 +52,7 @@ Docs should use this wording split:
 ## Recommended Next Steps
 
 1. Validate React/Next query quality on a larger real project or convert alpha misses into fixtures.
-2. Continue the behavior-preserving `reactAnalyzer.ts` split, targeting TypeScript declaration/member discovery or JSX composition/prop evidence next.
+2. Continue the `queryService.ts` split by extracting remaining command branches into intent handlers. Project metadata and symbol lookup now live in `queryBasic.ts`; code-health queries now live in `queryCodeHealth.ts`; references/relationships now live in `queryRelationships.ts`; pattern, pattern-map, and hotspots now live in `queryPatterns.ts`; search/exact-file query handling now lives in `querySearch.ts`; flow context expansion now lives in `queryFlowContext.ts`; endpoint-location enrichment now lives in `queryNodeLocations.ts`; where-to-add orchestration and enrichment now live in `queryWhereToAdd.ts`. The service is below 900 lines, query-service tests are split into core, where-to-add/context-pruning, and discovery/flow suites, and web-analyzer tests are split by scenario. Pause additional maintainability splitting unless a file grows back over the guardrail.
 3. Continue inferred prop work with checker-backed inferred types, richer default-value refinement, nested arrays, alias/default pattern edge cases, and generic component inference.
 4. Deepen utility-prop coverage for key remapping, conditional mapped types, referenced template-literal aliases, numeric/symbol/template index fallback, and checker-backed value/optional types.
 5. Infer value-derived JSX generic substitutions and add checker-backed generic constraints.
