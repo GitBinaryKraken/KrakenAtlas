@@ -238,23 +238,33 @@ test("analyzeVanillaWeb maps generic React component props and JSX type argument
   assert.ok(aliasChoicesPropPass.evidence?.includes("TOption=PickerValue"));
   assert.ok(aliasChoicesPropPass.evidence?.includes("type: PickerValue[]"));
 
-  const defaultedCurrentPropPass = result.relationships.find((relationship) =>
+  const defaultedCurrentPropPasses = result.relationships.filter((relationship) =>
     relationship.type === "PASSES_PROP" &&
     relationship.from === "symbol:react:src/App.tsx:component:App" &&
     relationship.to === "symbol:react:src/GenericPicker.tsx:props:DefaultedPickerProps.current"
   );
-  assert.ok(defaultedCurrentPropPass);
-  assert.ok(defaultedCurrentPropPass.evidence?.includes("TChoice=PickerValue"));
-  assert.ok(defaultedCurrentPropPass.evidence?.includes("type: PickerValue"));
+  assert.ok(defaultedCurrentPropPasses.some((relationship) =>
+    relationship.evidence?.includes("TChoice=\"ready\" | \"blocked\"") &&
+    relationship.evidence?.includes("type: \"ready\" | \"blocked\"")
+  ));
+  assert.ok(defaultedCurrentPropPasses.some((relationship) =>
+    relationship.evidence?.includes("TChoice=PickerValue") &&
+    relationship.evidence?.includes("type: PickerValue")
+  ));
 
-  const defaultedEntriesPropPass = result.relationships.find((relationship) =>
+  const defaultedEntriesPropPasses = result.relationships.filter((relationship) =>
     relationship.type === "PASSES_PROP" &&
     relationship.from === "symbol:react:src/App.tsx:component:App" &&
     relationship.to === "symbol:react:src/GenericPicker.tsx:props:DefaultedPickerProps.entries"
   );
-  assert.ok(defaultedEntriesPropPass);
-  assert.ok(defaultedEntriesPropPass.evidence?.includes("TChoice=PickerValue"));
-  assert.ok(defaultedEntriesPropPass.evidence?.includes("type: PickerValue[]"));
+  assert.ok(defaultedEntriesPropPasses.some((relationship) =>
+    relationship.evidence?.includes("TChoice=\"ready\" | \"blocked\"") &&
+    relationship.evidence?.includes("type: \"ready\" | \"blocked\"[]")
+  ));
+  assert.ok(defaultedEntriesPropPasses.some((relationship) =>
+    relationship.evidence?.includes("TChoice=PickerValue") &&
+    relationship.evidence?.includes("type: PickerValue[]")
+  ));
 });
 
 test("analyzeVanillaWeb maps React, JSX, and TypeScript component relationships", async (t) => {

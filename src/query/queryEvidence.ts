@@ -1,4 +1,5 @@
 import type { QueryResponse } from "./queryTypes";
+import { relationshipSourceKind } from "../model/mapProvenance";
 import { numberValue, stringValue, sumCounts, uniqueStrings } from "./queryUtils";
 
 export function compactResponse(input: Partial<QueryResponse> & { query: string; answer: string; confidence: number }): QueryResponse {
@@ -118,6 +119,7 @@ export function relationshipEvidence(row: Record<string, unknown>): Record<strin
   return {
     id: row.id,
     type: row.type,
+    sourceKind: stringValue(row.sourceKind) || relationshipSourceKind(row),
     from: row.from,
     to: row.to,
     fromLocation: row.fromLocation,

@@ -18,6 +18,7 @@ export interface QueryServiceOptions {
 
 export interface RelationshipQueryOptions {
   edgeTypes?: string[];
+  sourceKinds?: string[];
   limit?: number;
 }
 

@@ -99,8 +99,10 @@ export async function withQueryService<T>(workspaceRoot: string, callback: (serv
 export class QueryService {
   private readonly queryContext?: QueryContext;
   private readonly queryContextAmbiguity?: QueryContextAmbiguity;
+  private readonly relationshipSourceKindColumnExists: boolean;
 
   public constructor(private readonly database: Database, options: QueryServiceOptions = {}) {
+    this.relationshipSourceKindColumnExists = hasTableColumn(database, "relationships", "source_kind");
     const resolution = this.resolveQueryContext(options.projectContext);
     this.queryContext = resolution.context;
     this.queryContextAmbiguity = resolution.ambiguity;
@@ -139,6 +141,7 @@ export class QueryService {
       findSymbolIds: (currentQuery: string) => this.findSymbolIds(currentQuery),
       hasQueryContext: Boolean(this.queryContext),
       queryContextName: this.queryContext?.name,
+      relationshipSourceKindColumnExists: this.relationshipSourceKindColumnExists,
       referenceContextWhere: (prefix: "AND" | "WHERE") => this.referenceContextWhere(prefix),
       relationshipContextWhere: (prefix: "AND" | "WHERE") => this.relationshipContextWhere(prefix),
       relationshipMatchesContext: (row: Record<string, unknown>) => this.relationshipMatchesContext(row),
@@ -318,6 +321,8 @@ export class QueryService {
       execJson: (sql: string, params?: unknown[]) => this.execJson(sql, params),
       execRows: (sql: string, params?: unknown[]) => this.execRows(sql, params),
       findFlow: (currentQuery: string) => this.findFlow(currentQuery),
+      findGlobalRankedSearchRowsByTerms: (currentQuery: string, limit: number) => this.findRankedSearchRowsByTerms(currentQuery, limit, false),
+      findGlobalSearchRowsByTerms: (currentQuery: string, limit: number) => this.findSearchRowsByTerms(currentQuery, limit, false),
       findRankedSearchRowsByTerms: (currentQuery: string, limit: number) => this.findRankedSearchRowsByTerms(currentQuery, limit),
       findRelevantPatterns: (currentQuery: string) => this.findRelevantPatterns(currentQuery),
       findSearchRowsByTerms: (currentQuery: string, limit: number) => this.findSearchRowsByTerms(currentQuery, limit),
@@ -344,7 +349,7 @@ export class QueryService {
     );
   }
 
-  private findSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>> {
+  private findSearchRowsByTerms(query: string, limit: number, scopedToContext = true): Array<Record<string, unknown>> {
     const terms = queryTerms(query);
     if (terms.length === 0) {
       return [];
@@ -352,7 +357,7 @@ export class QueryService {
 
     const clauses = terms.map(() => "(title LIKE ? OR body LIKE ? OR path LIKE ?)").join(" OR ");
     const params = terms.flatMap((term) => [`%${term}%`, `%${term}%`, `%${term}%`]);
-    const context = this.searchContextWhere("AND");
+    const context = scopedToContext ? this.searchContextWhere("AND") : { sql: "", params: [] };
     return this.execRows(
       `SELECT record_id, record_type, title, body, path FROM code_search
        WHERE (${clauses})
@@ -362,7 +367,7 @@ export class QueryService {
     );
   }
 
-  private findRankedSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>> {
+  private findRankedSearchRowsByTerms(query: string, limit: number, scopedToContext = true): Array<Record<string, unknown>> {
     const terms = queryTerms(query);
     if (terms.length === 0) {
       return [];
@@ -370,7 +375,7 @@ export class QueryService {
 
     const clauses = terms.map(() => "(title LIKE ? OR body LIKE ? OR path LIKE ?)").join(" OR ");
     const params = terms.flatMap((term) => [`%${term}%`, `%${term}%`, `%${term}%`]);
-    const context = this.searchContextWhere("AND");
+    const context = scopedToContext ? this.searchContextWhere("AND") : { sql: "", params: [] };
     const poolLimit = Math.max(200, Math.min(limit * 10, 1000));
     const rows = this.execRows(
       `SELECT record_id, record_type, title, body, path FROM code_search
@@ -872,6 +877,15 @@ export class QueryService {
     } finally {
       statement.free();
     }
+  }
+}
+
+function hasTableColumn(database: Database, tableName: string, columnName: string): boolean {
+  try {
+    const result = database.exec(`PRAGMA table_info(${tableName});`);
+    return (result[0]?.values ?? []).some((row) => row[1] === columnName);
+  } catch {
+    return false;
   }
 }
 

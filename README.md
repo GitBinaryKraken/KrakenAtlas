@@ -13,6 +13,16 @@ Instead of asking an agent to scan the whole repository, ask Kraken Atlas first:
 
 Kraken Atlas is currently an **alpha feedback build** focused first on **C#/.NET Core**, **ASP.NET Core**, **Razor/HTML**, **vanilla JavaScript**, and first-pass **React/TypeScript** projects. Its code atlas prioritizes fast command and CLI queries that help agents find the right files, understand relationships, and work with focused context before making changes.
 
+## Direction
+
+Kraken Atlas is not trying to replace Roslyn, LSP servers, SourceGraph, NDepend, TypeScript's compiler, or other mature semantic engines. Those tools are excellent sources of code facts.
+
+Atlas focuses on the layer agents still need: turning compiler and scanner facts into a compact local map that answers practical coding questions. The goal is to identify local patterns, likely edit surfaces, nearby examples to imitate, supporting evidence, and likely blast radius before an agent opens broad source files.
+
+In short: source facts are the substrate, patterns are the product, and agent decisions are the quality measure.
+
+Recent unreleased map-contract work also labels relationship evidence by source kind, such as `compiler-resolved`, `source-parsed`, `convention-derived`, `inferred`, or `text-derived`, and supports provenance-aware relationship filtering with `--source-kind`.
+
 ## What's New In 0.2.3
 
 - Refreshed React/TypeScript roadmap, feedback, known-limits, and handoff docs so they distinguish shipped compiler-backed slices from remaining first-pass semantic gaps.
@@ -330,6 +340,7 @@ kraken-atlas query references "ComposableEditorPartViewModel" --workspace . --co
 kraken-atlas query references "ITranslationDictionaryService" --workspace . --context WebUI --format agent
 kraken-atlas query relationships "ConfigJson" --workspace . --context WebUI --format agent
 kraken-atlas query relationships "ConfigJson" --workspace . --context WebUI --edge WRITES_FIELD --limit 20 --format agent
+kraken-atlas query relationships "ConfigJson" --workspace . --context WebUI --source-kind compiler-resolved --format agent
 kraken-atlas context relationships "ConfigJson" --workspace . --context WebUI --format md
 ```
 
@@ -428,7 +439,7 @@ Use `Kraken Atlas: Find Orphaned Code Candidates` to inspect private/internal C#
 | Find where a UI action posts | `flow "button or form action name"` | `POSTS_TO`, `HANDLES_EVENT`, `CALLS`, and `MAPS_ROUTE` relationships. |
 | Find who calls a service method | `references "InterfaceOrMethodName"` | Follow returned implementation, DI registration, constructor/Razor injection, and call edges; use `relationships` for a narrower exact hop. |
 | Find where data is persisted | `where-to-add "persist field-or-entity-name"` | Entity/model, DbContext/DbSet, repository, service, and related entry-point files. |
-| Inspect a known map anchor | `relationships "PropertyOrSymbolOrFile"` | Use `--edge <type>` and `--limit <n>` to inspect focused graph edges before opening files. |
+| Inspect a known map anchor | `relationships "PropertyOrSymbolOrFile"` | Use `--edge <type>`, `--source-kind <kind>`, and `--limit <n>` to inspect focused graph edges before opening files. |
 | Review likely orphaned methods | `orphans "optional filter"` | Verify dynamic/framework/external usage with `relationships`, `references`, and focused source inspection before deletion. |
 | Review duplicate method bodies | `duplicates "optional filter"` | Compare all returned file/line instances and confirm shared ownership before extracting common code. |
 
@@ -612,6 +623,7 @@ Deferred or future work:
 - MCP server workflow.
 - Human-facing visual graph browsing.
 - Static HTML report generation.
+- Replacing IDE, LSP, compiler, SourceGraph, or NDepend-style semantic databases.
 
 ---
 

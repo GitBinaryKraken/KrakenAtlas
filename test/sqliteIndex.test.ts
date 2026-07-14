@@ -89,7 +89,7 @@ test("rebuildSqliteIndex creates relationship graph indexes", async () => {
     relationships: [
       {
         recordType: "relationship",
-        id: "relationship:implements:UserService:IUserService",
+        id: "relationship:csharp:implements:UserService:IUserService",
         from: "symbol:csharp:UserService",
         to: "symbol:csharp:IUserService",
         type: "IMPLEMENTS",
@@ -108,15 +108,18 @@ test("rebuildSqliteIndex creates relationship graph indexes", async () => {
 
   const database = await openSqliteIndex(indexPath);
   try {
-    const edge = database.exec("SELECT from_id, to_id, type FROM relationships WHERE to_id = 'symbol:csharp:IUserService';")[0].values[0];
+    const edge = database.exec("SELECT from_id, to_id, type, source_kind, json FROM relationships WHERE to_id = 'symbol:csharp:IUserService';")[0].values[0];
     const pattern = database.exec("SELECT name FROM patterns WHERE id = 'pattern:dotnet:constructor-injection';")[0].values[0][0];
     const indexNames = database.exec("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'relationships' ORDER BY name;")[0].values.flat();
+    const relationshipJson = JSON.parse(edge[4] as string);
 
-    assert.deepStrictEqual(edge, ["symbol:csharp:UserService", "symbol:csharp:IUserService", "IMPLEMENTS"]);
+    assert.deepStrictEqual(edge.slice(0, 4), ["symbol:csharp:UserService", "symbol:csharp:IUserService", "IMPLEMENTS", "compiler-resolved"]);
+    assert.strictEqual(relationshipJson.sourceKind, "compiler-resolved");
     assert.strictEqual(pattern, "Constructor injection");
     assert.ok(indexNames.includes("idx_relationships_from"));
     assert.ok(indexNames.includes("idx_relationships_to"));
     assert.ok(indexNames.includes("idx_relationships_type"));
+    assert.ok(indexNames.includes("idx_relationships_source_kind"));
   } finally {
     database.close();
   }
@@ -221,8 +224,10 @@ test("rebuildSqliteIndex creates node role enrichment", async () => {
   const serviceId = "symbol:csharp:Kelp2025_WebUI.Services.PageEditorService";
   const formId = "symbol:razor:Kelp2025_WebUI/Views/Pages/Edit.cshtml:form:save-page";
   const projectId = "symbol:dotnet-project:Kelp2025_WebUI/Kelp2025_WebUI.csproj";
+  const typeCodeId = "symbol:csharp:KelpApiDomain.ViewModels.Persona.PersonaDetailTypeCode";
   const files: FileRecord[] = [
     fileRecord("KelpApiDomain/ViewModels/Pages/PageDraftModels.cs"),
+    fileRecord("KelpApiDomain/ViewModels/Persona/PersonaDetailTypeCode.cs"),
     fileRecord("KelpApi/Controllers/PageController.cs"),
     fileRecord("Kelp2025_WebUI/Services/PageEditorService.cs"),
     fileRecord("Kelp2025_WebUI/Views/Pages/Edit.cshtml"),
@@ -233,7 +238,8 @@ test("rebuildSqliteIndex creates node role enrichment", async () => {
     symbolRecord(controllerId, "PageController", "KelpApi.Controllers.PageController", "class", "csharp", "KelpApi/Controllers/PageController.cs"),
     symbolRecord(serviceId, "PageEditorService", "Kelp2025_WebUI.Services.PageEditorService", "class", "csharp", "Kelp2025_WebUI/Services/PageEditorService.cs"),
     symbolRecord(formId, "save-page", "save-page", "form", "razor", "Kelp2025_WebUI/Views/Pages/Edit.cshtml", ["html-form"]),
-    symbolRecord(projectId, "Kelp2025_WebUI", "Kelp2025_WebUI/Kelp2025_WebUI.csproj", "project", "dotnet-project", "Kelp2025_WebUI/Kelp2025_WebUI.csproj", ["dotnet-project"])
+    symbolRecord(projectId, "Kelp2025_WebUI", "Kelp2025_WebUI/Kelp2025_WebUI.csproj", "project", "dotnet-project", "Kelp2025_WebUI/Kelp2025_WebUI.csproj", ["dotnet-project"]),
+    symbolRecord(typeCodeId, "PersonaDetailTypeCode", "KelpApiDomain.ViewModels.Persona.PersonaDetailTypeCode", "enum", "csharp", "KelpApiDomain/ViewModels/Persona/PersonaDetailTypeCode.cs")
   ];
 
   await rebuildSqliteIndex(indexPath, { files, symbols });
@@ -259,6 +265,7 @@ test("rebuildSqliteIndex creates node role enrichment", async () => {
     assert.ok(roleRows.includes(`${serviceId}:service`));
     assert.ok(roleRows.includes(`${formId}:form`));
     assert.ok(roleRows.includes(`${projectId}:project`));
+    assert.ok(roleRows.includes(`${typeCodeId}:type-code-contract`));
     assert.ok(requestRoles.some(([role, source]) => role === "domain-contract" && source === "project-name"));
     assert.ok(indexNames.includes("idx_node_roles_node"));
     assert.ok(indexNames.includes("idx_node_roles_role"));

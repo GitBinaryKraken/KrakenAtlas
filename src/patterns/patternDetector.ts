@@ -62,6 +62,42 @@ const patternDefinitions: PatternDefinition[] = [
     agentGuidance: "When changing persisted behavior, follow service-to-repository calls and repository read/write edges before editing broad data code."
   },
   {
+    id: "pattern:data:sql-table-access",
+    name: "SQL table access",
+    category: "data-access",
+    language: "sql",
+    relationshipTypes: ["READS_TABLE", "JOINS_TABLE", "WRITES_TABLE", "UPSERTS_TABLE", "DELETES_FROM_TABLE", "MAPS_DAPPER_RESULT", "USES_DAPPER_PARAMETER", "PROJECTS_DAPPER_ROW", "MAPS_DAPPER_PROPERTY", "INSERTS_ROW", "ROW_IN_TABLE", "ROW_HAS_TYPE_CODE"],
+    rulesObserved: ["Code and SQL files read/write named database tables and may seed explicit configuration rows."],
+    agentGuidance: "When changing persisted behavior, follow table read/write and seed-row edges to the source service, admin surface, migration, or seed before editing runtime code."
+  },
+  {
+    id: "pattern:data:dapper-type-binding",
+    name: "Dapper type binding",
+    category: "data-access",
+    language: "csharp",
+    relationshipTypes: ["MAPS_DAPPER_RESULT", "USES_DAPPER_PARAMETER", "PROJECTS_DAPPER_ROW", "MAPS_DAPPER_PROPERTY"],
+    rulesObserved: ["Dapper calls bind SQL table access to C# result or parameter types and may project row records into domain/data contracts."],
+    agentGuidance: "When changing a table-backed domain contract, inspect the typed Dapper result/parameter and row-projection edges to find the data service, backing table, row DTO, and domain model before editing UI or API callers."
+  },
+  {
+    id: "pattern:dotnet:model-projection",
+    name: "Model projection",
+    category: "model-mapping",
+    language: "csharp",
+    relationshipTypes: ["PROJECTS_MODEL", "MAPS_PROPERTY"],
+    rulesObserved: ["C# mapping methods copy resolved properties between domain, DTO, API, or view model types."],
+    agentGuidance: "When changing a model member, follow model-projection edges to downstream DTOs, API/view models, serializers, and UI callers before editing only the declaring class."
+  },
+  {
+    id: "pattern:data:generated-table-model",
+    name: "Generated table model",
+    category: "data-access",
+    language: "sql",
+    relationshipTypes: ["BACKS_TABLE"],
+    rulesObserved: ["Generated table model files map to database table nodes."],
+    agentGuidance: "When a generated table model appears in recommendations, treat it as backing evidence and find the admin, service, migration, or seed that writes the table before editing generated code."
+  },
+  {
     id: "pattern:dotnet:options-config",
     name: "Options/config binding",
     category: "configuration",
@@ -223,6 +259,11 @@ export function detectPatterns(input: PatternDetectionInput): PatternRecord[] {
     });
   }
 
+  const templateBackedRuntimeField = detectTemplateBackedRuntimeFieldPattern(input);
+  if (templateBackedRuntimeField) {
+    patterns.push(templateBackedRuntimeField);
+  }
+
   return patterns.sort((left, right) => left.id.localeCompare(right.id));
 }
 
@@ -304,6 +345,80 @@ function scorePattern(frequency: number): number {
   }
 
   return 0.35;
+}
+
+function detectTemplateBackedRuntimeFieldPattern(input: PatternDetectionInput): PatternRecord | undefined {
+  const tableRelationships = input.relationships.filter((relationship) =>
+    ["READS_TABLE", "JOINS_TABLE", "WRITES_TABLE", "UPSERTS_TABLE"].includes(relationship.type) &&
+    relationship.to.startsWith("table:")
+  );
+  const templateReaders = tableRelationships.filter((relationship) =>
+    ["READS_TABLE", "JOINS_TABLE"].includes(relationship.type) && isTemplateTableNode(relationship.to)
+  );
+  const definitionWriters = tableRelationships.filter((relationship) =>
+    ["WRITES_TABLE", "UPSERTS_TABLE"].includes(relationship.type) &&
+    (isTemplateTableNode(relationship.to) || isTaxonomyTableNode(relationship.to) || isAdminFile(relationship.file ?? ""))
+  );
+
+  if (!templateReaders.length || !definitionWriters.length) {
+    return undefined;
+  }
+
+  const evidence = uniqueRelationships([...definitionWriters, ...templateReaders]);
+  const adminFiles = uniqueStrings(definitionWriters.map((relationship) => relationship.file ?? "").filter(Boolean));
+  const runtimeFiles = uniqueStrings(templateReaders.map((relationship) => relationship.file ?? "").filter(Boolean));
+  const tableNodes = uniqueStrings(evidence.map((relationship) => relationship.to));
+  const frequency = evidence.length;
+
+  return {
+    recordType: "pattern",
+    id: "pattern:data:template-backed-runtime-field",
+    name: "Template-backed runtime field",
+    category: "data-backed-configuration",
+    language: "sql",
+    confidence: Math.min(0.9, 0.45 + frequency * 0.08 + Math.min(adminFiles.length, 2) * 0.08 + Math.min(runtimeFiles.length, 2) * 0.06),
+    frequency,
+    counterExampleCount: 0,
+    instances: [
+      {
+        name: "definition-source",
+        files: adminFiles.slice(0, 5),
+        symbols: tableNodes.slice(0, 5)
+      },
+      {
+        name: "runtime-template-reader",
+        files: runtimeFiles.slice(0, 5),
+        symbols: tableNodes.slice(0, 5)
+      }
+    ],
+    rulesObserved: [
+      "Admin or configuration code writes taxonomy/template tables while runtime code reads template tables to render or persist configured fields."
+    ],
+    agentGuidance: "For new configurable fields/options, start with the admin/config source-of-truth and backing template/type tables; inspect runtime renderers only when editor behavior changes."
+  };
+}
+
+function uniqueRelationships(relationships: RelationshipRecord[]): RelationshipRecord[] {
+  const seen = new Set<string>();
+  return relationships.filter((relationship) => {
+    if (seen.has(relationship.id)) {
+      return false;
+    }
+    seen.add(relationship.id);
+    return true;
+  });
+}
+
+function isTemplateTableNode(nodeId: string): boolean {
+  return /\btemplate|_templates\b/iu.test(nodeId);
+}
+
+function isTaxonomyTableNode(nodeId: string): boolean {
+  return /\bobject(?:types?|categories?)\b|\btaxonomy\b|\btypecode\b/iu.test(nodeId);
+}
+
+function isAdminFile(file: string): boolean {
+  return /(^|\/)(admintools|admin|pageadmin)(\/|$)|\bmanagement\b/iu.test(file.replace(/\\/g, "/"));
 }
 
 function countCounterExamples(definition: PatternDefinition, input: PatternDetectionInput): number {

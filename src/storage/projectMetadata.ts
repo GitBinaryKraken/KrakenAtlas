@@ -9,6 +9,7 @@ import {
   RelationshipRecord,
   SymbolRecord
 } from "../model/records";
+import { CURRENT_MAP_SCHEMA_VERSION } from "./schemaVersion";
 
 export interface ProjectMetadataInput {
   workspaceRoot: string;
@@ -29,7 +30,7 @@ export function createProjectMetadata(input: ProjectMetadataInput): ProjectMetad
   const workspaceRootName = path.basename(input.workspaceRoot);
 
   return {
-    schemaVersion: "0.1.0",
+    schemaVersion: CURRENT_MAP_SCHEMA_VERSION,
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
     workspaceName: workspaceRootName,
     workspaceRootName,

@@ -1,6 +1,7 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { Manifest } from "../model/records";
+import { CURRENT_MAP_SCHEMA_VERSION } from "./schemaVersion";
 
 export interface ManifestStats {
   fileCount: number;
@@ -14,7 +15,7 @@ export function createManifest(workspaceRoot: string, stats: ManifestStats, gene
   const workspaceRootName = path.basename(workspaceRoot);
 
   return {
-    schemaVersion: "0.1.0",
+    schemaVersion: CURRENT_MAP_SCHEMA_VERSION,
     generatedAt: generatedAt.toISOString(),
     workspaceName: workspaceRootName,
     workspaceRootName,

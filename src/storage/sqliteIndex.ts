@@ -10,6 +10,7 @@ import {
   RelationshipRecord,
   SymbolRecord
 } from "../model/records";
+import { relationshipSourceKind } from "../model/mapProvenance";
 import { loadSqlJs } from "./sqlJs";
 
 export async function rebuildSqliteIndex(indexPath: string, records: CodeMapIndexRecords): Promise<void> {
@@ -96,6 +97,7 @@ function createSchema(database: Database): void {
       file TEXT,
       start_line INTEGER,
       confidence REAL,
+      source_kind TEXT,
       json TEXT NOT NULL
     );
 
@@ -103,6 +105,7 @@ function createSchema(database: Database): void {
     CREATE INDEX idx_relationships_to ON relationships(to_id);
     CREATE INDEX idx_relationships_type ON relationships(type);
     CREATE INDEX idx_relationships_file ON relationships(file);
+    CREATE INDEX idx_relationships_source_kind ON relationships(source_kind);
 
     CREATE TABLE patterns (
       id TEXT PRIMARY KEY,
@@ -336,9 +339,11 @@ function insertReference(database: Database, reference: ReferenceRecord): void {
 }
 
 function insertRelationship(database: Database, relationship: RelationshipRecord): void {
+  const sourceKind = relationshipSourceKind(relationship);
+  const enrichedRelationship = { ...relationship, sourceKind };
   database.run(
-    `INSERT INTO relationships (id, from_id, to_id, type, file, start_line, confidence, json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
+    `INSERT INTO relationships (id, from_id, to_id, type, file, start_line, confidence, source_kind, json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       relationship.id,
       relationship.from,
@@ -347,7 +352,8 @@ function insertRelationship(database: Database, relationship: RelationshipRecord
       relationship.file ?? null,
       relationship.range?.startLine ?? null,
       relationship.confidence,
-      JSON.stringify(relationship)
+      sourceKind,
+      JSON.stringify(enrichedRelationship)
     ]
   );
 
@@ -473,6 +479,78 @@ function insertNodeRoleEnrichment(database: Database, records: CodeMapIndexRecor
   for (const symbol of records.symbols ?? []) {
     for (const role of inferSymbolRoles(symbol)) {
       add(symbol.id, role.role, role.confidence, role.source);
+    }
+  }
+
+  const fileIdsByPath = new Map(records.files.map((file) => [normalizeUsagePath(file.path), file.id]));
+  for (const relationship of records.relationships ?? []) {
+    const fileId = fileIdsByPath.get(normalizeUsagePath(relationship.file ?? ""));
+    if (!fileId) {
+      continue;
+    }
+
+    if (isCSharpProjectionRelationship(relationship)) {
+      add(fileId, "model-projector", relationship.type === "PROJECTS_MODEL" ? 0.78 : 0.7, "csharp-projection");
+      add(fileId, "model-mapper", 0.74, "csharp-projection");
+    }
+
+    if (!isSqlRelationship(relationship)) {
+      continue;
+    }
+
+    add(fileId, relationship.type === "BACKS_TABLE" ? "generated-table-model" : "data-access", relationship.type === "BACKS_TABLE" ? 0.86 : 0.68, "sql-relationship");
+    if (relationship.type === "MAPS_DAPPER_RESULT") {
+      add(fileId, "dapper-result-mapper", 0.78, "sql-relationship");
+      add(fileId, "data-access", 0.78, "sql-relationship");
+    }
+    if (relationship.type === "USES_DAPPER_PARAMETER") {
+      add(fileId, "dapper-parameter-writer", 0.74, "sql-relationship");
+      add(fileId, "data-access", 0.76, "sql-relationship");
+    }
+    if (relationship.type === "PROJECTS_DAPPER_ROW" || relationship.type === "MAPS_DAPPER_PROPERTY") {
+      add(fileId, "dapper-row-projector", relationship.type === "PROJECTS_DAPPER_ROW" ? 0.8 : 0.74, "sql-relationship");
+      add(fileId, "data-access", 0.76, "sql-relationship");
+    }
+    if (relationship.type === "INSERTS_ROW") {
+      add(fileId, "seed-source", 0.82, "sql-relationship");
+      add(fileId, "definition-source", 0.76, "sql-relationship");
+    }
+    if (relationship.type === "ROW_HAS_TYPE_CODE") {
+      add(fileId, "type-code-editor", 0.72, "sql-relationship");
+    }
+    if (!isSqlTableRelationship(relationship)) {
+      continue;
+    }
+
+    const normalizedFile = normalizeRoleText(relationship.file ?? "");
+    const table = normalizeRoleText(relationship.to);
+    const writesTable = ["WRITES_TABLE", "UPSERTS_TABLE", "DELETES_FROM_TABLE"].includes(relationship.type);
+    const readsTable = ["READS_TABLE", "JOINS_TABLE"].includes(relationship.type);
+    const adminPath = /\b(admin|admintools|pageadmin|management)\b/u.test(normalizedFile);
+
+    if (adminPath && writesTable) {
+      add(fileId, "admin-config-surface", 0.86, "sql-relationship");
+      add(fileId, "definition-source", 0.82, "sql-relationship");
+    }
+    if (isTaxonomyTable(table) && writesTable) {
+      add(fileId, "taxonomy-manager", adminPath ? 0.9 : 0.78, "sql-relationship");
+      add(fileId, "object-type-manager", table.includes("objecttype") ? 0.9 : 0.75, "sql-relationship");
+    }
+    if (writesTable && relationshipTouchesTypeCode(relationship)) {
+      add(fileId, "type-code-editor", adminPath ? 0.88 : 0.76, "sql-relationship");
+      add(fileId, "definition-source", adminPath ? 0.84 : 0.74, "sql-relationship");
+    }
+    if (isTemplateTable(table)) {
+      if (writesTable) {
+        add(fileId, "template-admin-surface", 0.88, "sql-relationship");
+      }
+      if (readsTable) {
+        add(fileId, "template-reader", 0.76, "sql-relationship");
+        add(fileId, "runtime-template-reader", 0.78, "sql-relationship");
+      }
+      if (relationship.type === "BACKS_TABLE") {
+        add(fileId, "template-table-model", 0.88, "sql-relationship");
+      }
     }
   }
 
@@ -819,6 +897,33 @@ function inferSymbolRoles(symbol: SymbolRecord): Array<{ role: string; confidenc
   if (kind === "project" || symbol.id.startsWith("symbol:dotnet-project:")) {
     add("project", 1, "symbol-kind");
   }
+  if (kind === "databasetable" || symbol.id.startsWith("table:")) {
+    add("database-table", 0.96, "symbol-kind");
+    if (isTemplateTable(combined)) {
+      add("template-table", 0.92, "symbol-name");
+    }
+    if (isTaxonomyTable(combined)) {
+      add("taxonomy-table", 0.9, "symbol-name");
+    }
+  }
+  if (kind === "typecodevalue" || symbol.id.startsWith("type-code:")) {
+    add("type-code-value", 0.94, "symbol-kind");
+  }
+  if (kind === "databaserow" || symbol.id.startsWith("row:")) {
+    add("database-row", 0.92, "symbol-kind");
+    if (symbol.patterns?.includes("seed-row")) {
+      add("seed-row", 0.9, "pattern");
+    }
+  }
+  if (/TableDataModel$/u.test(name)) {
+    add("generated-table-model", 0.84, "name-suffix");
+    if (/Template/u.test(name)) {
+      add("template-table-model", 0.84, "name-suffix");
+    }
+  }
+  if (isTypeCodeContract(symbol, combined, filePath)) {
+    add("type-code-contract", kind === "enum" ? 0.95 : 0.84, kind === "enum" ? "enum-name" : "symbol-name");
+  }
   if (combined.includes("apidomain") || /\b(domain|contracts?)\b/u.test(combined)) {
     add("domain-contract", combined.includes("apidomain") ? 0.95 : 0.82, combined.includes("apidomain") ? "project-name" : "namespace-path");
   }
@@ -898,6 +1003,39 @@ function inferSymbolRoles(symbol: SymbolRecord): Array<{ role: string; confidenc
 
 function normalizeRoleText(value: string): string {
   return value.replace(/\\/g, "/").toLowerCase();
+}
+
+function isSqlTableRelationship(relationship: RelationshipRecord): boolean {
+  return ["READS_TABLE", "JOINS_TABLE", "WRITES_TABLE", "UPSERTS_TABLE", "DELETES_FROM_TABLE", "BACKS_TABLE"].includes(relationship.type)
+    && relationship.to.startsWith("table:");
+}
+
+function isSqlRelationship(relationship: RelationshipRecord): boolean {
+  return isSqlTableRelationship(relationship) || ["INSERTS_ROW", "ROW_IN_TABLE", "ROW_HAS_TYPE_CODE", "MAPS_DAPPER_RESULT", "USES_DAPPER_PARAMETER", "PROJECTS_DAPPER_ROW", "MAPS_DAPPER_PROPERTY"].includes(relationship.type);
+}
+
+function isCSharpProjectionRelationship(relationship: RelationshipRecord): boolean {
+  return relationship.id.startsWith("relationship:csharp-projection:")
+    || relationship.type === "PROJECTS_MODEL";
+}
+
+function isTemplateTable(value: string): boolean {
+  return /\btemplate|_templates\b/u.test(value);
+}
+
+function isTaxonomyTable(value: string): boolean {
+  return /\bobject(?:types?|categories?)\b|\btaxonomy\b|\btypecode\b/u.test(value);
+}
+
+function relationshipTouchesTypeCode(relationship: RelationshipRecord): boolean {
+  return /\btype_?code\b/iu.test([relationship.from, relationship.to, relationship.evidence, relationship.file].filter(Boolean).join(" "));
+}
+
+function isTypeCodeContract(symbol: SymbolRecord, combined: string, filePath: string): boolean {
+  if (/\btype[-_ ]?code\b/u.test(combined) || /typecode/u.test(combined)) {
+    return true;
+  }
+  return /\btype[-_ ]?codes?\b/u.test(filePath) && /^(enum|class|record|struct|interface|property|field)$/u.test(symbol.kind.toLowerCase());
 }
 
 const nodeTagStopWords = new Set([

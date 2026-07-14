@@ -11,6 +11,7 @@ import {
   queryWantsFormOrProfile,
   queryWantsIdentityAccountFlow,
   queryWantsIdentityUserShape,
+  queryWantsTemplateBackedDetail,
   queryWantsValidationOrAuth
 } from "./queryText";
 import { numberValue, stringValue, uniqueStrings } from "./queryUtils";
@@ -43,6 +44,7 @@ export function rankFileRecommendations(
 ): FileRecommendation[] {
   const terms = queryTerms(query);
   const coreTerms = queryCoreTerms(query);
+  const wantsTemplateBackedDetail = queryWantsTemplateBackedDetail(query.toLowerCase());
   const recommendations = new Map<string, FileRecommendation>();
   const searchHitCounts = new Map<string, number>();
   const anchorHitCounts = new Map<string, number>();
@@ -129,6 +131,9 @@ export function rankFileRecommendations(
     const distinctCoreMatches = coreTerms.filter((term) => recommendation.matchedTerms.includes(term)).length;
     recommendation.score += distinctCoreMatches * 2.5 + (distinctCoreMatches >= 3 ? 4 : 0);
     recommendation.score += roleWeight(recommendation.file, query);
+    if (wantsTemplateBackedDetail && recommendation.strongAnchor) {
+      recommendation.strongAnchor = false;
+    }
     const compositionPenalty = compositionRootPenalty(recommendation.file, query);
     if (compositionPenalty > 0) {
       recommendation.score -= compositionPenalty;
@@ -168,6 +173,13 @@ export function buildWhereToAddCaveats(query: string, recommendations: FileRecom
     caveats.push({
       recordType: "caveat",
       message: "No high-confidence edit location found. Run broader project and search queries before editing."
+    });
+  }
+
+  if (queryWantsTemplateBackedDetail(query.toLowerCase())) {
+    caveats.push({
+      recordType: "caveat",
+      message: "Template-backed profile detail request: prefer admin/object-type/template configuration first; runtime PersonaInfo files usually render existing detail templates."
     });
   }
 
@@ -214,12 +226,13 @@ export function includeViewSurfaceRecommendation(query: string, selected: FileRe
     : [...selected.slice(0, 7), viewCandidate];
 }
 
-export function buildPatternFitEvidence(patterns: Array<Record<string, unknown>>, recommendations: FileRecommendation[]): Array<Record<string, unknown>> {
+export function buildPatternFitEvidence(query: string, patterns: Array<Record<string, unknown>>, recommendations: FileRecommendation[]): Array<Record<string, unknown>> {
   if (!patterns.length || !recommendations.length) {
     return [];
   }
 
   const recommendedFiles = new Set(recommendations.map((recommendation) => recommendation.file));
+  const wantsTemplateBackedDetail = queryWantsTemplateBackedDetail(query.toLowerCase());
   const ranked = patterns
     .map((pattern) => {
       const instances = Array.isArray(pattern.instances) ? pattern.instances as Array<Record<string, unknown>> : [];
@@ -227,7 +240,8 @@ export function buildPatternFitEvidence(patterns: Array<Record<string, unknown>>
         Array.isArray(instance.files) ? instance.files.filter((file): file is string => typeof file === "string") : []
       ));
       const matchedFiles = exampleFiles.filter((file) => recommendedFiles.has(file));
-      const score = matchedFiles.length * 10 + numberValue(pattern.confidence) * 3 + Math.min(3, numberValue(pattern.frequency));
+      const sourceOfTruthBoost = wantsTemplateBackedDetail && pattern.id === "pattern:data:template-backed-runtime-field" ? 30 : 0;
+      const score = matchedFiles.length * 10 + numberValue(pattern.confidence) * 3 + Math.min(3, numberValue(pattern.frequency)) + sourceOfTruthBoost;
       return { pattern, exampleFiles, matchedFiles, score };
     })
     .filter((entry) => entry.exampleFiles.length > 0)
@@ -311,7 +325,7 @@ export function assessExistingCapabilityEvidence(query: string, relationships: A
   const domainTerms = domainFlowTerms(queryTerms(query));
   const hasDomainEvidence = domainTerms.length === 0 || domainTerms.some((term) => haystack.includes(term));
   const hasUiEvidence = ["HANDLES_EVENT", "SELECTS_ELEMENT", "WRITES_FIELD", "BINDS_MODEL_PROPERTY"].some((type) => types.has(type));
-  const hasMappingEvidence = ["USES_CSHARP_SYMBOL", "BINDS_MODEL_PROPERTY", "MAPS_PROPERTY", "WRITES_FIELD"].some((type) => types.has(type));
+  const hasMappingEvidence = ["USES_CSHARP_SYMBOL", "BINDS_MODEL_PROPERTY", "PROJECTS_MODEL", "MAPS_PROPERTY", "WRITES_FIELD"].some((type) => types.has(type));
   const hasRenderEvidence = ["INVOKES_VIEW_COMPONENT", "RENDERS_VIEW"].some((type) => types.has(type));
 
   if (!hasDomainEvidence || !hasUiEvidence || !hasMappingEvidence || !hasRenderEvidence) {
@@ -352,7 +366,20 @@ function hasConnectedFeatureEvidence(relationships: Array<Record<string, unknown
     "WRITES_QUERY_STRING",
     "WRITES_BROWSER_HISTORY",
     "INVOKES_VIEW_COMPONENT",
-    "RENDERS_VIEW"
+    "RENDERS_VIEW",
+    "READS_TABLE",
+    "JOINS_TABLE",
+    "WRITES_TABLE",
+    "UPSERTS_TABLE",
+    "DELETES_FROM_TABLE",
+    "MAPS_DAPPER_RESULT",
+    "USES_DAPPER_PARAMETER",
+    "PROJECTS_DAPPER_ROW",
+    "MAPS_DAPPER_PROPERTY",
+    "PROJECTS_MODEL",
+    "INSERTS_ROW",
+    "ROW_IN_TABLE",
+    "ROW_HAS_TYPE_CODE"
   ]);
   return relationships.some((relationship) => connectedTypes.has(stringValue(relationship.type)));
 }
@@ -446,13 +473,14 @@ function roleWeight(file: string, query: string): number {
   const wantsValidation = queryWantsValidationOrAuth(lowerQuery);
   const wantsFormOrProfile = queryWantsFormOrProfile(lowerQuery);
   const wantsBrowserQueryState = queryWantsBrowserQueryState(lowerQuery);
+  const wantsTemplateBackedDetail = queryWantsTemplateBackedDetail(lowerQuery);
   let score = 0;
 
   if (hasPathSegment(normalized, "controllers")) {
     score += lowerQuery.includes("endpoint") || lowerQuery.includes("route") || lowerQuery.includes("api") ? 32 : wantsValidation || wantsFormOrProfile ? 16 : 2;
   }
   if (isIdentityAccountPageModel(normalized)) {
-    score += queryWantsIdentityAccountFlow(lowerQuery) ? 24 : 2;
+    score += queryWantsIdentityAccountFlow(lowerQuery) && !wantsTemplateBackedDetail ? 24 : 2;
   }
   if (queryWantsIdentityUserShape(lowerQuery)) {
     if (isIdentityUserModel(normalized)) {
@@ -505,12 +533,56 @@ function roleWeight(file: string, query: string): number {
   if (hasPathSegment(normalized, "wwwroot") || normalized.endsWith(".js")) {
     score += lowerQuery.includes("button") || lowerQuery.includes("form") || lowerQuery.includes("ajax") || lowerQuery.includes("fetch") ? 8 : 1;
   }
+  if (wantsTemplateBackedDetail) {
+    score += templateBackedDetailWeight(normalized);
+    if (isIdentityAccountPage(normalized) && !/\b(identity|account|login|register|registration|external|personal data|delete personal data|download personal data)\b/i.test(lowerQuery)) {
+      score -= 85;
+    }
+    if (isRuntimePersonaDetailSurface(normalized)) {
+      score -= 12;
+    }
+  }
 
   return score;
 }
 
+function templateBackedDetailWeight(normalizedFile: string): number {
+  let score = 0;
+  if (isAdminObjectManagementFile(normalizedFile)) {
+    score += 115;
+  }
+  if (/(personadetailtemplate|persona_detail_templates|detailtemplates|detailtemplate)/i.test(normalizedFile)) {
+    score += 95;
+  }
+  if (/(personadetailtypecode|typecode|typecodes|objecttypes|objecttypetranslations)/i.test(normalizedFile)) {
+    score += 70;
+  }
+  if (/(admin|admintools|pageadmin)/i.test(normalizedFile) && /(object|type|category|tree|index|management)/i.test(normalizedFile)) {
+    score += 50;
+  }
+  if (/(persona|profile)/i.test(normalizedFile) && /(detail|info|type|template)/i.test(normalizedFile)) {
+    score += 20;
+  }
+  return score;
+}
+
+function isAdminObjectManagementFile(normalizedFile: string): boolean {
+  return /(^|\/)admintools\//i.test(normalizedFile)
+    && /(objectmanagement|iobjectmanagement|pages\/index\.cshtml|pages\/index\.cshtml\.cs|object-tree|objecttypes|typeinput|savetype)/i.test(normalizedFile);
+}
+
+function isRuntimePersonaDetailSurface(normalizedFile: string): boolean {
+  return /persona\/kelp-persona-edit\.js$/i.test(normalizedFile)
+    || /views\/shared\/components\/personainfo\/default\.cshtml$/i.test(normalizedFile)
+    || /(^|\/)controllers\/personacontroller\.cs$/i.test(normalizedFile);
+}
+
 function isIdentityAccountPageModel(normalizedFile: string): boolean {
   return /(^|\/)areas\/identity\/pages\/account\//.test(normalizedFile) && normalizedFile.endsWith(".cshtml.cs");
+}
+
+function isIdentityAccountPage(normalizedFile: string): boolean {
+  return /(^|\/)areas\/identity\/pages\/account\//.test(normalizedFile);
 }
 
 function isIdentityUserModel(normalizedFile: string): boolean {

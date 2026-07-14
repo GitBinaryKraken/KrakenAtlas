@@ -1,5 +1,6 @@
 import type { QueryResponse } from "../query/queryService";
 import type { DoctorResult } from "../doctor/mapDoctor";
+import { relationshipSourceKind } from "../model/mapProvenance";
 import type { UpdateProjectResult } from "../rebuild/updateProject";
 
 export function renderAgentResponse(response: QueryResponse): string {
@@ -26,9 +27,12 @@ export function renderAgentResponse(response: QueryResponse): string {
     const avoidFiles = evidence.filter((item) => item.recordType === "planAvoidFile");
     const drift = evidence.filter((item) => item.recordType === "finding" && item.kind === "pattern-drift");
     const contextPack = evidence.filter((item) => item.recordType === "contextPackCommand");
+    const sharedContractFirst = /\b(shared|contract|dto|request)\b/iu.test(response.query);
     evidence = isChangePlan
       ? [...planSummary, ...caveats, ...sharedContracts, ...sharedContractChecklists, ...contextPruning, ...capability, ...patternFit, ...fileEvidence, ...avoidFiles, ...drift, ...contextPack]
-      : [...caveats, ...sharedContracts, ...contextPruning, ...capability, ...patternFit, ...fileEvidence];
+      : sharedContractFirst
+        ? [...caveats, ...sharedContracts.slice(0, 1), ...contextPruning, ...capability, ...patternFit, ...fileEvidence, ...sharedContracts.slice(1)]
+        : [...caveats, ...contextPruning, ...capability, ...patternFit, ...fileEvidence, ...sharedContracts];
   }
   const lines = [
     "Answer",
@@ -217,7 +221,12 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
 
   if (item.recordType === "relationshipFilter") {
     const edgeTypes = Array.isArray(item.edgeTypes) ? item.edgeTypes.filter((value): value is string => typeof value === "string") : [];
-    return `- Filter: ${edgeTypes.join(", ") || truncate(stringValue(item.message), 120)}`;
+    const sourceKinds = Array.isArray(item.sourceKinds) ? item.sourceKinds.filter((value): value is string => typeof value === "string") : [];
+    const filters = [
+      edgeTypes.length ? edgeTypes.join(", ") : "",
+      sourceKinds.length ? `source-kind ${sourceKinds.join(", ")}` : ""
+    ].filter(Boolean);
+    return `- Filter: ${filters.join("; ") || truncate(stringValue(item.message), 120)}`;
   }
 
   if (item.recordType === "contextExpansion") {
@@ -367,7 +376,7 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
   }
 
   if (typeof item.type === "string" && (item.from || item.to)) {
-    return `- ${item.type}: ${compactId(stringValue(item.from))} -> ${compactId(stringValue(item.to))}${formatLocation(item)}${formatEndpointLocations(item)}${formatSnippet(item.evidence)}`;
+    return `- ${item.type}${formatSourceKind(item)}: ${compactId(stringValue(item.from))} -> ${compactId(stringValue(item.to))}${formatLocation(item)}${formatEndpointLocations(item)}${formatSnippet(item.evidence)}`;
   }
 
   if (typeof item.id === "string" && typeof item.name === "string") {
@@ -516,6 +525,11 @@ function formatEndpointLocation(value: unknown): string {
 function formatSnippet(value: unknown): string {
   const text = stringValue(value);
   return text ? `; ${truncate(text, 80)}` : "";
+}
+
+function formatSourceKind(item: Record<string, unknown>): string {
+  const sourceKind = stringValue(item.sourceKind) || relationshipSourceKind(item);
+  return sourceKind ? ` [${sourceKind}]` : "";
 }
 
 function formatMemberLabel(member: Record<string, unknown>): string {

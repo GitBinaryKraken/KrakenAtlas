@@ -78,7 +78,7 @@ export function findDataFlowContext(
 
   const repositoryEdges = dependencies.execJson(
     `SELECT json FROM relationships
-     WHERE type IN ('CALLS_REPOSITORY', 'QUERIES', 'WRITES', 'USES_DBSET', 'MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD')
+     WHERE type IN ('CALLS_REPOSITORY', 'QUERIES', 'WRITES', 'USES_DBSET', 'MAPS_DAPPER_RESULT', 'USES_DAPPER_PARAMETER', 'PROJECTS_DAPPER_ROW', 'MAPS_DAPPER_PROPERTY', 'PROJECTS_MODEL', 'MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD')
        AND (from_id IN (${placeholders(flowSymbols.length)}) OR to_id IN (${placeholders(flowSymbols.length)}))
      ORDER BY type, file, start_line
      LIMIT 10;`,
@@ -92,7 +92,7 @@ export function findDataFlowContext(
 
   const adjacentDataEdges = dependencies.execJson(
     `SELECT json FROM relationships
-     WHERE type IN ('CALLS_REPOSITORY', 'QUERIES', 'WRITES', 'USES_DBSET', 'DBSET_FOR', 'MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD')
+     WHERE type IN ('CALLS_REPOSITORY', 'QUERIES', 'WRITES', 'USES_DBSET', 'DBSET_FOR', 'MAPS_DAPPER_RESULT', 'USES_DAPPER_PARAMETER', 'PROJECTS_DAPPER_ROW', 'MAPS_DAPPER_PROPERTY', 'PROJECTS_MODEL', 'MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD')
        AND (from_id IN (${placeholders(repositoryTargets.length)}) OR to_id IN (${placeholders(repositoryTargets.length)}))
      ORDER BY type, file, start_line
      LIMIT 10;`,
@@ -115,7 +115,7 @@ export function findPropertyBridgeFlowContext(
   const context = dependencies.relationshipContextWhere("AND");
   return rankFlowEdges(dependencies.execJson(
     `SELECT json FROM relationships
-     WHERE type IN ('MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD')
+     WHERE type IN ('PROJECTS_MODEL', 'MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD')
        AND (${clauses})
      ${context.sql}
      ORDER BY confidence DESC, file, start_line
@@ -139,7 +139,7 @@ export function findRequestedPropertyFlowContext(
   const context = dependencies.relationshipContextWhere("AND");
   return anchorFlowEdges(rankFlowEdges(dependencies.execJson(
     `SELECT json FROM relationships
-     WHERE type IN ('MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD', 'WRITES', 'QUERIES')
+     WHERE type IN ('PROJECTS_MODEL', 'MAPS_PROPERTY', 'BINDS_MODEL_PROPERTY', 'WRITES_FIELD', 'WRITES', 'QUERIES')
        AND (${clauses})
      ${context.sql}
      ORDER BY type, file, start_line
@@ -179,7 +179,7 @@ export function findLayeredFlowContext(
 
   const adjacent = dependencies.execJson(
     `SELECT json FROM relationships
-     WHERE type IN ('INVOKES_VIEW_COMPONENT', 'RENDERS_VIEW', 'USES_CSHARP_SYMBOL', 'WRITES_FIELD', 'BINDS_MODEL_PROPERTY', 'MAPS_PROPERTY', 'READS_QUERY_STRING', 'WRITES_QUERY_STRING', 'WRITES_BROWSER_HISTORY', 'POSTS_TO', 'CALLS', 'CALLS_REPOSITORY', 'WRITES', 'QUERIES', 'USES_DBSET', 'PROJECT_REFERENCES')
+     WHERE type IN ('INVOKES_VIEW_COMPONENT', 'RENDERS_VIEW', 'USES_CSHARP_SYMBOL', 'WRITES_FIELD', 'BINDS_MODEL_PROPERTY', 'PROJECTS_MODEL', 'MAPS_PROPERTY', 'READS_QUERY_STRING', 'WRITES_QUERY_STRING', 'WRITES_BROWSER_HISTORY', 'POSTS_TO', 'CALLS', 'CALLS_REPOSITORY', 'WRITES', 'QUERIES', 'USES_DBSET', 'MAPS_DAPPER_RESULT', 'USES_DAPPER_PARAMETER', 'PROJECTS_DAPPER_ROW', 'MAPS_DAPPER_PROPERTY', 'PROJECT_REFERENCES')
        AND (from_id IN (${placeholders(flowSymbols.length)}) OR to_id IN (${placeholders(flowSymbols.length)}))
      ${context.sql}
      ORDER BY type, file, start_line

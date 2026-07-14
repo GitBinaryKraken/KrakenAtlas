@@ -109,3 +109,23 @@ export function queryWantsValidationOrAuth(lowerQuery: string): boolean {
 export function queryWantsFormOrProfile(lowerQuery: string): boolean {
   return /\b(form|forms|field|fields|input|inputs|view|views|ui|profile|persona|setup|registration|register|account)\b/i.test(lowerQuery);
 }
+
+export function queryWantsTemplateBackedDetail(lowerQuery: string): boolean {
+  const mentionsProfileDetailDomain = /\b(profile|profiles|persona|personas|personal info|details?|bio|about)\b/i.test(lowerQuery);
+  const mentionsConfigurableValue = /\b(field|fields|detail|details|preference|preferences|favorite|favourite|pick|choose|select|option|options|value|values|attribute|attributes|beverage|drink)\b/i.test(lowerQuery);
+  const mentionsAdditionIntent = /\b(add|adding|new|create|let|allow|user|users|pick|choose|select|favorite|favourite)\b/i.test(lowerQuery);
+  return mentionsProfileDetailDomain && mentionsConfigurableValue && mentionsAdditionIntent;
+}
+
+export function whereToAddSearchQueries(query: string): string[] {
+  if (!queryWantsTemplateBackedDetail(query.toLowerCase())) {
+    return [query];
+  }
+
+  return uniqueStrings([
+    query,
+    `${query} template taxonomy configurable field admin config source of truth type code table`,
+    `${query} admin tools object management object tree object type objecttypes type code TypeInput TypeCode SaveType`,
+    `${query} persona detail template PersonaDetailTemplate PersonaDetailTypeCode persona_detail_templates detail type code`
+  ]);
+}

@@ -20,7 +20,9 @@ import {
 } from "./querySharedContracts";
 import {
   queryWantsBrowserQueryState,
-  queryWantsCompositionRoot
+  queryWantsCompositionRoot,
+  queryWantsTemplateBackedDetail,
+  whereToAddSearchQueries
 } from "./queryText";
 import { QueryResponse } from "./queryTypes";
 import {
@@ -48,6 +50,8 @@ export interface WhereToAddDependencies {
   execJson(sql: string, params?: unknown[]): Array<Record<string, unknown>>;
   execRows(sql: string, params?: unknown[]): Array<Record<string, unknown>>;
   findFlow(query: string): QueryResponse;
+  findGlobalRankedSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>>;
+  findGlobalSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>>;
   findRankedSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>>;
   findRelevantPatterns(query: string): Array<Record<string, unknown>>;
   findSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>>;
@@ -60,9 +64,28 @@ export function findWhereToAddQuery(query: string, dependencies: WhereToAddDepen
     return ambiguity;
   }
 
-  const searchRows = mergeSearchRows(dependencies.findSearchRowsByTerms(query, 60), dependencies.findRankedSearchRowsByTerms(query, 20));
+  const searchQueries = whereToAddSearchQueries(query);
+  const scopedSearchRows = mergeSearchRows(
+    ...searchQueries.flatMap((searchQuery, index) => [
+      dependencies.findSearchRowsByTerms(searchQuery, index === 0 ? 60 : 40),
+      dependencies.findRankedSearchRowsByTerms(searchQuery, index === 0 ? 20 : 12)
+    ])
+  );
+  const globalSearchRows = queryWantsTemplateBackedDetail(query.toLowerCase()) && searchQueries.length > 1
+    ? mergeSearchRows(
+      ...searchQueries.slice(1).flatMap((searchQuery) => [
+        dependencies.findGlobalSearchRowsByTerms(searchQuery, 50),
+        dependencies.findGlobalRankedSearchRowsByTerms(searchQuery, 16)
+      ])
+    )
+    : [];
+  const searchRows = mergeSearchRows(scopedSearchRows, globalSearchRows);
   const flow = dependencies.findFlow(query);
-  const patterns = dependencies.scopePatternsToContext(dependencies.findRelevantPatterns(query));
+  const patterns = includeTemplateBackedPattern(
+    query,
+    dependencies.scopePatternsToContext(dependencies.findRelevantPatterns(query)),
+    dependencies
+  );
   const strongAnchors = flow.evidence.filter((item) => item.recordType === "strongAnchor");
   const rankedRecommendations = enrichRecommendationsWithNodeGuidance(
     query,
@@ -87,7 +110,7 @@ export function findWhereToAddQuery(query: string, dependencies: WhereToAddDepen
     : rankedRecommendations;
   const recommendations = includeViewSurfaceRecommendation(query, candidateRecommendations.slice(0, 8), candidateRecommendations);
   const capabilityAssessment = assessExistingCapabilityEvidence(query, flow.relationships);
-  const patternFit = buildPatternFitEvidence(patterns, recommendations);
+  const patternFit = buildPatternFitEvidence(query, patterns, recommendations);
   const sharedContractBoundaries = buildSharedContractBoundaryEvidence(query, recommendations, flow.relationships, strongAnchors, dependencies);
   const contextPruning = pruneWhereToAddRelationshipsForContext(query, recommendations.map((recommendation) => recommendation.file), recommendations, sharedContractBoundaries, flow.relationships.slice(0, 12), dependencies);
   const caveats = buildWhereToAddCaveats(query, recommendations, flow.relationships);
@@ -106,11 +129,36 @@ export function findWhereToAddQuery(query: string, dependencies: WhereToAddDepen
     relationships: contextPruning.relationships,
     patterns: patterns.slice(0, 5).map(patternEvidence),
     nextQueries: uniqueStrings([
-      ...files.slice(0, 5).map((file) => `kraken-atlas query relationships "${file}"`),
+      ...files.slice(0, 5).map(relationshipNextQueryForFile),
       ...flow.nextQueries,
       ...patterns.flatMap((pattern) => (pattern.instances as any[] | undefined)?.slice(0, 2).flatMap((instance) => (instance.symbols ?? []).map((symbol: string) => `kraken-atlas query relationships "${symbol}"`)) ?? [])
     ]).slice(0, 8)
   });
+}
+
+function relationshipNextQueryForFile(file: string): string {
+  const normalized = file.replace(/\\/g, "/");
+  const slash = normalized.indexOf("/");
+  const context = slash > 0 ? normalized.slice(0, slash) : "";
+  return context
+    ? `kraken-atlas query relationships "${file}" --context ${context}`
+    : `kraken-atlas query relationships "${file}"`;
+}
+
+function includeTemplateBackedPattern(
+  query: string,
+  patterns: Array<Record<string, unknown>>,
+  dependencies: Pick<WhereToAddDependencies, "execJson">
+): Array<Record<string, unknown>> {
+  if (!queryWantsTemplateBackedDetail(query.toLowerCase()) || patterns.some((pattern) => pattern.id === "pattern:data:template-backed-runtime-field")) {
+    return patterns;
+  }
+
+  const [pattern] = dependencies.execJson(
+    `SELECT json FROM patterns WHERE id = ? LIMIT 1;`,
+    ["pattern:data:template-backed-runtime-field"]
+  );
+  return pattern ? [pattern, ...patterns] : patterns;
 }
 
 export function pruneWhereToAddRelationshipsForContext(

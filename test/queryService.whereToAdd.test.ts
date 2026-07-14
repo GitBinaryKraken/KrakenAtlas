@@ -8,7 +8,8 @@ import { renderAgentResponse } from "../src/format/agentFormatter";
 import { FileRecord, PatternRecord, ReferenceRecord, RelationshipRecord, SymbolRecord } from "../src/model/records";
 import { buildContextPruningResult } from "../src/query/queryContextPruning";
 import { QueryService } from "../src/query/queryService";
-import type { FileRecommendation } from "../src/query/whereToAddRanking";
+import { whereToAddSearchQueries } from "../src/query/queryText";
+import { rankFileRecommendations, type FileRecommendation } from "../src/query/whereToAddRanking";
 import { openSqliteIndex, rebuildSqliteIndex } from "../src/storage/sqliteIndex";
 import { fileRecord, range, stringValue } from "../test-support/queryTestHelpers";
 
@@ -149,6 +150,192 @@ test("where-to-add ranks feature-specific form files before base controllers and
     if (result.files.includes("Web/Program.cs")) {
       assert.ok(result.files.indexOf("Web/Controllers/ProfileController.cs") < result.files.indexOf("Web/Program.cs"));
     }
+  } finally {
+    database.close();
+  }
+});
+
+test("where-to-add expands profile detail requests toward admin object/type-code surfaces", async () => {
+  const query = "let a user, on their profile page, pick their favorite tropical beverage";
+  const expandedQueries = whereToAddSearchQueries(query).join("\n");
+
+  assert.match(expandedQueries, /object management/i);
+  assert.match(expandedQueries, /PersonaDetailTypeCode/i);
+
+  const ranked = rankFileRecommendations(
+    query,
+    [
+      {
+        record_id: "relationship:admin:index-type-code",
+        record_type: "relationship",
+        title: "BINDS_MODEL_PROPERTY",
+        body: "TypeInput.TypeCode SaveType object tree object management",
+        path: "AdminTools/Pages/Index.cshtml"
+      },
+      {
+        record_id: "symbol:csharp:AdminTools.Services.ObjectManagementService.SaveTypeAsync(AdminTools.Models.TypeForm)",
+        record_type: "symbol",
+        title: "SaveTypeAsync",
+        body: "AdminTools.Services.ObjectManagementService objecttypes TypeCode",
+        path: "AdminTools/Services/ObjectManagementService.cs"
+      },
+      {
+        record_id: "symbol:csharp:KelpApiDomain.ViewModels.Persona.PersonaDetailTypeCode",
+        record_type: "symbol",
+        title: "PersonaDetailTypeCode",
+        body: "Birthday Gender RelationshipStatus Languages",
+        path: "KelpApiDomain/ViewModels/Persona/PersonaDetailTypeCode.cs"
+      },
+      {
+        record_id: "symbol:csharp:KelpPostGresDomain.DataModels.GeneratedTables.PersonaDetailTemplatesTableDataModel",
+        record_type: "symbol",
+        title: "PersonaDetailTemplatesTableDataModel",
+        body: "persona_detail_templates TypeCode template",
+        path: "KelpPostGresDomain/DataModels/GeneratedTables/PersonaDetailTemplatesTableDataModel.cs"
+      },
+      {
+        record_id: "file:Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml",
+        record_type: "file",
+        title: "PersonaInfo profile detail editor",
+        body: "persona detail profile add select field",
+        path: "Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml"
+      },
+      {
+        record_id: "file:Kelp2025_WebUI/Areas/Identity/Pages/Account/Manage/DeletePersonalData.cshtml.cs",
+        record_type: "file",
+        title: "DeletePersonalData",
+        body: "user profile personal data account identity",
+        path: "Kelp2025_WebUI/Areas/Identity/Pages/Account/Manage/DeletePersonalData.cshtml.cs"
+      }
+    ],
+    [],
+    [],
+    [
+      {
+        id: "symbol:razor:Kelp2025_WebUI/Areas/Identity/Pages/Account/Manage/DeletePersonalData.cshtml:form:delete-user",
+        name: "delete-user",
+        file: "Kelp2025_WebUI/Areas/Identity/Pages/Account/Manage/DeletePersonalData.cshtml.cs",
+        matchedConcepts: ["user", "page"],
+        range: range()
+      },
+      {
+        id: "symbol:razor:Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml:form:persona-detail-editor-_field.TypeCode",
+        name: "persona-detail-editor-@field.TypeCode",
+        file: "Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml",
+        matchedConcepts: ["profile", "field"],
+        range: range()
+      }
+    ]
+  );
+
+  const topFiles = ranked.slice(0, 3).map((recommendation) => recommendation.file);
+  const identityIndex = ranked.findIndex((recommendation) => recommendation.file.includes("/Areas/Identity/Pages/Account/"));
+  const runtimeIndex = ranked.findIndex((recommendation) => recommendation.file.includes("/PersonaInfo/Default.cshtml"));
+
+  assert.strictEqual(ranked[0]?.file, "AdminTools/Pages/Index.cshtml");
+  assert.ok(topFiles.includes("AdminTools/Services/ObjectManagementService.cs"));
+  assert.ok(identityIndex === -1 || identityIndex > 2);
+  assert.ok(runtimeIndex === -1 || runtimeIndex > 2);
+});
+
+test("where-to-add can cross a web UI context for template-backed profile detail admin tools", async () => {
+  const query = "let a user, on their profile page, pick their favorite tropical beverage";
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-profile-detail-template-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const files: FileRecord[] = [
+    fileRecord("AdminTools/Pages/Index.cshtml"),
+    fileRecord("AdminTools/Services/ObjectManagementService.cs"),
+    fileRecord("KelpApiDomain/ViewModels/Persona/PersonaDetailTypeCode.cs"),
+    fileRecord("KelpPostGresDomain/DataModels/GeneratedTables/PersonaDetailTemplatesTableDataModel.cs"),
+    fileRecord("Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml"),
+    fileRecord("Kelp2025_WebUI/Areas/Identity/Pages/Account/Manage/DeletePersonalData.cshtml.cs")
+  ];
+  const symbols: SymbolRecord[] = [
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:AdminTools.Services.ObjectManagementService.SaveTypeAsync(AdminTools.Models.TypeForm)",
+      name: "SaveTypeAsync",
+      fullyQualifiedName: "AdminTools.Services.ObjectManagementService.SaveTypeAsync",
+      kind: "method",
+      language: "csharp",
+      file: "AdminTools/Services/ObjectManagementService.cs",
+      range: range(),
+      summary: "Saves an object type row with TypeCode into public.objecttypes.",
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpApiDomain.ViewModels.Persona.PersonaDetailTypeCode",
+      name: "PersonaDetailTypeCode",
+      fullyQualifiedName: "KelpApiDomain.ViewModels.Persona.PersonaDetailTypeCode",
+      kind: "enum",
+      language: "csharp",
+      file: "KelpApiDomain/ViewModels/Persona/PersonaDetailTypeCode.cs",
+      range: range(),
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:KelpPostGresDomain.DataModels.GeneratedTables.PersonaDetailTemplatesTableDataModel",
+      name: "PersonaDetailTemplatesTableDataModel",
+      fullyQualifiedName: "KelpPostGresDomain.DataModels.GeneratedTables.PersonaDetailTemplatesTableDataModel",
+      kind: "class",
+      language: "csharp",
+      file: "KelpPostGresDomain/DataModels/GeneratedTables/PersonaDetailTemplatesTableDataModel.cs",
+      range: range(),
+      summary: "Generated table model for public.persona_detail_templates.",
+      confidence: 1
+    },
+    {
+      recordType: "symbol",
+      id: "symbol:csharp:Kelp2025_WebUI.Areas.Identity.Pages.Account.Manage.DeletePersonalDataModel",
+      name: "DeletePersonalDataModel",
+      fullyQualifiedName: "Kelp2025_WebUI.Areas.Identity.Pages.Account.Manage.DeletePersonalDataModel",
+      kind: "class",
+      language: "csharp",
+      file: "Kelp2025_WebUI/Areas/Identity/Pages/Account/Manage/DeletePersonalData.cshtml.cs",
+      range: range(),
+      summary: "Identity account personal data profile page.",
+      confidence: 1
+    }
+  ];
+  const relationships: RelationshipRecord[] = [
+    {
+      recordType: "relationship",
+      id: "relationship:admin-index-type-code-binding",
+      from: "symbol:razor:AdminTools/Pages/Index.cshtml:input:TypeInput.TypeCode",
+      to: "model-binding:TypeInput.TypeCode",
+      type: "BINDS_MODEL_PROPERTY",
+      file: "AdminTools/Pages/Index.cshtml",
+      range: range(),
+      evidence: "TypeInput.TypeCode SaveType object tree object management",
+      confidence: 0.9
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:runtime-persona-info-type-code",
+      from: "symbol:razor:Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml:input:TypeCode",
+      to: "model-binding:PersonaDetail.TypeCode",
+      type: "BINDS_MODEL_PROPERTY",
+      file: "Kelp2025_WebUI/Views/Shared/Components/PersonaInfo/Default.cshtml",
+      range: range(),
+      evidence: "Runtime persona detail editor posts TypeCode.",
+      confidence: 0.9
+    }
+  ];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const result = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).whereToAdd(query);
+    const identityIndex = result.files.findIndex((file) => file.includes("/Areas/Identity/Pages/Account/"));
+
+    assert.strictEqual(result.files[0], "AdminTools/Pages/Index.cshtml");
+    assert.ok(result.files.includes("AdminTools/Services/ObjectManagementService.cs"));
+    assert.ok(result.files.includes("KelpApiDomain/ViewModels/Persona/PersonaDetailTypeCode.cs"));
+    assert.ok(identityIndex === -1 || identityIndex > 2);
+    assert.ok(result.evidence.some((item) => item.recordType === "caveat" && stringValue(item.message).includes("Template-backed profile detail")));
+    assert.ok(result.nextQueries.some((nextQuery) => nextQuery.includes("\"AdminTools/Pages/Index.cshtml\" --context AdminTools")));
   } finally {
     database.close();
   }

@@ -1,5 +1,10 @@
 import { ReferenceRecord, RelationshipRecord, SourceRange } from "../model/records";
-import { genericSubstitutionsForJsx, genericSubstitutionsForProp, jsxPropEvidence } from "./reactGenericProps";
+import {
+  genericSubstitutionsForJsx,
+  genericSubstitutionsForProp,
+  jsxPropEvidence,
+  valueDerivedGenericSubstitutionsForJsx
+} from "./reactGenericProps";
 import { declarationNamesForImport, resolveReExportedFile } from "./reactImportResolution";
 import { filterMembersForPropUtility, indexSignatureAcceptsPropName, syntheticMembersForPropUtility } from "./reactPropUtilities";
 import { matchAll } from "./reactSourceText";
@@ -36,6 +41,11 @@ type JsxTypeArgumentEdgeEmitter = (
   typeParameterIdsByName: Map<string, string>,
   result: WebAnalyzerResult
 ) => void;
+
+interface JsxAttribute {
+  name: string;
+  valueText: string | undefined;
+}
 
 export interface ReactRecordBuilders {
   reference: ReferenceBuilder;
@@ -76,23 +86,35 @@ export function analyzeComponentComposition(
     result.references.push(records.reference(jsxName, target, declaration.file, range, memberName ? "jsx-namespace-component" : "jsx-component", match[0], component ? 0.88 : 0.62));
     result.relationships.push(records.relationship(declaration.id, target, "RENDERS_COMPONENT", declaration.file, range, match[0], component ? 0.88 : 0.65));
     emitJsxTypeArgumentEdges(declaration.id, typeArguments, declaration.file, range, declarationsByName, typeParameterIdsByName, result);
-    const componentSubstitutions = genericSubstitutionsForJsx(component, typeArguments);
+    const attributes = jsxAttributes(match[4]).filter((attr) => !ignoredJsxAttributes.has(attr.name));
+    const propMembersByAttribute = new Map<string, ReactMember | undefined>();
+    for (const attr of attributes) {
+      propMembersByAttribute.set(
+        attr.name,
+        component ? resolveComponentPropMember(component, attr.name, declarationsByName, membersByParentId, importsByFile, reExportsByFile) : undefined
+      );
+    }
+    const valueDerivedSubstitutions = valueDerivedGenericSubstitutionsForJsx(
+      component,
+      attributes
+        .map((attr) => ({ propMember: propMembersByAttribute.get(attr.name), valueText: attr.valueText }))
+        .filter((item): item is { propMember: ReactMember; valueText: string | undefined } => Boolean(item.propMember)),
+      declarationsByName
+    );
+    const componentSubstitutions = genericSubstitutionsForJsx(component, typeArguments, valueDerivedSubstitutions);
 
-    for (const attr of jsxAttributeNames(match[4])) {
-      if (ignoredJsxAttributes.has(attr)) {
-        continue;
-      }
-      const propMember = component ? resolveComponentPropMember(component, attr, declarationsByName, membersByParentId, importsByFile, reExportsByFile) : undefined;
-      const propTarget = propMember?.id ?? `prop:react:${componentName}.${attr}`;
+    for (const attr of attributes) {
+      const propMember = propMembersByAttribute.get(attr.name);
+      const propTarget = propMember?.id ?? `prop:react:${componentName}.${attr.name}`;
       const propSubstitutions = propMember ? genericSubstitutionsForProp(component, propMember, componentSubstitutions, declarationsByName) : componentSubstitutions;
-      const propEvidence = propMember ? jsxPropEvidence(jsxName, attr, propMember, propSubstitutions, declarationsByName, importsByFile, reExportsByFile) : `<${jsxName} ${attr}=...`;
+      const propEvidence = propMember ? jsxPropEvidence(jsxName, attr.name, propMember, propSubstitutions, declarationsByName, importsByFile, reExportsByFile) : `<${jsxName} ${attr.name}=...`;
       const propConfidence = propMember ? 0.84 : 0.68;
       if (propMember) {
-        result.references.push(records.reference(attr, propMember.id, declaration.file, range, "jsx-prop", match[0], propConfidence));
+        result.references.push(records.reference(attr.name, propMember.id, declaration.file, range, "jsx-prop", match[0], propConfidence));
       }
       result.relationships.push(records.relationship(declaration.id, propTarget, "PASSES_PROP", declaration.file, range, propEvidence, propConfidence));
-      if (/^on[A-Z]/u.test(attr)) {
-        result.relationships.push(records.relationship(declaration.id, `event:react:${attr}`, "HANDLES_EVENT", declaration.file, range, `<${tagName} ${attr}=...`, 0.74));
+      if (/^on[A-Z]/u.test(attr.name)) {
+        result.relationships.push(records.relationship(declaration.id, `event:react:${attr.name}`, "HANDLES_EVENT", declaration.file, range, `<${tagName} ${attr.name}=...`, 0.74));
       }
     }
   }
@@ -294,10 +316,17 @@ function resolveComponentPropMember(
     ?? members.find((member) => indexSignatureAcceptsPropName(member, propName));
 }
 
-function jsxAttributeNames(attributeText: string): string[] {
-  const names: string[] = [];
-  for (const match of matchAll(attributeText, /(?:^|\s)([A-Za-z_$][\w$:-]*)\s*=/g)) {
-    names.push(match[1]);
+function jsxAttributes(attributeText: string): JsxAttribute[] {
+  const attributes: JsxAttribute[] = [];
+  for (const match of matchAll(attributeText, /(?:^|\s)([A-Za-z_$][\w$:-]*)\s*=\s*("[^"]*"|'[^']*'|\{[^}]*\})?/g)) {
+    attributes.push({ name: match[1], valueText: match[2] });
   }
-  return [...new Set(names)];
+  const seen = new Set<string>();
+  return attributes.filter((attribute) => {
+    if (seen.has(attribute.name)) {
+      return false;
+    }
+    seen.add(attribute.name);
+    return true;
+  });
 }

@@ -52,7 +52,9 @@ export function findPatternsQuery(query: string, dependencies: PatternQueryDepen
     confidence: rows.length ? 0.85 : 0,
     evidence: rows.map(patternEvidence),
     patterns: rows.map(patternEvidence),
-    nextQueries: rows.flatMap((row) => (row.instances as any[] | undefined)?.slice(0, 3).flatMap((instance) => (instance.symbols ?? []).map((symbol: string) => `kraken-atlas query relationships "${symbol}"`)) ?? []).slice(0, 6)
+    files: uniqueStrings(rows.flatMap(patternFiles)).slice(0, 20),
+    symbols: uniqueStrings(rows.flatMap(patternSymbols)).slice(0, 20),
+    nextQueries: patternRelationshipNextQueries(rows)
   });
 }
 
@@ -231,4 +233,11 @@ function patternMapNextQueries(patterns: Array<Record<string, unknown>>): string
     .slice(0, 6)
     .map((symbol) => `kraken-atlas query relationships "${symbol}"`);
   return uniqueStrings([...patternQueries, ...relationshipQueries]).slice(0, 10);
+}
+
+function patternRelationshipNextQueries(patterns: Array<Record<string, unknown>>): string[] {
+  return uniqueStrings(patterns
+    .flatMap(patternSymbols)
+    .slice(0, 6)
+    .map((symbol) => `kraken-atlas query relationships "${symbol}"`));
 }

@@ -1,8 +1,11 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { analyzeAspNetConventions } from "../analyzers/aspnetConventionAnalyzer";
+import { analyzeCSharpModelProjections } from "../analyzers/csharpProjectionAnalyzer";
+import { analyzeCSharpTypeCodeContracts } from "../analyzers/csharpTypeCodeAnalyzer";
 import { analyzeDotnetProjects } from "../analyzers/dotnetProjectAnalyzer";
 import { runRoslynAnalyzer } from "../analyzers/roslynAnalyzer";
+import { analyzeSqlDataAccess } from "../analyzers/sqlAnalyzer";
 import { analyzeVanillaWeb } from "../analyzers/webAnalyzer";
 import { defaultMaxFileSizeBytes, defaultOutputFolder } from "../config/defaults";
 import { renderAgentReadme } from "../context/agentContext";
@@ -59,15 +62,21 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
   const hasCSharpFiles = files.some((file) => file.extension === ".cs");
   const roslynAnalysis = await runAnalyzerSafely(async () => runRoslynAnalyzer(options.extensionPath, options.workspaceRoot, outputFolder, hasCSharpFiles));
   const roslynResult = roslynAnalysis.result ?? { symbols: [], references: [], relationships: [] };
+  progress("Running C# type-code analyzer");
+  const typeCodeResult = await analyzeCSharpTypeCodeContracts(options.workspaceRoot, files);
 
   progress("Running web analyzer");
   const webResult = await analyzeVanillaWeb(options.workspaceRoot, files, roslynResult.symbols);
+  progress("Running SQL/table analyzer");
+  const sqlResult = await analyzeSqlDataAccess(options.workspaceRoot, files, [...roslynResult.symbols, ...typeCodeResult.symbols]);
   progress("Running .NET project analyzer");
   const dotnetProjectResult = await analyzeDotnetProjects(options.workspaceRoot, files);
-  const symbols = [...roslynResult.symbols, ...webResult.symbols, ...dotnetProjectResult.symbols];
+  const symbols = uniqueById([...roslynResult.symbols, ...typeCodeResult.symbols, ...webResult.symbols, ...sqlResult.symbols, ...dotnetProjectResult.symbols]);
   const references = [...roslynResult.references, ...webResult.references];
   const conventionResult = analyzeAspNetConventions(files, symbols);
-  const relationships = uniqueById([...roslynResult.relationships, ...webResult.relationships, ...dotnetProjectResult.relationships, ...conventionResult.relationships]);
+  const baseRelationships = uniqueById([...roslynResult.relationships, ...typeCodeResult.relationships, ...webResult.relationships, ...sqlResult.relationships, ...dotnetProjectResult.relationships, ...conventionResult.relationships]);
+  const modelProjectionResult = analyzeCSharpModelProjections(symbols, baseRelationships);
+  const relationships = uniqueById([...baseRelationships, ...modelProjectionResult.relationships]);
   const patterns = detectPatterns({ symbols, relationships });
   progress("Detecting code-health findings");
   const findings = await detectCodeHealthFindings({ workspaceRoot: options.workspaceRoot, symbols, references, relationships });
@@ -106,6 +115,36 @@ export async function rebuildProject(options: RebuildProjectOptions): Promise<Re
         references: webResult.references.length,
         relationships: webResult.relationships.length,
         patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web") || pattern.id.startsWith("pattern:react")).length
+      }
+    },
+    {
+      id: "csharp-type-code",
+      status: typeCodeResult.symbols.length || typeCodeResult.relationships.length ? "completed" : "skipped",
+      recordCounts: {
+        symbols: typeCodeResult.symbols.length,
+        references: 0,
+        relationships: typeCodeResult.relationships.length,
+        patterns: 0
+      }
+    },
+    {
+      id: "csharp-model-projection",
+      status: modelProjectionResult.relationships.length ? "completed" : "skipped",
+      recordCounts: {
+        symbols: 0,
+        references: 0,
+        relationships: modelProjectionResult.relationships.length,
+        patterns: patterns.filter((pattern) => pattern.id === "pattern:dotnet:model-projection").length
+      }
+    },
+    {
+      id: "sql",
+      status: sqlResult.symbols.length || sqlResult.relationships.length ? "completed" : "skipped",
+      recordCounts: {
+        symbols: sqlResult.symbols.length,
+        references: 0,
+        relationships: sqlResult.relationships.length,
+        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:data")).length
       }
     }
   ];

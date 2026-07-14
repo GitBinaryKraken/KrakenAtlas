@@ -6,6 +6,8 @@ export interface ValueLifecycleRelationshipOptions {
   query: string;
   symbolIds: string[];
   edgeTypes: string[];
+  sourceKinds: string[];
+  filterSourceKindsInSql: boolean;
   limit: number;
   relationshipContext: { sql: string; params: string[] };
   readJson: ValueLifecycleJsonReader;
@@ -28,6 +30,7 @@ export function findValueLifecycleRelationships(options: ValueLifecycleRelations
   return options.readJson(
     `SELECT json FROM relationships
      WHERE type IN (${placeholders(allowedTypes.length)})
+       ${options.filterSourceKindsInSql && options.sourceKinds.length ? `AND source_kind IN (${placeholders(options.sourceKinds.length)})` : ""}
        AND (${anchors.map(() => "(from_id LIKE ? OR to_id LIKE ? OR json LIKE ?)").join(" OR ")})
      ${options.relationshipContext.sql}
      ORDER BY
@@ -43,6 +46,7 @@ export function findValueLifecycleRelationships(options: ValueLifecycleRelations
      LIMIT ${options.limit};`,
     [
       ...allowedTypes,
+      ...(options.filterSourceKindsInSql ? options.sourceKinds : []),
       ...anchors.flatMap((anchor) => [`%${anchor}%`, `%${anchor}%`, `%${anchor}%`]),
       ...options.relationshipContext.params
     ]

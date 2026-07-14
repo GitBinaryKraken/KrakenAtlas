@@ -465,6 +465,44 @@ test("renderAgentResponse compacts C# method signatures in relationship evidence
   assert.doesNotMatch(output, /System\.Threading\.CancellationToken/);
 });
 
+test("renderAgentResponse labels relationship source kinds for agent-readable map facts", () => {
+  const output = renderAgentResponse({
+    query: "model projection",
+    answer: "Found 2 relationship edge(s).",
+    confidence: 0.9,
+    files: ["Services/PersonaDataService.cs", "Mapping/PersonaMappingExtensions.cs"],
+    symbols: [],
+    relationships: [
+      {
+        id: "relationship:calls:csharp:service-call",
+        type: "CALLS",
+        from: "symbol:csharp:App.Controllers.PersonaController.Get()",
+        to: "symbol:csharp:App.Services.PersonaService.Get()",
+        file: "Controllers/PersonaController.cs",
+        range: { startLine: 18, startColumn: 1, endLine: 18, endColumn: 20 },
+        evidence: "PersonaService.Get()"
+      },
+      {
+        id: "relationship:csharp-projection:projects_model:persona",
+        type: "PROJECTS_MODEL",
+        from: "symbol:csharp:Domain.PersonaInfoFieldDataModel",
+        to: "symbol:csharp:Api.PersonaDetailFieldViewModel",
+        file: "Mapping/PersonaMappingExtensions.cs",
+        range: { startLine: 42, startColumn: 1, endLine: 42, endColumn: 20 },
+        evidence: "Model projection"
+      }
+    ],
+    patterns: [],
+    flow: [],
+    evidence: [],
+    nextQueries: [],
+    estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
+  } satisfies QueryResponse);
+
+  assert.match(output, /CALLS \[compiler-resolved\]/);
+  assert.match(output, /PROJECTS_MODEL \[inferred\]/);
+});
+
 test("renderAgentResponse formats relationship filters without raw JSON", () => {
   const output = renderAgentResponse({
     query: "map.js",
@@ -484,13 +522,14 @@ test("renderAgentResponse formats relationship filters without raw JSON", () => 
     evidence: [{
       recordType: "relationshipFilter",
       edgeTypes: ["READS_QUERY_STRING", "CONTAINS"],
-      message: "Showing only relationship types: READS_QUERY_STRING, CONTAINS."
+      sourceKinds: ["source-parsed"],
+      message: "Showing only relationship types: READS_QUERY_STRING, CONTAINS; source kinds: source-parsed."
     }],
     nextQueries: [],
     estimatedContextSavings: "Compact graph output."
   });
 
-  assert.match(output, /Filter: READS_QUERY_STRING, CONTAINS/);
+  assert.match(output, /Filter: READS_QUERY_STRING, CONTAINS; source-kind source-parsed/);
   assert.doesNotMatch(output, /\{"recordType":"relationshipFilter"/);
 });
 

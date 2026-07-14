@@ -1,4 +1,4 @@
-import { queryTerms } from "./queryText";
+import { queryTerms, queryWantsTemplateBackedDetail } from "./queryText";
 import { booleanValue, numberValue, placeholders, stringValue, uniqueStrings } from "./queryUtils";
 import type { FileRecommendation } from "./whereToAddRanking";
 
@@ -36,7 +36,7 @@ export function enrichRecommendationsWithNodeGuidance(
     const typeSymbols = readJson(
       `SELECT json FROM symbols
        WHERE file IN (${placeholders(files.length)})
-         AND kind IN ('class', 'record', 'struct', 'interface')
+         AND kind IN ('class', 'record', 'struct', 'interface', 'enum')
        ORDER BY file, start_line
        LIMIT 160;`,
       files
@@ -65,6 +65,7 @@ export function enrichRecommendationsWithNodeGuidance(
     const rolesBySymbol = groupRows(symbolRoleRows, (row) => stringValue(row.node_id));
     const membersBySymbol = groupRows(memberRows, (row) => stringValue(row.node_id));
     const queryTermSet = new Set(queryTerms(query));
+    const wantsTemplateBackedDetail = queryWantsTemplateBackedDetail(query.toLowerCase());
 
     for (const recommendation of recommendations) {
       const fileRoles = uniqueStrings((rolesByFile.get(recommendation.file) ?? [])
@@ -96,9 +97,29 @@ export function enrichRecommendationsWithNodeGuidance(
       if (memberHints.length) {
         recommendation.memberHints = memberHints;
       }
+      if (wantsTemplateBackedDetail) {
+        const sourceOfTruthRoles = fileRoles.filter((role) =>
+          ["admin-config-surface", "definition-source", "taxonomy-manager", "object-type-manager", "template-admin-surface", "template-table-model", "type-code-editor"].includes(role)
+        );
+        const contractRoles = symbolRoles.filter((role) => role === "type-code-contract");
+        if (contractRoles.length) {
+          recommendation.score += 10;
+          const reason = "Backing contract role match: type-code-contract.";
+          if (!recommendation.reasons.includes(reason)) {
+            recommendation.reasons.push(reason);
+          }
+        }
+        if (sourceOfTruthRoles.length) {
+          recommendation.score += 24 + sourceOfTruthRoles.length * 3;
+          const reason = `Source-of-truth role match: ${sourceOfTruthRoles.slice(0, 3).join(", ")}.`;
+          if (!recommendation.reasons.includes(reason)) {
+            recommendation.reasons.push(reason);
+          }
+        }
+      }
     }
 
-    return recommendations;
+    return recommendations.sort((left, right) => Number(Boolean(right.strongAnchor)) - Number(Boolean(left.strongAnchor)) || right.score - left.score || left.file.localeCompare(right.file));
   } catch {
     return recommendations;
   }

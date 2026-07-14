@@ -39,6 +39,11 @@ export function rankFlowEdges(edges: Array<Record<string, unknown>>): Array<Reco
     CALLS_REPOSITORY: 15,
     USES_DBSET: 16,
     QUERIES: 17,
+    MAPS_DAPPER_RESULT: 17.2,
+    USES_DAPPER_PARAMETER: 17.4,
+    PROJECTS_DAPPER_ROW: 17.6,
+    MAPS_DAPPER_PROPERTY: 17.8,
+    PROJECTS_MODEL: 17.9,
     DBSET_FOR: 18,
     VALIDATES: 19,
     USES_VALIDATOR: 20,
@@ -125,6 +130,11 @@ export function relationshipMatchesCrossContextAnchor(edge: Record<string, unkno
     "QUERIES",
     "WRITES",
     "USES_DBSET",
+    "MAPS_DAPPER_RESULT",
+    "USES_DAPPER_PARAMETER",
+    "PROJECTS_DAPPER_ROW",
+    "MAPS_DAPPER_PROPERTY",
+    "PROJECTS_MODEL",
     "PROJECT_REFERENCES"
   ]);
   return allowedTypes.has(stringValue(edge.type))

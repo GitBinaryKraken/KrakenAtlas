@@ -1,7 +1,9 @@
 import * as fs from "fs/promises";
 import * as path from "path";
 import { analyzeAspNetConventions } from "../analyzers/aspnetConventionAnalyzer";
+import { analyzeCSharpModelProjections } from "../analyzers/csharpProjectionAnalyzer";
 import { analyzeDotnetProjects } from "../analyzers/dotnetProjectAnalyzer";
+import { analyzeSqlDataAccess } from "../analyzers/sqlAnalyzer";
 import { analyzeVanillaWeb } from "../analyzers/webAnalyzer";
 import { defaultMaxFileSizeBytes, defaultOutputFolder } from "../config/defaults";
 import { renderAgentReadme } from "../context/agentContext";
@@ -22,6 +24,7 @@ import { readJsonl } from "../storage/jsonlReader";
 import { writeJsonl } from "../storage/jsonlWriter";
 import { createManifest, writeManifest } from "../storage/manifest";
 import { createProjectMetadata, writeProjectMetadata } from "../storage/projectMetadata";
+import { CURRENT_MAP_SCHEMA_VERSION } from "../storage/schemaVersion";
 import { rebuildSqliteIndex } from "../storage/sqliteIndex";
 import { rebuildProject, RebuildProjectOptions, RebuildProjectResult } from "./rebuildProject";
 
@@ -56,6 +59,10 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
   if (!(await pathExists(path.join(outputFolder, "findings.jsonl")))) {
     return fullRebuild(options, "The existing map predates code-health findings and requires a schema rebuild.");
   }
+  const previousSchemaVersion = await readProjectSchemaVersion(outputFolder);
+  if (previousSchemaVersion !== CURRENT_MAP_SCHEMA_VERSION) {
+    return fullRebuild(options, `The existing map schema ${previousSchemaVersion ?? "unknown"} predates ${CURRENT_MAP_SCHEMA_VERSION} and requires a rebuild.`);
+  }
 
   const diff = diffFiles(previousFiles, currentFiles);
   if (diff.addedFiles.length === 0 && diff.changedFiles.length === 0 && diff.deletedFiles.length === 0) {
@@ -84,23 +91,28 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
   const existingReferences = await readJsonl<ReferenceRecord>(path.join(outputFolder, "references.jsonl"));
   const existingRelationships = await readJsonl<RelationshipRecord>(path.join(outputFolder, "relationships.jsonl"));
 
-  progress("Refreshing vanilla web graph records");
+  progress("Refreshing vanilla web and SQL graph records");
   const existingCSharpSymbols = existingSymbols.filter((symbol) => symbol.language === "csharp");
   const webResult = await analyzeVanillaWeb(options.workspaceRoot, currentFiles, existingCSharpSymbols);
+  const sqlResult = await analyzeSqlDataAccess(options.workspaceRoot, currentFiles, existingCSharpSymbols);
   const dotnetProjectResult = await analyzeDotnetProjects(options.workspaceRoot, currentFiles);
-  const symbols = [
-    ...existingSymbols.filter((record) => !isWebSymbol(record) && record.kind !== "project"),
+  const symbols = uniqueById([
+    ...existingSymbols.filter((record) => !isWebSymbol(record) && !isSqlSymbol(record) && record.kind !== "project"),
     ...webResult.symbols,
+    ...sqlResult.symbols,
     ...dotnetProjectResult.symbols
-  ].sort(byId);
+  ]).sort(byId);
   const references = [...existingReferences.filter((record) => !isWebFile(record.file)), ...webResult.references].sort(byId);
   const conventionResult = analyzeAspNetConventions(currentFiles, symbols);
-  const relationships = uniqueById([
-    ...existingRelationships.filter((record) => !isWebRelationship(record) && record.type !== "PROJECT_REFERENCES" && !isAspNetConventionRelationship(record)),
+  const baseRelationships = uniqueById([
+    ...existingRelationships.filter((record) => !isWebRelationship(record) && !isSqlRelationship(record) && !isCSharpProjectionRelationship(record) && record.type !== "PROJECT_REFERENCES" && !isAspNetConventionRelationship(record)),
     ...webResult.relationships,
+    ...sqlResult.relationships,
     ...dotnetProjectResult.relationships,
     ...conventionResult.relationships
   ]).sort(byId);
+  const modelProjectionResult = analyzeCSharpModelProjections(symbols, baseRelationships);
+  const relationships = uniqueById([...baseRelationships, ...modelProjectionResult.relationships]).sort(byId);
   const patterns = detectPatterns({ symbols, relationships });
   const findings = await detectCodeHealthFindings({ workspaceRoot: options.workspaceRoot, symbols, references, relationships });
 
@@ -133,6 +145,36 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
         references: webResult.references.length,
         relationships: webResult.relationships.length,
         patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web") || pattern.id.startsWith("pattern:react")).length
+      }
+    },
+    {
+      id: "csharp-type-code",
+      status: symbols.some(isCSharpTypeCodeSymbol) || relationships.some(isCSharpTypeCodeRelationship) ? "completed" : "skipped",
+      recordCounts: {
+        symbols: symbols.filter(isCSharpTypeCodeSymbol).length,
+        references: 0,
+        relationships: relationships.filter(isCSharpTypeCodeRelationship).length,
+        patterns: 0
+      }
+    },
+    {
+      id: "csharp-model-projection",
+      status: modelProjectionResult.relationships.length ? "completed" : "skipped",
+      recordCounts: {
+        symbols: 0,
+        references: 0,
+        relationships: modelProjectionResult.relationships.length,
+        patterns: patterns.filter((pattern) => pattern.id === "pattern:dotnet:model-projection").length
+      }
+    },
+    {
+      id: "sql",
+      status: sqlResult.symbols.length || sqlResult.relationships.length ? "completed" : "skipped",
+      recordCounts: {
+        symbols: sqlResult.symbols.length,
+        references: 0,
+        relationships: sqlResult.relationships.length,
+        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:data")).length
       }
     }
   ];
@@ -196,6 +238,15 @@ async function readAnalyzerRuns(outputFolder: string): Promise<ProjectAnalyzerRu
   }
 }
 
+async function readProjectSchemaVersion(outputFolder: string): Promise<string | undefined> {
+  try {
+    const project = JSON.parse(await fs.readFile(path.join(outputFolder, "project.json"), "utf8")) as { schemaVersion?: string };
+    return project.schemaVersion;
+  } catch {
+    return undefined;
+  }
+}
+
 async function fullRebuild(
   options: RebuildProjectOptions,
   reason: string,
@@ -247,6 +298,29 @@ function isWebFile(filePath: string): boolean {
 
 function isAspNetConventionRelationship(relationship: RelationshipRecord): boolean {
   return relationship.id.startsWith("relationship:aspnet:view-component-renders:");
+}
+
+function isSqlSymbol(symbol: SymbolRecord): boolean {
+  return symbol.id.startsWith("table:") || symbol.id.startsWith("row:") || symbol.kind === "databaseTable" || symbol.kind === "databaseRow";
+}
+
+function isSqlRelationship(relationship: RelationshipRecord): boolean {
+  return relationship.id.startsWith("relationship:sql:")
+    || ["READS_TABLE", "JOINS_TABLE", "WRITES_TABLE", "UPSERTS_TABLE", "DELETES_FROM_TABLE", "BACKS_TABLE", "INSERTS_ROW", "ROW_IN_TABLE", "ROW_HAS_TYPE_CODE", "MAPS_DAPPER_RESULT", "USES_DAPPER_PARAMETER", "PROJECTS_DAPPER_ROW", "MAPS_DAPPER_PROPERTY"].includes(relationship.type);
+}
+
+function isCSharpTypeCodeSymbol(symbol: SymbolRecord): boolean {
+  return symbol.id.startsWith("type-code:") || symbol.patterns?.some((pattern) => pattern.startsWith("type-code-")) === true;
+}
+
+function isCSharpTypeCodeRelationship(relationship: RelationshipRecord): boolean {
+  return relationship.id.startsWith("relationship:csharp-type-code:")
+    || ["HAS_TYPE_CODE_MEMBER", "DEFINES_TYPE_CODE"].includes(relationship.type);
+}
+
+function isCSharpProjectionRelationship(relationship: RelationshipRecord): boolean {
+  return relationship.id.startsWith("relationship:csharp-projection:")
+    || relationship.type === "PROJECTS_MODEL";
 }
 
 function byId<T extends { id: string }>(left: T, right: T): number {

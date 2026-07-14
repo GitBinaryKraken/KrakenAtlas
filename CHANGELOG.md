@@ -2,10 +2,24 @@
 
 ## Unreleased
 
+- Realigned roadmap and README direction around Atlas as an agent-readable code map that consumes compiler/LSP/Roslyn/TypeScript facts and adds pattern, edit-surface, evidence, and context-reduction layers rather than competing as a graph viewer or semantic database.
+- Added relationship source-kind labels for agent-readable map output so relationship evidence can distinguish compiler-resolved, source-parsed, convention-derived, inferred, and text-derived facts.
+- Persisted relationship `source_kind` in SQLite, enriched stored relationship JSON with `sourceKind`, bumped the map schema to `0.1.1`, and added `query relationships --source-kind <kind>` filtering for provenance-aware agent queries with a compatibility fallback for older maps.
 - Continued the behavior-preserving `reactAnalyzer.ts` split by extracting shared source-text scanning and ID helpers, route/store/context conventions, compiler-AST TypeScript declaration/type-parameter discovery, JSX composition/prop evidence, and TypeScript prop/interface/enum member discovery into focused modules.
 - Continued the next `queryService.ts` split by extracting project metadata, symbol lookup, code-health, references, relationships, pattern, pattern-map, hotspots, search, exact-file, flow-context, endpoint-location, and where-to-add orchestration helpers into focused modules.
 - Split the oversized query-service test file into core, where-to-add/context-pruning, and search/reference/relationship/flow suites.
 - Split the oversized web-analyzer test file into Razor/HTML, JavaScript-flow, React prop/type, and React route/workflow suites.
+- Added first-pass value-derived JSX generic substitution evidence for literal and literal-array React props when explicit JSX type arguments are omitted.
+- Improved `where-to-add` for template-backed profile/persona detail fields so natural prompts such as "pick a favorite field on the profile page" can cross a WebUI context into AdminTools object/type management, keep PersonaDetailTemplate/TypeCode backing evidence, demote runtime PersonaInfo and Identity distractors, and preserve follow-up command context.
+- Added a first-pass SQL/table analyzer that emits database table nodes, table read/write/upsert/delete/join relationships, `.sql` source-file indexing, and generated `*TableDataModel` to table backing edges.
+- Added data-backed configuration roles and patterns, including source-of-truth roles for admin/config surfaces, template/taxonomy table roles, generated table model roles, first-pass type-code contract/editor roles, and a `template-backed-runtime-field` detector.
+- Improved table and pattern query output so exact table relationship lookups prioritize table edges over incidental property/text matches, and `query pattern` opens detected pattern instance files directly.
+- Improved `where-to-add` pattern guidance for template-backed profile/detail prompts so the data-backed source-of-truth pattern outranks generic UI patterns.
+- Added a C# type-code contract analyzer that maps explicit enum members such as `PersonaDetailTypeCode.Birthday = 7101` to shared `type-code:<value>` nodes.
+- Added conservative SQL seed-row facts for explicit literal `INSERT` rows, including row-to-table and row-to-type-code relationships for fixture-backed configuration data.
+- Added first-pass Dapper result/parameter type binding: generic `QueryAsync<T>`-style calls now map touched tables to resolved C# result types, typed `ExecuteAsync` parameters map request/command DTOs to write tables, exact relationship queries prioritize those direct edges, and `JOIN LATERAL` no longer creates a fake table node.
+- Added first-pass Dapper result projection mapping: typed Dapper result variables now create `PROJECTS_DAPPER_ROW` and `MAPS_DAPPER_PROPERTY` edges when direct object-initializer assignments project row/result properties into domain/data models.
+- Added first-pass C# model projection synthesis: resolved `MAPS_PROPERTY` clusters now create `PROJECTS_MODEL` edges so table/Dapper/domain chains can continue into API and view model contracts.
 
 ## 0.2.3
 

@@ -4,6 +4,7 @@ import { defaultMaxFileSizeBytes, defaultOutputFolder } from "../config/defaults
 import { FileRecord, ProjectAnalyzerRun, ProjectMetadata } from "../model/records";
 import { ScanOptions, ScanSummary, scanWorkspace } from "../scanner/fileScanner";
 import { readJsonl } from "../storage/jsonlReader";
+import { CURRENT_MAP_SCHEMA_VERSION } from "../storage/schemaVersion";
 
 export interface FileDiff {
   addedFiles: string[];
@@ -82,7 +83,8 @@ export async function inspectMap(options: DoctorOptions): Promise<DoctorResult> 
     };
   }
 
-  const stale = diff.addedFiles.length > 0 || diff.changedFiles.length > 0 || diff.deletedFiles.length > 0;
+  const schemaStale = project?.schemaVersion !== CURRENT_MAP_SCHEMA_VERSION;
+  const stale = schemaStale || diff.addedFiles.length > 0 || diff.changedFiles.length > 0 || diff.deletedFiles.length > 0;
   const analyzerMissing = hasCSharpFiles && !roslynAnalyzerFound;
   const degraded = failedAnalyzerRuns.length > 0;
 
@@ -98,12 +100,14 @@ export async function inspectMap(options: DoctorOptions): Promise<DoctorResult> 
     corpusWarnings,
     message: degraded
       ? "One or more analyzers failed during the last rebuild. Query results are partial."
+      : schemaStale
+        ? `Map schema ${project?.schemaVersion ?? "unknown"} predates ${CURRENT_MAP_SCHEMA_VERSION}. Rebuild before relying on query results.`
       : stale
         ? "Source files changed since the last map update."
         : analyzerMissing
           ? "C# files are present but the Roslyn analyzer project was not found."
           : "Kraken Atlas is ready.",
-    remediationCommands: degraded || analyzerMissing
+    remediationCommands: degraded || analyzerMissing || schemaStale
         ? ["kraken-atlas rebuild --workspace . --format agent"]
         : stale
           ? ["kraken-atlas update --workspace ."]

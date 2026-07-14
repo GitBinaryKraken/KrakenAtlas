@@ -207,6 +207,58 @@ test("relationship and flow queries keep exact property anchors inspectable", as
   }
 });
 
+test("relationship queries filter by persisted map fact source kind", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-relationship-source-kind-"));
+  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
+  const files: FileRecord[] = [
+    fileRecord("Web/UserController.cs"),
+    fileRecord("Data/UserProfileMapper.cs")
+  ];
+  const relationships: RelationshipRecord[] = [
+    {
+      recordType: "relationship",
+      id: "relationship:csharp:call:user-profile-save",
+      from: "symbol:csharp:Web.UserController.SaveUserProfile()",
+      to: "symbol:csharp:Domain.UserProfileService.SaveUserProfile()",
+      type: "CALLS",
+      file: "Web/UserController.cs",
+      range: range(),
+      evidence: "compiler-resolved call for UserProfile save",
+      confidence: 0.95
+    },
+    {
+      recordType: "relationship",
+      id: "relationship:csharp-projection:UserProfileRow:UserProfileModel",
+      from: "symbol:csharp:Data.UserProfileRow",
+      to: "symbol:csharp:Api.UserProfileModel",
+      type: "PROJECTS_MODEL",
+      file: "Data/UserProfileMapper.cs",
+      range: range(),
+      evidence: "UserProfileRow projects to UserProfileModel",
+      confidence: 0.78
+    }
+  ];
+
+  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [], patterns: [] });
+  const database = await openSqliteIndex(indexPath);
+  try {
+    const service = new QueryService(database);
+    const all = service.findRelationships("UserProfile", { limit: 10 });
+    const inferred = service.findRelationships("UserProfile", { sourceKinds: ["inferred"], limit: 10 });
+    const compilerResolved = service.findRelationships("UserProfile", { sourceKinds: ["compiler-resolved"], limit: 10 });
+
+    assert.ok(all.relationships.some((relationship) => relationship.type === "CALLS"));
+    assert.ok(all.relationships.some((relationship) => relationship.type === "PROJECTS_MODEL"));
+    assert.deepStrictEqual(inferred.relationships.map((relationship) => relationship.type), ["PROJECTS_MODEL"]);
+    assert.ok(inferred.relationships.every((relationship) => relationship.sourceKind === "inferred"));
+    assert.deepStrictEqual(compilerResolved.relationships.map((relationship) => relationship.type), ["CALLS"]);
+    assert.ok(compilerResolved.relationships.every((relationship) => relationship.sourceKind === "compiler-resolved"));
+    assert.ok(inferred.evidence.some((item) => item.recordType === "relationshipFilter" && Array.isArray(item.sourceKinds)));
+  } finally {
+    database.close();
+  }
+});
+
 test("flow includes exact requested metadata property anchors across page editor mappings", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-metadata-flow-"));
   const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");

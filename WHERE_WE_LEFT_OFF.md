@@ -1,12 +1,26 @@
 # Where We Left Off
 
-Date: 2026-07-06
+Date: 2026-07-08
 
 ## Current Checkpoint
 
 Use `git log -1 --oneline` for the current committed checkpoint. The release-prep checkpoint captures the `0.2.3` React/TypeScript semantic-analysis work, fixture coverage, and analyzer refactor slices. Public/package docs now present `0.2.3` as the latest packaged alpha.
 
+The product direction has been realigned: Atlas should focus on building better code maps for AI agents, not competing with Roslyn, LSP servers, SourceGraph, NDepend, TypeScript's compiler, or other semantic/indexing tools. Those tools are upstream fact sources. Atlas' job is to normalize source facts into a compact local atlas and add the agent-oriented layer: local patterns, likely edit surfaces, nearest examples, supporting evidence, blast-radius hints, and context reduction.
+
+The product should be judged by map usefulness, not graph completeness. A new relationship or analyzer slice is worth doing when it improves an agent-facing answer such as `where-to-add`, `flow`, `relationships`, `pattern`, `pattern-map`, `plan-change`, or a context pack. Human-facing visualization remains secondary.
+
 The main product thread has moved from the earlier pattern-planning slice into `0.2.x` React/TypeScript hardening. Atlas should still describe this as first-pass React/TypeScript support, but not as purely convention-based anymore: some compiler-backed project, import, declaration, prop, and call slices are now in place.
+
+Latest development also closed a `where-to-add` miss found in the Kelp multi-project test corpus: natural "favorite/pick field on a profile page" prompts now recognize template-backed profile/persona details, cross a WebUI context into AdminTools object/type management, keep PersonaDetailTemplate/TypeCode backing files in the recommendation set, demote runtime PersonaInfo and Identity account distractors, and emit follow-up commands in the recommended file's own context.
+
+The newest slice turns that miss into first-pass data-backed pattern recognition: Atlas now emits database table nodes and SQL table edges, maps generated `*TableDataModel` classes back to table nodes, maps explicit C# type-code enum members to shared `type-code:<value>` nodes, emits conservative SQL seed-row nodes for literal `INSERT` rows, adds source-of-truth roles for admin/config/template/taxonomy/type-code surfaces, detects a `template-backed-runtime-field` pattern, prioritizes that pattern for template-backed profile/detail prompts, and keeps exact table/type-code relationship queries focused on direct graph edges instead of incidental property/text matches.
+
+Latest follow-up added first-pass Dapper type binding, Dapper result projection mapping, and C# model projection synthesis. Atlas now maps generic `QueryAsync<T>`-style calls from touched table nodes to resolved C# result symbols with `MAPS_DAPPER_RESULT`, maps typed `ExecuteAsync` parameters to write tables with `USES_DAPPER_PARAMETER`, maps typed Dapper result variables into domain/data models through direct object initializers with `PROJECTS_DAPPER_ROW` and `MAPS_DAPPER_PROPERTY`, synthesizes type-level `PROJECTS_MODEL` edges from resolved `MAPS_PROPERTY` clusters, includes those edges in relationship queries/flow context/scoring/roles/patterns, prioritizes direct relationship rows before value-lifecycle expansion, and avoids treating `JOIN LATERAL` as a table.
+
+Current active direction: define and harden the agent-readable map contract, then let pattern detection sit on top of that map. The recent Kelp/Dapper/model-projection work is useful supporting infrastructure because it improves the template-backed field answer, but do not keep expanding projection edges unless the next slice is tied to a named pattern or a failing agent query.
+
+Latest map-contract slice made relationship source kinds durable and queryable. Query evidence and compact agent output can distinguish `compiler-resolved`, `source-parsed`, `convention-derived`, `inferred`, and `text-derived` relationship facts; SQLite now stores those labels in `relationships.source_kind`, enriches stored relationship JSON with `sourceKind`, bumps the map schema to `0.1.1`, and `query relationships --source-kind <kind>` can filter by provenance. Older maps are marked stale for rebuild, with an in-memory compatibility fallback for direct queries. Next apply the same provenance idea to pattern summaries and context packs.
 
 ## React/TypeScript Support State
 
@@ -38,7 +52,7 @@ Packaged `0.2.3` now extends the semantic path with:
 - Imported prop type aliases, inherited props with `EXTENDS_PROPS`, `ComponentProps<typeof Component>` aliases, and JSX prop resolution through inherited or shared prop declarations.
 - Utility-prop expansion for `Pick`, `Omit`, `Partial`, `Required`, `Readonly`, finite-key `Record`, broad `Record<string, T>`, finite template-literal keys, TypeScript index signatures, and simple mapped types.
 - Generic function component parsing with type-parameter nodes, typed props ownership, and JSX type-argument edges.
-- First-pass JSX type-argument substitution in generic prop-flow evidence for explicit generic component usages, defaulted generic substitutions when JSX omits explicit type arguments, simple props-alias parameter remapping when component props bind alias type parameters, and local/imported nested generic type-alias expansion in prop-flow evidence.
+- First-pass JSX type-argument substitution in generic prop-flow evidence for explicit generic component usages, defaulted generic substitutions when JSX omits explicit type arguments, value-derived generic substitutions from literal/literal-array JSX props, simple props-alias parameter remapping when component props bind alias type parameters, and local/imported nested generic type-alias expansion in prop-flow evidence.
 - Inferred prop nodes for untyped destructured component parameters in TypeScript and JavaScript/JSX components, including first-pass nested destructuring, rest prop, and simple default-value type/optionality hints.
 
 ## Documentation Alignment
@@ -51,17 +65,18 @@ Docs should use this wording split:
 
 ## Recommended Next Steps
 
-1. Validate React/Next query quality on a larger real project or convert alpha misses into fixtures.
-2. Continue the `queryService.ts` split by extracting remaining command branches into intent handlers. Project metadata and symbol lookup now live in `queryBasic.ts`; code-health queries now live in `queryCodeHealth.ts`; references/relationships now live in `queryRelationships.ts`; pattern, pattern-map, and hotspots now live in `queryPatterns.ts`; search/exact-file query handling now lives in `querySearch.ts`; flow context expansion now lives in `queryFlowContext.ts`; endpoint-location enrichment now lives in `queryNodeLocations.ts`; where-to-add orchestration and enrichment now live in `queryWhereToAdd.ts`. The service is below 900 lines, query-service tests are split into core, where-to-add/context-pruning, and discovery/flow suites, and web-analyzer tests are split by scenario. Pause additional maintainability splitting unless a file grows back over the guardrail.
-3. Continue inferred prop work with checker-backed inferred types, richer default-value refinement, nested arrays, alias/default pattern edge cases, and generic component inference.
-4. Deepen utility-prop coverage for key remapping, conditional mapped types, referenced template-literal aliases, numeric/symbol/template index fallback, and checker-backed value/optional types.
-5. Infer value-derived JSX generic substitutions and add checker-backed generic constraints.
-6. Add workspace/package-manager fixture coverage for pnpm/yarn/npm package boundaries, generated declarations, package exports, project references, path aliases, and mixed JS/TS package boundaries.
-7. Continue call-graph resolution for callbacks, imported object methods, hook-return methods, service clients, and async action functions.
-8. Improve relationship evidence labels so compiler-resolved, import-resolved, convention-derived, and text-derived edges are easy to filter in SQLite and agent output.
-9. Keep React Server Components, Suspense, loading/error boundary conventions, and broader external package type surfaces behind the core prop/type/call semantics work.
-10. In parallel, add .NET Minimal API route-group and endpoint-filter fixture coverage when the React/TypeScript slice is stable enough to pause.
+1. Turn the direction reset at the top of `NEXT_STEPS.md` into an implementation checklist for the durable agent-readable map contract: source facts, inferred relationships, pattern instances, evidence/confidence, examples to imitate, and caveats.
+2. Audit current analyzer backlog and keep only slices that improve a named pattern or agent-facing query. Move broad projection/LINQ/helper-method expansion out of the immediate lane unless backed by a miss fixture.
+3. Build the miss-driven fixture loop around map quality: each wrong `where-to-add`, noisy `flow`, or missing pattern should get a small good/okay/bad fixture.
+4. Continue the data-backed pattern plan only where it improves source-of-truth answers: type-code-to-template/option alignment, runtime/supporting role labels, broader source-of-truth intent classification, and fixture coverage.
+5. Validate React/Next query quality on a larger real project or convert alpha misses into fixtures; prefer compiler/LSP/TypeScript facts over regex-only semantic expansion.
+6. Extend provenance beyond relationships: relationship source kinds are now visible in agent output and filterable in SQLite/CLI; pattern summaries and context packs should carry the same source-kind/confidence language next.
+7. Continue the `queryService.ts` split only if file size or agent maintainability regresses. Project metadata and symbol lookup now live in `queryBasic.ts`; code-health queries now live in `queryCodeHealth.ts`; references/relationships now live in `queryRelationships.ts`; pattern, pattern-map, and hotspots now live in `queryPatterns.ts`; search/exact-file query handling now lives in `querySearch.ts`; flow context expansion now lives in `queryFlowContext.ts`; endpoint-location enrichment now lives in `queryNodeLocations.ts`; where-to-add orchestration and enrichment now live in `queryWhereToAdd.ts`.
 
 ## Validation
 
-`npm test` passed on 2026-07-06 with 87/87 tests after the broad `Record<string, T>`, index-signature, finite template-literal utility-prop, first-pass generic component / JSX type-argument, first-pass JSX generic substitution evidence, generic props-alias parameter remapping, local/imported nested generic type-alias expansion, and defaulted generic JSX substitution slices.
+Latest full validation on 2026-07-08:
+
+- `npm test` passed with 94/94 tests after the first Dapper result projection, C# model projection, relationship source-kind labeling, and SQLite source-kind filtering slices.
+- `node dist/cli.js rebuild --workspace ..\test-projects --format agent` completed with 743 files, 6832 symbols, 1725 references, 8017 relationships, 23 patterns, and 12 findings.
+- Real Kelp checks for the tropical-beverage `where-to-add`, exact `table:public.persona_detail_templates` relationships including `MAPS_DAPPER_RESULT`, `PROJECTS_DAPPER_ROW`, and `PROJECTS_MODEL`, exact `PersonaTemplateRow` projection/property relationships, exact `PersonaInfoFieldDataModel --edge PROJECTS_MODEL` relationships, exact `type-code:7101` relationships, `template-backed runtime field`, `Dapper type binding`, and `model projection` pattern output.

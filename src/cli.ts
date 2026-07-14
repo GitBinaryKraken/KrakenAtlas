@@ -20,6 +20,7 @@ interface CliOptions {
   quiet: boolean;
   projectContext?: string;
   edgeTypes: string[];
+  sourceKinds: string[];
   limit?: number;
 }
 
@@ -202,7 +203,7 @@ function runQuery(service: QueryService, queryType: string, query: string, optio
       return service.findReferences(query);
     case "relationships":
     case "relationship":
-      return service.findRelationships(query, { edgeTypes: options.edgeTypes, limit: options.limit });
+      return service.findRelationships(query, { edgeTypes: options.edgeTypes, sourceKinds: options.sourceKinds, limit: options.limit });
     case "pattern":
     case "patterns":
       return service.findPatterns(query);
@@ -425,6 +426,10 @@ function parseOptions(args: string[]): CliOptions {
     .flatMap((value) => value.split(","))
     .map((value) => value.trim())
     .filter(Boolean);
+  const sourceKinds = optionValues(args, "--source-kind")
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
   const limitIndex = args.indexOf("--limit");
   const parsedLimit = limitIndex >= 0 ? Number.parseInt(args[limitIndex + 1] ?? "", 10) : undefined;
 
@@ -435,6 +440,7 @@ function parseOptions(args: string[]): CliOptions {
     quiet: args.includes("--quiet"),
     projectContext: contextIndex >= 0 ? args[contextIndex + 1] : undefined,
     edgeTypes,
+    sourceKinds,
     limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined
   };
 }
@@ -459,7 +465,7 @@ function parseFormat(value: string | undefined): CliOptions["format"] {
 function isOptionArg(args: string[], index: number): boolean {
   const arg = args[index];
   const previous = args[index - 1];
-  return arg.startsWith("--") || previous === "--workspace" || previous === "--format" || previous === "--context" || previous === "--edge" || previous === "--limit";
+  return arg.startsWith("--") || previous === "--workspace" || previous === "--format" || previous === "--context" || previous === "--edge" || previous === "--source-kind" || previous === "--limit";
 }
 
 function toMarkdown(response: any): string {
@@ -489,7 +495,7 @@ Usage:
   kraken-atlas doctor [--workspace <path>] [--format json|info|md|agent]
   kraken-atlas install-agent [--workspace <path>] [--format json|info|md|agent]
   kraken-atlas context [flow|where-to-add|plan-change|search|relationships|symbol|references|pattern|pattern-map|hotspots|project|orphans|duplicates|drift] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
-  kraken-atlas query <project|symbol|references|relationships|pattern|pattern-map|hotspots|flow|search|where-to-add|plan-change|orphans|duplicates|drift> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--limit <n>]
+  kraken-atlas query <project|symbol|references|relationships|pattern|pattern-map|hotspots|flow|search|where-to-add|plan-change|orphans|duplicates|drift> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--source-kind <kind>] [--limit <n>]
 
 Agent loop:
   kraken-atlas doctor --workspace . --format agent
@@ -510,6 +516,7 @@ Options:
   --context <name>    Scope query seeds to a project/folder in a parent workspace.
   --format <format>   json, info, md, or agent. Defaults to json. Use agent for compact token-saving output; info/md for richer human-readable output.
   --edge <type>        Filter relationship query output by edge type. Repeat or comma-separate values, e.g. --edge WRITES_FIELD,MAPS_PROPERTY.
+  --source-kind <kind> Filter relationship query output by map fact source kind. Repeat or comma-separate values: compiler-resolved, source-parsed, convention-derived, inferred, text-derived.
   --limit <n>          Limit relationship query output. Defaults to 30, max 100.
   --quiet             Suppress rebuild/update progress logs.
   --help              Show this help.

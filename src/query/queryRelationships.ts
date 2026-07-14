@@ -1,4 +1,5 @@
 import { inferProjectNameFromFile } from "./queryContext";
+import { relationshipSourceKind } from "../model/mapProvenance";
 import {
   buildReferenceSummary,
   compactResponse,
@@ -35,6 +36,7 @@ interface RelationshipQueryDependencies {
   findSymbolIds(query: string): string[];
   hasQueryContext: boolean;
   queryContextName?: string;
+  relationshipSourceKindColumnExists: boolean;
   referenceContextWhere(prefix: "AND" | "WHERE"): QueryWhere;
   relationshipContextWhere(prefix: "AND" | "WHERE"): QueryWhere;
   relationshipMatchesContext(row: Record<string, unknown>): boolean;
@@ -118,6 +120,9 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
   const context = dependencies.relationshipContextWhere("AND");
   const edgeTypes = uniqueStrings((options.edgeTypes ?? []).map((edgeType) => edgeType.trim().toUpperCase()).filter(Boolean));
   const edgeFilter = edgeTypes.length ? `AND type IN (${placeholders(edgeTypes.length)})` : "";
+  const sourceKinds = uniqueStrings((options.sourceKinds ?? []).map((sourceKind) => sourceKind.trim().toLowerCase()).filter(Boolean));
+  const filterSourceKindsInSql = dependencies.relationshipSourceKindColumnExists;
+  const sourceKindFilter = filterSourceKindsInSql && sourceKinds.length ? `AND source_kind IN (${placeholders(sourceKinds.length)})` : "";
   const limit = Math.max(1, Math.min(options.limit ?? 30, 100));
   let rows = dependencies.execJson(
     `SELECT json FROM relationships
@@ -129,40 +134,73 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
         OR type LIKE ?
         OR json LIKE ?)
      ${edgeFilter}
+     ${sourceKindFilter}
      ${context.sql}
      ORDER BY
        CASE
-         WHEN json LIKE ? THEN 0
+         WHEN from_id IN (${placeholders(terms.length)}) OR to_id IN (${placeholders(terms.length)}) THEN 0
          WHEN from_id LIKE ? OR to_id LIKE ? THEN 1
-         WHEN file LIKE ? THEN 2
-         ELSE 3
+         WHEN json LIKE ? THEN 2
+         WHEN file LIKE ? THEN 3
+         ELSE 4
        END,
        CASE type
-         WHEN 'MAPS_ROUTE' THEN 0
-         WHEN 'REQUIRES_AUTH' THEN 1
-         WHEN 'WRITES_QUERY_STRING' THEN 2
-         WHEN 'READS_QUERY_STRING' THEN 3
-         WHEN 'WRITES_BROWSER_HISTORY' THEN 4
-         WHEN 'POSTS_TO' THEN 5
-         WHEN 'WRITES' THEN 6
-         WHEN 'QUERIES' THEN 7
-         WHEN 'CALLS_REPOSITORY' THEN 8
-         WHEN 'CALLS' THEN 9
-         WHEN 'IMPLEMENTS' THEN 10
-         WHEN 'INJECTS' THEN 11
-         WHEN 'WRITES_FIELD' THEN 12
-         WHEN 'BINDS_MODEL_PROPERTY' THEN 13
-         WHEN 'MAPS_PROPERTY' THEN 14
-         WHEN 'SELECTS_ELEMENT' THEN 15
-         WHEN 'INVOKES_VIEW_COMPONENT' THEN 16
-         WHEN 'RENDERS_VIEW' THEN 17
+         WHEN 'UPSERTS_TABLE' THEN 0
+         WHEN 'WRITES_TABLE' THEN 1
+         WHEN 'DELETES_FROM_TABLE' THEN 2
+         WHEN 'READS_TABLE' THEN 3
+         WHEN 'JOINS_TABLE' THEN 4
+         WHEN 'BACKS_TABLE' THEN 5
+         WHEN 'MAPS_DAPPER_RESULT' THEN 6
+         WHEN 'USES_DAPPER_PARAMETER' THEN 7
+         WHEN 'PROJECTS_DAPPER_ROW' THEN 8
+         WHEN 'MAPS_DAPPER_PROPERTY' THEN 9
+         WHEN 'PROJECTS_MODEL' THEN 10
+         WHEN 'INSERTS_ROW' THEN 11
+         WHEN 'ROW_IN_TABLE' THEN 12
+         WHEN 'ROW_HAS_TYPE_CODE' THEN 13
+         WHEN 'MAPS_ROUTE' THEN 14
+         WHEN 'REQUIRES_AUTH' THEN 15
+         WHEN 'WRITES_QUERY_STRING' THEN 16
+         WHEN 'READS_QUERY_STRING' THEN 17
+         WHEN 'WRITES_BROWSER_HISTORY' THEN 18
+         WHEN 'POSTS_TO' THEN 19
+         WHEN 'WRITES' THEN 20
+         WHEN 'QUERIES' THEN 21
+         WHEN 'CALLS_REPOSITORY' THEN 22
+         WHEN 'CALLS' THEN 23
+         WHEN 'IMPLEMENTS' THEN 24
+         WHEN 'INJECTS' THEN 25
+         WHEN 'WRITES_FIELD' THEN 26
+         WHEN 'BINDS_MODEL_PROPERTY' THEN 27
+         WHEN 'MAPS_PROPERTY' THEN 28
+         WHEN 'SELECTS_ELEMENT' THEN 29
+         WHEN 'INVOKES_VIEW_COMPONENT' THEN 30
+         WHEN 'RENDERS_VIEW' THEN 31
          WHEN 'CONTAINS' THEN 99
          ELSE 50
        END,
        file,
        start_line
      LIMIT ${limit};`,
-    [...terms, ...terms, `%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`, ...edgeTypes, ...context.params, `%${query}%`, `%${query}%`, `%${query}%`, `%${query}%`]
+    [
+      ...terms,
+      ...terms,
+      `%${query}%`,
+      `%${query}%`,
+      `%${query}%`,
+      `%${query}%`,
+      `%${query}%`,
+      ...edgeTypes,
+      ...(filterSourceKindsInSql ? sourceKinds : []),
+      ...context.params,
+      ...terms,
+      ...terms,
+      `%${query}%`,
+      `%${query}%`,
+      `%${query}%`,
+      `%${query}%`
+    ]
   );
 
   if (dependencies.hasQueryContext && globalExactSymbolIds.length) {
@@ -170,6 +208,7 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
       `SELECT json FROM relationships
        WHERE (from_id IN (${placeholders(globalExactSymbolIds.length)}) OR to_id IN (${placeholders(globalExactSymbolIds.length)}))
        ${edgeFilter}
+       ${sourceKindFilter}
        ORDER BY
          CASE type
            WHEN 'IMPLEMENTS' THEN 0
@@ -182,20 +221,32 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
          file,
          start_line
        LIMIT ${limit};`,
-      [...globalExactSymbolIds, ...globalExactSymbolIds, ...edgeTypes]
+      [...globalExactSymbolIds, ...globalExactSymbolIds, ...edgeTypes, ...(filterSourceKindsInSql ? sourceKinds : [])]
     );
     rows = uniqueById([...connectedRows, ...rows]).slice(0, limit);
   }
 
-  const valueLifecycleRows = findValueLifecycleRelationships({
+  const dapperProjectionRows = findProjectionChainRelationships(rows, edgeTypes, sourceKinds, filterSourceKindsInSql, limit, dependencies);
+  if (dapperProjectionRows.length) {
+    const directBudget = Math.max(1, limit - dapperProjectionRows.length);
+    rows = uniqueById([...rows.slice(0, directBudget), ...dapperProjectionRows]).slice(0, limit);
+  }
+
+  const valueLifecycleRows = symbolIds.some(isExactDataNodeId) ? [] : findValueLifecycleRelationships({
     query,
     symbolIds,
     edgeTypes,
+    sourceKinds,
+    filterSourceKindsInSql,
     limit,
     relationshipContext: dependencies.relationshipContextWhere("AND"),
     readJson: (sql, params = []) => dependencies.execJson(sql, params)
   });
-  rows = uniqueById([...valueLifecycleRows, ...rows]).slice(0, limit);
+  const hasDirectSeedRows = rows.some((row) => terms.includes(stringValue(row.from)) || terms.includes(stringValue(row.to)));
+  rows = uniqueById(hasDirectSeedRows ? [...rows, ...valueLifecycleRows] : [...valueLifecycleRows, ...rows]).slice(0, limit);
+  if (sourceKinds.length) {
+    rows = rows.filter((row) => sourceKinds.includes(rowSourceKind(row)));
+  }
 
   const filteredRows = dependencies.withEndpointLocations(filterRelationshipRowsForQuery(rows, query));
   const omittedCount = Math.max(0, rows.length - filteredRows.length);
@@ -209,7 +260,7 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
   return compactResponse({
     query,
     answer: filteredRows.length
-      ? `Found ${filteredRows.length} relationship edge(s)${edgeTypes.length ? ` filtered to ${edgeTypes.join(", ")}` : ""}.`
+      ? `Found ${filteredRows.length} relationship edge(s)${formatRelationshipFiltersForAnswer(edgeTypes, sourceKinds)}.`
       : "No relationships matched.",
     confidence: filteredRows.length ? 0.9 : 0,
     evidence: [
@@ -223,10 +274,11 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
         edgeTypes: expandedTypes,
         message: `Included ${expandedRows.length} directly connected edge(s) outside seed context ${dependencies.queryContextName}: ${formatCountMap(expandedTypes)}.`
       }] : []),
-      ...(edgeTypes.length ? [{
+      ...(edgeTypes.length || sourceKinds.length ? [{
         recordType: "relationshipFilter",
         edgeTypes,
-        message: `Showing only relationship types: ${edgeTypes.join(", ")}.`
+        sourceKinds,
+        message: formatRelationshipFilterMessage(edgeTypes, sourceKinds)
       }] : []),
       ...(rows.length >= limit ? [{
         recordType: "caveat",
@@ -239,10 +291,78 @@ export function findRelationshipsQuery(query: string, options: RelationshipQuery
       ...filteredRows.map(relationshipEvidence)
     ],
     relationships: filteredRows.map(relationshipEvidence),
-    symbols: uniqueStrings(filteredRows.flatMap((row) => [stringValue(row.from), stringValue(row.to)]).filter((value) => value.startsWith("symbol:"))),
+    symbols: uniqueStrings(filteredRows.flatMap((row) => [stringValue(row.from), stringValue(row.to)]).filter(isQueryableNodeId)),
     files: relationshipFiles(filteredRows),
     nextQueries: relationshipNextQueries(filteredRows)
   });
+}
+
+function findProjectionChainRelationships(
+  rows: Array<Record<string, unknown>>,
+  edgeTypes: string[],
+  sourceKinds: string[],
+  filterSourceKindsInSql: boolean,
+  limit: number,
+  dependencies: RelationshipQueryDependencies
+): Array<Record<string, unknown>> {
+  const sourceKindFilter = filterSourceKindsInSql && sourceKinds.length ? `AND source_kind IN (${placeholders(sourceKinds.length)})` : "";
+  const allowedDapperTypes = ["PROJECTS_DAPPER_ROW", "MAPS_DAPPER_PROPERTY"].filter((type) => edgeTypes.length === 0 || edgeTypes.includes(type));
+  const rowTypeIds = uniqueStrings(rows
+    .filter((row) => stringValue(row.type) === "MAPS_DAPPER_RESULT")
+    .map((row) => stringValue(row.to))
+    .filter((id) => id.startsWith("symbol:csharp:")));
+  const dapperRows = allowedDapperTypes.length && rowTypeIds.length ? dependencies.execJson(
+    `SELECT json FROM relationships
+     WHERE type IN (${placeholders(allowedDapperTypes.length)})
+       ${sourceKindFilter}
+       AND (
+         from_id IN (${placeholders(rowTypeIds.length)})
+         OR to_id IN (${placeholders(rowTypeIds.length)})
+         OR ${rowTypeIds.map(() => "from_id LIKE ? OR to_id LIKE ?").join(" OR ")}
+       )
+     ORDER BY
+       CASE type
+         WHEN 'PROJECTS_DAPPER_ROW' THEN 0
+         WHEN 'MAPS_DAPPER_PROPERTY' THEN 1
+         ELSE 20
+       END,
+       file,
+       start_line
+     LIMIT ${Math.min(limit, 20)};`,
+    [
+      ...allowedDapperTypes,
+      ...(filterSourceKindsInSql ? sourceKinds : []),
+      ...rowTypeIds,
+      ...rowTypeIds,
+      ...rowTypeIds.flatMap((id) => [`${id}.%`, `${id}.%`])
+    ]
+  ) : [];
+
+  const allowedModelTypes = ["PROJECTS_MODEL"].filter((type) => edgeTypes.length === 0 || edgeTypes.includes(type));
+  const modelTypeIds = uniqueStrings([
+    ...rows,
+    ...dapperRows
+  ]
+    .filter((row) => stringValue(row.type) === "PROJECTS_DAPPER_ROW")
+    .map((row) => stringValue(row.to))
+    .filter((id) => id.startsWith("symbol:csharp:")));
+  const modelRows = allowedModelTypes.length && modelTypeIds.length ? dependencies.execJson(
+    `SELECT json FROM relationships
+     WHERE type IN (${placeholders(allowedModelTypes.length)})
+       ${sourceKindFilter}
+       AND from_id IN (${placeholders(modelTypeIds.length)})
+     ORDER BY file, start_line
+     LIMIT ${Math.min(limit, 20)};`,
+    [
+      ...allowedModelTypes,
+      ...(filterSourceKindsInSql ? sourceKinds : []),
+      ...modelTypeIds
+    ]
+  ) : [];
+
+  const dapperTypeRows = dapperRows.filter((row) => stringValue(row.type) === "PROJECTS_DAPPER_ROW");
+  const dapperPropertyRows = dapperRows.filter((row) => stringValue(row.type) !== "PROJECTS_DAPPER_ROW");
+  return uniqueById([...dapperTypeRows, ...modelRows, ...dapperPropertyRows]);
 }
 
 export function relationshipNextQueries(rows: Array<Record<string, unknown>>): string[] {
@@ -559,12 +679,40 @@ function queryTargetsCommonExternalSymbol(lowerQuery: string): boolean {
   return /\b(string|int|long|double|decimal|bool|object|task|ienumerable|ilist|list|dictionary|datetime|guid|iconfiguration|ihttpclientfactory|ilogger|iserviceprovider|pagemodel|controller|controllerbase)\b/i.test(lowerQuery);
 }
 
+function isQueryableNodeId(value: string): boolean {
+  return value.startsWith("symbol:") || value.startsWith("table:") || value.startsWith("type-code:") || value.startsWith("row:");
+}
+
+function isExactDataNodeId(value: string): boolean {
+  return value.startsWith("table:") || value.startsWith("row:") || value.startsWith("type-code:");
+}
+
+function rowSourceKind(row: Record<string, unknown>): string {
+  return stringValue(row.sourceKind) || relationshipSourceKind(row);
+}
+
 function countByValues(values: string[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const value of values.filter(Boolean)) {
     counts[value] = (counts[value] ?? 0) + 1;
   }
   return counts;
+}
+
+function formatRelationshipFiltersForAnswer(edgeTypes: string[], sourceKinds: string[]): string {
+  const parts = [
+    edgeTypes.length ? `types ${edgeTypes.join(", ")}` : "",
+    sourceKinds.length ? `source kinds ${sourceKinds.join(", ")}` : ""
+  ].filter(Boolean);
+  return parts.length ? ` filtered to ${parts.join("; ")}` : "";
+}
+
+function formatRelationshipFilterMessage(edgeTypes: string[], sourceKinds: string[]): string {
+  const parts = [
+    edgeTypes.length ? `relationship types: ${edgeTypes.join(", ")}` : "",
+    sourceKinds.length ? `source kinds: ${sourceKinds.join(", ")}` : ""
+  ].filter(Boolean);
+  return `Showing only ${parts.join("; ")}.`;
 }
 
 function formatCountMap(counts: Record<string, number>): string {

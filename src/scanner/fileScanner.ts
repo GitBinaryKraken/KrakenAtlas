@@ -340,7 +340,7 @@ function buildTags(extension: string, fullPath: string): string[] {
     tags.add(language);
   }
 
-  if ([".cs", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".cshtml", ".razor", ".html", ".htm"].includes(extension)) {
+  if ([".cs", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".cshtml", ".razor", ".html", ".htm", ".sql"].includes(extension)) {
     tags.add("source");
   }
 
