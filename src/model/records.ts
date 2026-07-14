@@ -57,51 +57,11 @@ export interface RelationshipRecord {
   confidence: number;
 }
 
-export interface PatternRecord {
-  recordType: "pattern";
-  id: string;
-  name: string;
-  category: string;
-  language?: string;
-  confidence: number;
-  frequency: number;
-  counterExampleCount: number;
-  instances: Array<{
-    name?: string;
-    files?: string[];
-    symbols?: string[];
-  }>;
-  rulesObserved: string[];
-  agentGuidance: string;
-}
-
-export interface FindingLocation {
-  symbolId?: string;
-  file: string;
-  range: SourceRange;
-}
-
-export interface FindingRecord {
-  recordType: "finding";
-  id: string;
-  kind: "orphan-callable" | "duplicate-code-block" | "pattern-drift";
-  title: string;
-  severity: "info" | "warning";
-  confidence: number;
-  summary: string;
-  locations: FindingLocation[];
-  evidence: string[];
-  caveats: string[];
-  fingerprint?: string;
-}
-
 export interface CodeMapIndexRecords {
   files: FileRecord[];
   symbols?: SymbolRecord[];
   references?: ReferenceRecord[];
   relationships?: RelationshipRecord[];
-  patterns?: PatternRecord[];
-  findings?: FindingRecord[];
   project?: ProjectMetadata;
 }
 
@@ -123,8 +83,6 @@ export interface ProjectAnalyzerRun {
     symbols: number;
     references: number;
     relationships: number;
-    patterns: number;
-    findings?: number;
   };
 }
 
@@ -142,8 +100,6 @@ export interface ProjectMetadata {
     symbols: number;
     references: number;
     relationships: number;
-    patterns: number;
-    findings?: number;
   };
   agentGuidance: {
     readFirst: string[];
@@ -165,8 +121,6 @@ export interface Manifest {
     symbols: string;
     references: string;
     relationships: string;
-    patterns: string;
-    findings: string;
     project: string;
     sqlite: string;
   };
@@ -174,7 +128,5 @@ export interface Manifest {
     fileCount: number;
     symbolCount: number;
     relationshipCount: number;
-    patternCount: number;
-    findingCount: number;
   };
 }

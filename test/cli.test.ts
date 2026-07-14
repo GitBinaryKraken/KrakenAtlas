@@ -22,11 +22,9 @@ test("CLI help and version are discoverable", async () => {
 
   assert.match(help.stdout, new RegExp(`Kraken Atlas ${escapedVersion}`));
   assert.match(help.stdout, /kraken-atlas query <project\|symbol/);
-  assert.match(help.stdout, /where-to-add\|plan-change/);
-  assert.match(help.stdout, /pattern-map\|hotspots\|flow/);
-  assert.match(help.stdout, /duplicates\|drift/);
-  assert.match(help.stdout, /kraken-atlas context \[flow\|where-to-add\|plan-change\|search/);
-  assert.match(help.stdout, /kraken-atlas context plan-change "requested change"/);
+  assert.match(help.stdout, /relationships\|flow\|search/);
+  assert.match(help.stdout, /kraken-atlas context \[flow\|search\|relationships/);
+  assert.doesNotMatch(help.stdout, /where-to-add|plan-change|pattern-map|hotspots|duplicates|drift/);
   assert.match(help.stdout, /json\|info\|md\|agent/);
   assert.match(help.stdout, /Use agent for compact token-saving output; info\/md for richer human-readable output/);
   assert.match(help.stdout, /Agent loop:/);
@@ -47,7 +45,7 @@ test("CLI resolves relative workspace paths to absolute output paths", async () 
 test("context-pack follow-ups retain workspace, context, and agent format", () => {
   const response = applyCliNextCommandOptions({
     query: "save user", answer: "Found.", confidence: 1,
-    evidence: [], files: [], symbols: [], relationships: [], patterns: [], flow: [],
+    evidence: [], files: [], symbols: [], relationships: [], flow: [],
     nextQueries: ['kraken-atlas query relationships "Web/User.cs"'],
     estimatedContextSavings: "compact"
   }, { workspaceArg: ".", projectContext: "WebUI", format: "agent" });
@@ -68,13 +66,13 @@ test("CLI ambiguous partial context exits cleanly with candidate contexts", asyn
     projectSymbol("AdminTools", "AdminTools/AdminTools.csproj"),
     projectSymbol("AdminApi", "AdminApi/AdminApi.csproj")
   ];
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships: [], references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships: [], references: [] });
 
   const result = await execFileAsync("node", [
     cliPath,
     "query",
-    "where-to-add",
-    "save user",
+    "relationships",
+    "UserService",
     "--workspace",
     workspaceRoot,
     "--context",
@@ -113,6 +111,9 @@ test("package files include runtime assets and exclude source/test folders", asy
   assert.ok(packageJson.files.includes("README.md"));
   assert.ok(packageJson.files.includes("CHANGELOG.md"));
   assert.ok(packageJson.files.includes("GETTING_STARTED.md"));
+  assert.ok(packageJson.files.includes("NEXT_STEPS.md"));
+  assert.ok(packageJson.files.includes("PRODUCT_REQUIREMENTS.md"));
+  assert.ok(packageJson.files.includes("WHERE_WE_LEFT_OFF.md"));
   assert.ok(!packageJson.files.includes("src/**"));
   assert.ok(!packageJson.files.includes("test/**"));
   assert.strictEqual(await exists(path.join(projectRoot, ".vscodeignore")), false);
@@ -125,7 +126,7 @@ test("package files include runtime assets and exclude source/test folders", asy
   assert.ok(packageJson.keywords.includes("context-reduction"));
   assert.ok(packageJson.keywords.includes("token-reduction"));
   assert.ok(packageJson.keywords.includes("dotnet"));
-  assert.ok(packageJson.keywords.includes("where-to-add"));
+  assert.ok(packageJson.keywords.includes("relationships"));
   assert.ok(commands.includes("krakenAtlas.rebuildIndex"));
   assert.ok(commands.includes("krakenAtlas.updateIndex"));
   assert.ok(commands.includes("krakenAtlas.doctor"));
@@ -134,14 +135,6 @@ test("package files include runtime assets and exclude source/test folders", asy
   assert.ok(commands.includes("krakenAtlas.querySymbol"));
   assert.ok(commands.includes("krakenAtlas.queryReferences"));
   assert.ok(commands.includes("krakenAtlas.queryRelationships"));
-  assert.ok(commands.includes("krakenAtlas.queryPattern"));
-  assert.ok(commands.includes("krakenAtlas.queryPatternMap"));
-  assert.ok(commands.includes("krakenAtlas.queryHotspots"));
-  assert.ok(commands.includes("krakenAtlas.findOrphans"));
-  assert.ok(commands.includes("krakenAtlas.findDuplicates"));
-  assert.ok(commands.includes("krakenAtlas.findDrift"));
-  assert.ok(commands.includes("krakenAtlas.whereToAdd"));
-  assert.ok(commands.includes("krakenAtlas.planChange"));
   assert.ok(commands.includes("krakenAtlas.searchMap"));
   assert.ok(commands.includes("krakenAtlas.exportContextPack"));
   assert.ok(commands.includes("krakenAtlas.installAgentInstructions"));
@@ -153,25 +146,9 @@ test("package files include runtime assets and exclude source/test folders", asy
   assert.ok(languageModelTools.includes("kraken_atlas_doctor"));
   assert.ok(languageModelTools.includes("kraken_atlas_query"));
   assert.ok(languageModelTools.includes("kraken_atlas_context_pack"));
-  assert.match(
+  assert.doesNotMatch(
     packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
-    /where-to-add/
-  );
-  assert.match(
-    packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
-    /plan-change/
-  );
-  assert.match(
-    packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
-    /hotspots/
-  );
-  assert.match(
-    packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
-    /drift/
-  );
-  assert.match(
-    packageJson.contributes.languageModelTools.find((tool: { name: string }) => tool.name === "kraken_atlas_query").modelDescription,
-    /orphans.*duplicates/
+    /where-to-add|plan-change|hotspots|drift|orphans|duplicates/
   );
 });
 

@@ -42,8 +42,6 @@ const requiredOutputs = [
   "symbols.jsonl",
   "references.jsonl",
   "relationships.jsonl",
-  "patterns.jsonl",
-  "findings.jsonl",
   "agent-readme.md",
   "index.sqlite"
 ];

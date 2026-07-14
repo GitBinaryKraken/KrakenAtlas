@@ -5,18 +5,14 @@ import { analyzeDotnetProjects } from "../analyzers/dotnetProjectAnalyzer";
 import { analyzeVanillaWeb } from "../analyzers/webAnalyzer";
 import { defaultMaxFileSizeBytes, defaultOutputFolder } from "../config/defaults";
 import { renderAgentReadme } from "../context/agentContext";
-import { detectCodeHealthFindings } from "../findings/codeHealthDetector";
 import { diffFiles } from "../doctor/mapDoctor";
 import {
   FileRecord,
-  FindingRecord,
-  PatternRecord,
   ProjectAnalyzerRun,
   ReferenceRecord,
   RelationshipRecord,
   SymbolRecord
 } from "../model/records";
-import { detectPatterns, renderConventionsMarkdown } from "../patterns/patternDetector";
 import { scanWorkspace } from "../scanner/fileScanner";
 import { readJsonl } from "../storage/jsonlReader";
 import { writeJsonl } from "../storage/jsonlWriter";
@@ -53,10 +49,6 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
   if (previousFiles.length === 0) {
     return fullRebuild(options, "No existing files.jsonl map was found.");
   }
-  if (!(await pathExists(path.join(outputFolder, "findings.jsonl")))) {
-    return fullRebuild(options, "The existing map predates code-health findings and requires a schema rebuild.");
-  }
-
   const diff = diffFiles(previousFiles, currentFiles);
   if (diff.addedFiles.length === 0 && diff.changedFiles.length === 0 && diff.deletedFiles.length === 0) {
     return {
@@ -65,8 +57,6 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
       symbolCount: (await readJsonl<SymbolRecord>(path.join(outputFolder, "symbols.jsonl"))).length,
       referenceCount: (await readJsonl<ReferenceRecord>(path.join(outputFolder, "references.jsonl"))).length,
       relationshipCount: (await readJsonl<RelationshipRecord>(path.join(outputFolder, "relationships.jsonl"))).length,
-      patternCount: (await readJsonl<PatternRecord>(path.join(outputFolder, "patterns.jsonl"))).length,
-      findingCount: (await readJsonl<FindingRecord>(path.join(outputFolder, "findings.jsonl"))).length,
       analyzerRuns: await readAnalyzerRuns(outputFolder),
       scanSummary: scanResult.summary,
       mode: "skipped",
@@ -101,18 +91,12 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     ...dotnetProjectResult.relationships,
     ...conventionResult.relationships
   ]).sort(byId);
-  const patterns = detectPatterns({ symbols, relationships });
-  const findings = await detectCodeHealthFindings({ workspaceRoot: options.workspaceRoot, symbols, references, relationships });
-
   progress("Writing updated graph files");
   await fs.mkdir(outputFolder, { recursive: true });
   await writeJsonl(path.join(outputFolder, "files.jsonl"), currentFiles);
   await writeJsonl(path.join(outputFolder, "symbols.jsonl"), symbols);
   await writeJsonl(path.join(outputFolder, "references.jsonl"), references);
   await writeJsonl(path.join(outputFolder, "relationships.jsonl"), relationships);
-  await writeJsonl(path.join(outputFolder, "patterns.jsonl"), patterns);
-  await writeJsonl(path.join(outputFolder, "findings.jsonl"), findings);
-  await fs.writeFile(path.join(outputFolder, "conventions.md"), renderConventionsMarkdown(patterns), "utf8");
 
   const analyzerRuns: ProjectAnalyzerRun[] = [
     {
@@ -121,8 +105,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
       recordCounts: {
         symbols: symbols.filter((symbol) => symbol.language === "csharp").length,
         references: references.filter((reference) => !isWebFile(reference.file)).length,
-        relationships: relationships.filter((relationship) => !isWebRelationship(relationship)).length,
-        patterns: patterns.filter((pattern) => pattern.language === "csharp" || pattern.id.startsWith("pattern:dotnet") || pattern.id.startsWith("pattern:aspnet")).length
+        relationships: relationships.filter((relationship) => !isWebRelationship(relationship)).length
       }
     },
     {
@@ -131,8 +114,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
       recordCounts: {
         symbols: webResult.symbols.length,
         references: webResult.references.length,
-        relationships: webResult.relationships.length,
-        patterns: patterns.filter((pattern) => pattern.id.startsWith("pattern:web") || pattern.id.startsWith("pattern:react")).length
+        relationships: webResult.relationships.length
       }
     }
   ];
@@ -143,8 +125,6 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     symbols,
     references,
     relationships,
-    patternsCount: patterns.length,
-    findingsCount: findings.length,
     analyzerRuns
   });
 
@@ -156,8 +136,6 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     symbols,
     references,
     relationships,
-    patterns,
-    findings,
     project: projectMetadata
   });
   await writeManifest(
@@ -165,9 +143,7 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     createManifest(options.workspaceRoot, {
       fileCount: currentFiles.length,
       symbolCount: symbols.length,
-      relationshipCount: relationships.length,
-      patternCount: patterns.length,
-      findingCount: findings.length
+      relationshipCount: relationships.length
     })
   );
 
@@ -177,8 +153,6 @@ export async function updateProject(options: RebuildProjectOptions): Promise<Upd
     symbolCount: symbols.length,
     referenceCount: references.length,
     relationshipCount: relationships.length,
-    patternCount: patterns.length,
-    findingCount: findings.length,
     analyzerRuns,
     scanSummary: scanResult.summary,
     mode: "partial",
@@ -262,13 +236,4 @@ function uniqueById<T extends { id: string }>(records: T[]): T[] {
     seen.add(record.id);
     return true;
   });
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
 }

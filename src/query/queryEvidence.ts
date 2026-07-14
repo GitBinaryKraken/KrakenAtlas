@@ -1,5 +1,5 @@
 import type { QueryResponse } from "./queryTypes";
-import { numberValue, stringValue, sumCounts, uniqueStrings } from "./queryUtils";
+import { stringValue, sumCounts, uniqueStrings } from "./queryUtils";
 
 export function compactResponse(input: Partial<QueryResponse> & { query: string; answer: string; confidence: number }): QueryResponse {
   return {
@@ -10,7 +10,6 @@ export function compactResponse(input: Partial<QueryResponse> & { query: string;
     files: uniqueStrings(input.files ?? []),
     symbols: uniqueStrings(input.symbols ?? []),
     relationships: input.relationships ?? [],
-    patterns: input.patterns ?? [],
     flow: input.flow ?? [],
     nextQueries: uniqueStrings(input.nextQueries ?? []).slice(0, 10),
     estimatedContextSavings: "Returns graph records and line ranges instead of full source files."
@@ -171,62 +170,4 @@ export function inferSyntheticNodeKind(endpointId: string): string {
   }
 
   return "synthetic";
-}
-
-export function patternEvidence(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    id: row.id,
-    name: row.name,
-    category: row.category,
-    language: row.language,
-    confidence: row.confidence,
-    frequency: row.frequency,
-    counterExampleCount: row.counterExampleCount,
-    rulesObserved: row.rulesObserved,
-    agentGuidance: row.agentGuidance,
-    instances: row.instances
-  };
-}
-
-export function buildPatternMapSummaries(patterns: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-  const byCategory = new Map<string, Array<Record<string, unknown>>>();
-  for (const pattern of patterns) {
-    const category = stringValue(pattern.category) || "uncategorized";
-    byCategory.set(category, [...(byCategory.get(category) ?? []), pattern]);
-  }
-
-  return [...byCategory.entries()]
-    .sort((left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]))
-    .map(([category, categoryPatterns]) => {
-      const sorted = [...categoryPatterns].sort((left, right) =>
-        numberValue(right.confidence) - numberValue(left.confidence) ||
-        numberValue(right.frequency) - numberValue(left.frequency) ||
-        stringValue(left.name).localeCompare(stringValue(right.name))
-      );
-      const totalFrequency = sorted.reduce((sum, pattern) => sum + numberValue(pattern.frequency), 0);
-      return {
-        recordType: "patternMapArea",
-        category,
-        patternCount: sorted.length,
-        totalFrequency,
-        averageConfidence: averagePatternConfidence(sorted),
-        patterns: sorted.slice(0, 5).map((pattern) => ({
-          id: pattern.id,
-          name: pattern.name,
-          confidence: pattern.confidence,
-          frequency: pattern.frequency,
-          guidance: pattern.agentGuidance
-        })),
-        message: `${category}: ${sorted.length} pattern(s), ${totalFrequency} observed edge(s).`
-      };
-    });
-}
-
-export function averagePatternConfidence(patterns: Array<Record<string, unknown>>): number {
-  if (patterns.length === 0) {
-    return 0;
-  }
-
-  const total = patterns.reduce((sum, pattern) => sum + numberValue(pattern.confidence), 0);
-  return Math.round((total / patterns.length) * 100) / 100;
 }

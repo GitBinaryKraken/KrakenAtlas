@@ -4,8 +4,6 @@ import { Database } from "sql.js";
 import {
   CodeMapIndexRecords,
   FileRecord,
-  FindingRecord,
-  PatternRecord,
   ReferenceRecord,
   RelationshipRecord,
   SymbolRecord
@@ -104,37 +102,6 @@ function createSchema(database: Database): void {
     CREATE INDEX idx_relationships_type ON relationships(type);
     CREATE INDEX idx_relationships_file ON relationships(file);
 
-    CREATE TABLE patterns (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      category TEXT,
-      language TEXT,
-      confidence REAL,
-      frequency INTEGER,
-      counter_example_count INTEGER,
-      agent_guidance TEXT,
-      json TEXT NOT NULL
-    );
-
-    CREATE INDEX idx_patterns_name ON patterns(name);
-    CREATE INDEX idx_patterns_category ON patterns(category);
-    CREATE INDEX idx_patterns_language ON patterns(language);
-
-    CREATE TABLE findings (
-      id TEXT PRIMARY KEY,
-      kind TEXT NOT NULL,
-      title TEXT NOT NULL,
-      confidence REAL,
-      file TEXT,
-      start_line INTEGER,
-      fingerprint TEXT,
-      json TEXT NOT NULL
-    );
-
-    CREATE INDEX idx_findings_kind ON findings(kind);
-    CREATE INDEX idx_findings_file ON findings(file);
-    CREATE INDEX idx_findings_fingerprint ON findings(fingerprint);
-
     CREATE TABLE node_projects (
       node_id TEXT NOT NULL,
       project TEXT NOT NULL,
@@ -183,19 +150,6 @@ function createSchema(database: Database): void {
     CREATE INDEX idx_node_members_node ON node_members(node_id);
     CREATE INDEX idx_node_members_name ON node_members(member_name);
 
-    CREATE TABLE node_usage_summary (
-      node_id TEXT PRIMARY KEY,
-      incoming_count INTEGER NOT NULL DEFAULT 0,
-      outgoing_count INTEGER NOT NULL DEFAULT 0,
-      reference_count INTEGER NOT NULL DEFAULT 0,
-      project_count INTEGER NOT NULL DEFAULT 0,
-      hotspot_score REAL NOT NULL DEFAULT 0,
-      edit_likelihood REAL NOT NULL DEFAULT 0,
-      avoid_initially INTEGER NOT NULL DEFAULT 0
-    );
-
-    CREATE INDEX idx_node_usage_hotspot ON node_usage_summary(hotspot_score);
-    CREATE INDEX idx_node_usage_avoid ON node_usage_summary(avoid_initially);
   `);
 
   createSearchTable(database);
@@ -253,19 +207,10 @@ function insertRecords(database: Database, records: CodeMapIndexRecords): void {
       insertRelationship(database, relationship);
     }
 
-    for (const pattern of records.patterns ?? []) {
-      insertPattern(database, pattern);
-    }
-
-    for (const finding of records.findings ?? []) {
-      insertFinding(database, finding);
-    }
-
     insertNodeProjectEnrichment(database, records);
     insertNodeRoleEnrichment(database, records);
     insertNodeTagEnrichment(database, records);
     insertNodeMemberEnrichment(database, records);
-    insertNodeUsageSummary(database, records);
 
     database.run("COMMIT;");
   } catch (error) {
@@ -352,53 +297,6 @@ function insertRelationship(database: Database, relationship: RelationshipRecord
   );
 
   insertSearchRecord(database, relationship.id, "relationship", relationship.type, [relationship.from, relationship.to, relationship.evidence].filter(Boolean).join(" "), relationship.file ?? "");
-}
-
-function insertPattern(database: Database, pattern: PatternRecord): void {
-  database.run(
-    `INSERT INTO patterns (id, name, category, language, confidence, frequency, counter_example_count, agent_guidance, json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);`,
-    [
-      pattern.id,
-      pattern.name,
-      pattern.category,
-      pattern.language ?? null,
-      pattern.confidence,
-      pattern.frequency,
-      pattern.counterExampleCount,
-      pattern.agentGuidance,
-      JSON.stringify(pattern)
-    ]
-  );
-
-  insertSearchRecord(database, pattern.id, "pattern", pattern.name, [pattern.category, pattern.language, pattern.rulesObserved.join(" "), pattern.agentGuidance].filter(Boolean).join(" "), "");
-}
-
-function insertFinding(database: Database, finding: FindingRecord): void {
-  const primary = finding.locations[0];
-  database.run(
-    `INSERT INTO findings (id, kind, title, confidence, file, start_line, fingerprint, json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-    [
-      finding.id,
-      finding.kind,
-      finding.title,
-      finding.confidence,
-      primary?.file ?? null,
-      primary?.range.startLine ?? null,
-      finding.fingerprint ?? null,
-      JSON.stringify(finding)
-    ]
-  );
-
-  insertSearchRecord(
-    database,
-    finding.id,
-    "finding",
-    finding.title,
-    [finding.kind, finding.summary, ...finding.evidence, ...finding.caveats].join(" "),
-    primary?.file ?? ""
-  );
 }
 
 function insertSearchRecord(database: Database, recordId: string, recordType: string, title: string, body: string, filePath: string): void {
@@ -617,154 +515,6 @@ function insertNodeMemberEnrichment(database: Database, records: CodeMapIndexRec
         member.typeName ?? null,
         typeof member.required === "boolean" ? (member.required ? 1 : 0) : null,
         typeof member.nullable === "boolean" ? (member.nullable ? 1 : 0) : null
-      ]
-    );
-  }
-}
-
-function insertNodeUsageSummary(database: Database, records: CodeMapIndexRecords): void {
-  const knownSymbolIds = new Set((records.symbols ?? []).map((symbol) => symbol.id));
-  const fileIdsByPath = new Map(records.files.map((file) => [normalizeUsagePath(file.path), file.id]));
-  const summaries = new Map<string, {
-    incomingCount: number;
-    outgoingCount: number;
-    referenceCount: number;
-    projects: Set<string>;
-    hotspotScore: number;
-    editLikelihood: number;
-    avoidInitially: boolean;
-  }>();
-  const fileStats = new Map<string, {
-    file: string;
-    relationshipCount: number;
-    types: Map<string, number>;
-    endpoints: Set<string>;
-  }>();
-  const endpointCounts = new Map<string, number>();
-
-  const ensure = (nodeId: string) => {
-    let summary = summaries.get(nodeId);
-    if (!summary) {
-      summary = {
-        incomingCount: 0,
-        outgoingCount: 0,
-        referenceCount: 0,
-        projects: new Set<string>(),
-        hotspotScore: 0,
-        editLikelihood: 0,
-        avoidInitially: false
-      };
-      summaries.set(nodeId, summary);
-    }
-    return summary;
-  };
-  const addProject = (nodeId: string | undefined, project: string | undefined): void => {
-    if (nodeId && project) {
-      ensure(nodeId).projects.add(project);
-    }
-  };
-
-  for (const file of records.files) {
-    const summary = ensure(file.id);
-    addProject(file.id, inferProjectFromFile(file.path));
-    summary.editLikelihood = Math.max(summary.editLikelihood, fileUsageEditLikelihood(file.path, 0, false));
-  }
-
-  for (const symbol of records.symbols ?? []) {
-    ensure(symbol.id);
-    addProject(symbol.id, inferProjectFromFile(symbol.file));
-  }
-
-  for (const reference of records.references ?? []) {
-    for (const nodeId of expandNodeWithKnownParents(reference.resolvedSymbolId ?? undefined, knownSymbolIds)) {
-      ensure(nodeId).referenceCount += 1;
-      addProject(nodeId, inferProjectFromFile(reference.file));
-    }
-  }
-
-  for (const relationship of records.relationships ?? []) {
-    const project = inferProjectFromFile(relationship.file ?? "");
-    for (const nodeId of expandNodeWithKnownParents(relationship.from, knownSymbolIds)) {
-      ensure(nodeId).outgoingCount += 1;
-      addProject(nodeId, project);
-    }
-    for (const nodeId of expandNodeWithKnownParents(relationship.to, knownSymbolIds)) {
-      ensure(nodeId).incomingCount += 1;
-      addProject(nodeId, project);
-    }
-
-    const relationshipFile = normalizeUsagePath(relationship.file ?? "");
-    const fileId = fileIdsByPath.get(relationshipFile);
-    if (fileId) {
-      const summary = ensure(fileId);
-      summary.outgoingCount += 1;
-      addProject(fileId, project);
-    }
-
-    if (!relationshipFile || isUsageTestFile(relationshipFile)) {
-      continue;
-    }
-
-    const stats = fileStats.get(relationshipFile) ?? {
-      file: relationshipFile,
-      relationshipCount: 0,
-      types: new Map<string, number>(),
-      endpoints: new Set<string>()
-    };
-    stats.relationshipCount += 1;
-    const type = relationship.type || "UNKNOWN";
-    stats.types.set(type, (stats.types.get(type) ?? 0) + 1);
-    for (const endpoint of [relationship.from, relationship.to]) {
-      if (endpoint && !isCommonUsageExternalSymbol(endpoint)) {
-        stats.endpoints.add(endpoint);
-        endpointCounts.set(endpoint, (endpointCounts.get(endpoint) ?? 0) + 1);
-      }
-    }
-    fileStats.set(relationshipFile, stats);
-  }
-
-  for (const stats of fileStats.values()) {
-    const fileId = fileIdsByPath.get(stats.file);
-    if (!fileId) {
-      continue;
-    }
-
-    const relationshipTypes = [...stats.types.keys()];
-    const role = inferUsageHotspotRole(stats.file, relationshipTypes);
-    const sharedEndpointCount = [...stats.endpoints].filter((endpoint) => (endpointCounts.get(endpoint) ?? 0) > 1).length;
-    const hotspotScore = stats.relationshipCount + stats.types.size * 3 + sharedEndpointCount * 2 + usageHotspotRoleScore(role);
-    const summary = ensure(fileId);
-    summary.hotspotScore = Math.max(summary.hotspotScore, hotspotScore);
-    summary.editLikelihood = Math.max(summary.editLikelihood, fileUsageEditLikelihood(stats.file, hotspotScore, false));
-    summary.avoidInitially = summary.avoidInitially || role === "composition-root" || role === "configuration" || hotspotScore >= 18;
-  }
-
-  for (const [nodeId, summary] of summaries) {
-    const relationshipCount = summary.incomingCount + summary.outgoingCount;
-    if (!nodeId.startsWith("file:")) {
-      summary.hotspotScore = Math.max(
-        summary.hotspotScore,
-        relationshipCount + summary.referenceCount + Math.max(0, summary.projects.size - 1) * 2
-      );
-      summary.editLikelihood = Math.max(
-        summary.editLikelihood,
-        Math.min(1, (relationshipCount + summary.referenceCount) / 20)
-      );
-      summary.avoidInitially = summary.avoidInitially || summary.projects.size >= 3 || summary.hotspotScore >= 20;
-    }
-
-    database.run(
-      `INSERT INTO node_usage_summary (node_id, incoming_count, outgoing_count, reference_count, project_count, hotspot_score, edit_likelihood, avoid_initially)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?);`,
-      [
-        nodeId,
-        summary.incomingCount,
-        summary.outgoingCount,
-        summary.referenceCount,
-        summary.projects.size,
-        roundUsageMetric(summary.hotspotScore),
-        roundUsageMetric(summary.editLikelihood),
-        summary.avoidInitially ? 1 : 0
       ]
     );
   }
@@ -1089,62 +839,6 @@ function inferMemberNullable(symbol: SymbolRecord): boolean | undefined {
 
 function normalizeUsagePath(filePath: string): string {
   return filePath.replace(/\\/g, "/").replace(/^\.?\//, "");
-}
-
-function isUsageTestFile(filePath: string): boolean {
-  return /(^|\/)(test|tests|specs?)(\/|$)|(\.|-)(test|spec)\./iu.test(normalizeUsagePath(filePath));
-}
-
-function isCommonUsageExternalSymbol(id: string): boolean {
-  return /^symbol:csharp:(string|int|long|double|decimal|bool|object|task|task<|ienumerable<|ilist<|list<|dictionary<|datetime|guid|iconfiguration|ihttpclientfactory|ilogger|ilogger<|iserviceprovider|pagemodel|controller|controllerbase)(\.|$|<)/iu.test(id);
-}
-
-function inferUsageHotspotRole(filePath: string, relationshipTypes: string[]): string {
-  const normalized = normalizeUsagePath(filePath);
-  const basename = normalized.split("/").pop() ?? normalized;
-  const types = new Set(relationshipTypes);
-
-  if (/^(Program|Startup)\.cs$/iu.test(basename) || types.has("REGISTERS") || types.has("USES_MIDDLEWARE")) {
-    return "composition-root";
-  }
-  if (/appsettings|config|options|settings/iu.test(normalized) || types.has("USES_CONFIG_KEY") || types.has("BINDS_OPTIONS")) {
-    return "configuration";
-  }
-  if (/(Controller|PageModel|\.cshtml\.cs)$/iu.test(basename) || /\.(cshtml|razor)$/iu.test(basename) || types.has("MAPS_ROUTE") || types.has("HANDLES_REQUEST")) {
-    return "entry-point";
-  }
-  if (/(Service|Manager|Repository|Adapter)\.cs$/iu.test(basename) || types.has("CALLS_REPOSITORY") || types.has("USES_DBSET")) {
-    return "service-layer";
-  }
-  if (/\.(js|ts|tsx)$/iu.test(basename) || types.has("HANDLES_EVENT") || types.has("WRITES_QUERY_STRING")) {
-    return "client-flow";
-  }
-  return "shared-bridge";
-}
-
-function usageHotspotRoleScore(role: string): number {
-  switch (role) {
-    case "composition-root":
-    case "configuration":
-      return 4;
-    case "entry-point":
-    case "service-layer":
-      return 2;
-    default:
-      return 0;
-  }
-}
-
-function fileUsageEditLikelihood(filePath: string, hotspotScore: number, avoidInitially: boolean): number {
-  const role = inferUsageHotspotRole(filePath, []);
-  const roleBase = role === "entry-point" || role === "service-layer" || role === "client-flow" ? 0.55 : role === "shared-bridge" ? 0.35 : 0.15;
-  const centralityBoost = Math.min(0.25, hotspotScore / 80);
-  const avoidPenalty = avoidInitially || role === "composition-root" || role === "configuration" ? 0.2 : 0;
-  return Math.max(0, Math.min(1, roleBase + centralityBoost - avoidPenalty));
-}
-
-function roundUsageMetric(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 function expandNodeWithKnownParents(nodeId: string | undefined, knownSymbolIds: Set<string>): string[] {

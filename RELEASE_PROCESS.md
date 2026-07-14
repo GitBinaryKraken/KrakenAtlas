@@ -111,10 +111,13 @@ In a target workspace, run:
 
 ```text
 Kraken Atlas: Check Map Health
-Kraken Atlas: Suggest Where To Add Code
+Kraken Atlas: Show Project Summary
+Kraken Atlas: Find Symbol
+Kraken Atlas: Find References
+Kraken Atlas: Show Relationships
 ```
 
-For a release that changes ranking, retest the exact alpha-feedback query that motivated the release.
+For a release that changes mapping, retest the exact fixture structure and relationship query that motivated the release. Confirm expected symbols, references, edges, and source locations.
 
 ## Final Release Notes
 

@@ -16,8 +16,6 @@ export interface ProjectMetadataInput {
   symbols: SymbolRecord[];
   references: ReferenceRecord[];
   relationships: RelationshipRecord[];
-  patternsCount: number;
-  findingsCount?: number;
   analyzerRuns: ProjectAnalyzerRun[];
   generatedAt?: Date;
 }
@@ -29,7 +27,7 @@ export function createProjectMetadata(input: ProjectMetadataInput): ProjectMetad
   const workspaceRootName = path.basename(input.workspaceRoot);
 
   return {
-    schemaVersion: "0.1.0",
+    schemaVersion: "0.2.0",
     generatedAt: (input.generatedAt ?? new Date()).toISOString(),
     workspaceName: workspaceRootName,
     workspaceRootName,
@@ -41,9 +39,7 @@ export function createProjectMetadata(input: ProjectMetadataInput): ProjectMetad
       files: input.files.length,
       symbols: input.symbols.length,
       references: input.references.length,
-      relationships: input.relationships.length,
-      patterns: input.patternsCount,
-      findings: input.findingsCount ?? 0
+      relationships: input.relationships.length
     },
     agentGuidance: {
       readFirst: [

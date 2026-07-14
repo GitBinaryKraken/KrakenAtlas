@@ -42,7 +42,6 @@ test("rebuildSqliteIndex creates queryable files and search records", async () =
     symbols: [],
     references: [],
     relationships: [],
-    patternsCount: 0,
     analyzerRuns: []
   });
 
@@ -71,21 +70,6 @@ test("rebuildSqliteIndex creates relationship graph indexes", async () => {
 
   await rebuildSqliteIndex(indexPath, {
     files: [],
-    patterns: [
-      {
-        recordType: "pattern",
-        id: "pattern:dotnet:constructor-injection",
-        name: "Constructor injection",
-        category: "dependency-management",
-        language: "csharp",
-        confidence: 0.55,
-        frequency: 2,
-        counterExampleCount: 0,
-        instances: [],
-        rulesObserved: ["Types receive dependencies through constructor parameters."],
-        agentGuidance: "Prefer constructor injection."
-      }
-    ],
     relationships: [
       {
         recordType: "relationship",
@@ -109,11 +93,9 @@ test("rebuildSqliteIndex creates relationship graph indexes", async () => {
   const database = await openSqliteIndex(indexPath);
   try {
     const edge = database.exec("SELECT from_id, to_id, type FROM relationships WHERE to_id = 'symbol:csharp:IUserService';")[0].values[0];
-    const pattern = database.exec("SELECT name FROM patterns WHERE id = 'pattern:dotnet:constructor-injection';")[0].values[0][0];
     const indexNames = database.exec("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'relationships' ORDER BY name;")[0].values.flat();
 
     assert.deepStrictEqual(edge, ["symbol:csharp:UserService", "symbol:csharp:IUserService", "IMPLEMENTS"]);
-    assert.strictEqual(pattern, "Constructor injection");
     assert.ok(indexNames.includes("idx_relationships_from"));
     assert.ok(indexNames.includes("idx_relationships_to"));
     assert.ok(indexNames.includes("idx_relationships_type"));
@@ -363,61 +345,6 @@ test("rebuildSqliteIndex creates node member enrichment", async () => {
     ]);
     assert.ok(indexNames.includes("idx_node_members_node"));
     assert.ok(indexNames.includes("idx_node_members_name"));
-  } finally {
-    database.close();
-  }
-});
-
-test("rebuildSqliteIndex creates node usage summary enrichment", async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), "kraken-atlas-node-usage-"));
-  const indexPath = path.join(root, ".kraken-atlas", "index.sqlite");
-  const serviceId = "symbol:csharp:Domain.UserService";
-  const files: FileRecord[] = [
-    fileRecord("Web/Program.cs"),
-    fileRecord("Web/Controllers/UserController.cs"),
-    fileRecord("Domain/UserService.cs")
-  ];
-  const symbols: SymbolRecord[] = [
-    symbolRecord(serviceId, "UserService", "Domain.UserService", "class", "csharp", "Domain/UserService.cs"),
-    symbolRecord("symbol:csharp:Web.Controllers.UserController", "UserController", "Web.Controllers.UserController", "class", "csharp", "Web/Controllers/UserController.cs")
-  ];
-  const references: ReferenceRecord[] = [{
-    recordType: "reference",
-    id: "reference:csharp:user-service",
-    symbolName: "UserService",
-    resolvedSymbolId: serviceId,
-    file: "Web/Controllers/UserController.cs",
-    range: range(),
-    context: "type-usage",
-    snippet: "UserService service",
-    confidence: 0.9
-  }];
-  const relationships: RelationshipRecord[] = [
-    relationshipRecord("relationship:registers:user-service", "symbol:dotnet-project:Web/Web.csproj", serviceId, "REGISTERS", "Web/Program.cs"),
-    relationshipRecord("relationship:middleware:auth", "symbol:csharp:Web.Program", "symbol:csharp:Web.AuthMiddleware", "USES_MIDDLEWARE", "Web/Program.cs"),
-    relationshipRecord("relationship:route:user", "symbol:csharp:Web.Controllers.UserController", "route:csharp:/users", "MAPS_ROUTE", "Web/Controllers/UserController.cs"),
-    relationshipRecord("relationship:calls:user-service", "symbol:csharp:Web.Controllers.UserController", serviceId, "CALLS", "Web/Controllers/UserController.cs"),
-    relationshipRecord("relationship:queries:user-service", serviceId, "symbol:csharp:Domain.AppDbContext.Users", "QUERIES", "Domain/UserService.cs")
-  ];
-
-  await rebuildSqliteIndex(indexPath, { files, symbols, references, relationships });
-
-  const database = await openSqliteIndex(indexPath);
-  try {
-    const rows = database.exec(
-      `SELECT node_id, incoming_count, outgoing_count, reference_count, project_count, hotspot_score, avoid_initially
-       FROM node_usage_summary
-       WHERE node_id IN ('file:Web/Program.cs', '${serviceId}')
-       ORDER BY node_id;`
-    )[0].values;
-    const indexNames = database.exec("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'node_usage_summary' ORDER BY name;")[0].values.flat();
-
-    assert.deepStrictEqual(rows, [
-      ["file:Web/Program.cs", 0, 2, 0, 1, 14, 1],
-      [serviceId, 2, 1, 1, 2, 6, 0]
-    ]);
-    assert.ok(indexNames.includes("idx_node_usage_hotspot"));
-    assert.ok(indexNames.includes("idx_node_usage_avoid"));
   } finally {
     database.close();
   }

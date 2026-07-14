@@ -1,8 +1,10 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.MSBuild;
 
 var options = AnalyzerOptions.Parse(args);
 if (options is null)
@@ -80,27 +82,116 @@ internal sealed class CSharpWorkspaceAnalyzer
     public async Task<AnalysisResult> AnalyzeAsync()
     {
         var result = new AnalysisResult();
-        var documents = new List<CSharpDocument>();
+        var documents = await LoadDocumentsAsync();
 
+        var declaredTypes = CollectDeclaredTypes(documents);
+        var dbSetProperties = CollectDbSetProperties(documents, declaredTypes);
+
+        foreach (var document in documents)
+        {
+            AnalyzeDocument(document, declaredTypes, dbSetProperties, document.SemanticModel, result);
+        }
+
+        result.Deduplicate();
+        return result;
+    }
+
+    private async Task<List<CSharpDocument>> LoadDocumentsAsync()
+    {
+        var workspaceInputs = DiscoverWorkspaceInputs(_inputPath).ToList();
+        if (workspaceInputs.Count > 0)
+        {
+            var workspaceDocuments = await LoadMsBuildDocumentsAsync(workspaceInputs);
+            if (workspaceDocuments.Count > 0)
+            {
+                return workspaceDocuments;
+            }
+        }
+
+        return await LoadLooseDocumentsAsync();
+    }
+
+    private async Task<List<CSharpDocument>> LoadMsBuildDocumentsAsync(IReadOnlyList<string> workspaceInputs)
+    {
+        if (!MSBuildLocator.IsRegistered)
+        {
+            MSBuildLocator.RegisterDefaults();
+        }
+
+        var documents = new Dictionary<string, CSharpDocument>(StringComparer.OrdinalIgnoreCase);
+        foreach (var workspaceInput in workspaceInputs)
+        {
+            using var workspace = MSBuildWorkspace.Create();
+            workspace.WorkspaceFailed += (_, eventArgs) =>
+                Console.Error.WriteLine($"Roslyn workspace warning: {eventArgs.Diagnostic.Message}");
+
+            Solution solution;
+            var extension = Path.GetExtension(workspaceInput);
+            if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase))
+            {
+                solution = await workspace.OpenSolutionAsync(workspaceInput);
+            }
+            else
+            {
+                var project = await workspace.OpenProjectAsync(workspaceInput);
+                solution = project.Solution;
+            }
+
+            foreach (var project in solution.Projects.Where(project => project.Language == LanguageNames.CSharp))
+            {
+                var compilation = await project.GetCompilationAsync();
+                if (compilation is null)
+                {
+                    continue;
+                }
+
+                foreach (var sourceDocument in project.Documents)
+                {
+                    if (sourceDocument.FilePath is null
+                        || !sourceDocument.FilePath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)
+                        || IsIgnoredPath(sourceDocument.FilePath))
+                    {
+                        continue;
+                    }
+
+                    var tree = await sourceDocument.GetSyntaxTreeAsync();
+                    var root = await sourceDocument.GetSyntaxRootAsync();
+                    if (tree is null || root is null)
+                    {
+                        continue;
+                    }
+
+                    documents.TryAdd(
+                        Path.GetFullPath(sourceDocument.FilePath),
+                        new CSharpDocument(
+                            sourceDocument.FilePath,
+                            ToWorkspacePath(sourceDocument.FilePath),
+                            tree,
+                            root,
+                            compilation.GetSemanticModel(tree)));
+                }
+            }
+        }
+
+        return documents.Values.OrderBy(document => document.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    private async Task<List<CSharpDocument>> LoadLooseDocumentsAsync()
+    {
+        var documents = new List<CSharpDocument>();
         foreach (var filePath in DiscoverCSharpFiles(_inputPath))
         {
             var text = await File.ReadAllTextAsync(filePath);
             var tree = CSharpSyntaxTree.ParseText(text, path: filePath);
             var root = await tree.GetRootAsync();
-            documents.Add(new CSharpDocument(filePath, ToWorkspacePath(filePath), tree, root));
+            documents.Add(new CSharpDocument(filePath, ToWorkspacePath(filePath), tree, root, null!));
         }
 
-        var declaredTypes = CollectDeclaredTypes(documents);
-        var dbSetProperties = CollectDbSetProperties(documents, declaredTypes);
         var compilation = CreateCompilation(documents);
-
-        foreach (var document in documents)
-        {
-            AnalyzeDocument(document, declaredTypes, dbSetProperties, compilation.GetSemanticModel(document.Tree), result);
-        }
-
-        result.Deduplicate();
-        return result;
+        return documents
+            .Select(document => document with { SemanticModel = compilation.GetSemanticModel(document.Tree) })
+            .ToList();
     }
 
     private void AnalyzeDocument(
@@ -327,51 +418,56 @@ internal sealed class CSharpWorkspaceAnalyzer
         AnalysisResult result)
     {
         var fromName = GetFullyQualifiedName(type);
-        foreach (var constructor in type.Members.OfType<ConstructorDeclarationSyntax>())
+        var parameters = type.Members
+            .OfType<ConstructorDeclarationSyntax>()
+            .SelectMany(constructor => constructor.ParameterList.Parameters);
+        if (type.ParameterList is not null)
         {
-            foreach (var parameter in constructor.ParameterList.Parameters)
+            parameters = parameters.Concat(type.ParameterList.Parameters);
+        }
+
+        foreach (var parameter in parameters)
+        {
+            if (parameter.Type is null)
             {
-                if (parameter.Type is null)
-                {
-                    continue;
-                }
-
-                var dependencyName = parameter.Type.ToString();
-                AddOptionsUsageRelationship(document, type, parameter, declaredTypes, semanticModel, result);
-
-                if (!LooksLikeDependency(dependencyName))
-                {
-                    continue;
-                }
-
-                var dependencySymbol = semanticModel.GetTypeInfo(parameter.Type).Type;
-                var toName = dependencySymbol is null
-                    ? ResolveLikelyTypeName(type, dependencyName, declaredTypes)
-                    : GetSymbolDisplayName(dependencySymbol);
-                result.References.Add(new ReferenceRecord(
-                    "reference",
-                    $"reference:csharp:{document.RelativePath}:{Range.FromNode(document.Tree, parameter).StartLine}:{dependencyName}",
-                    dependencyName,
-                    SymbolId(toName),
-                    document.RelativePath,
-                    Range.FromNode(document.Tree, parameter),
-                    "constructor-parameter",
-                    parameter.ToString(),
-                    0.9));
-
-                result.Relationships.Add(new RelationshipRecord(
-                    "relationship",
-                    RelationshipId("injects", fromName, toName),
-                    SymbolId(fromName),
-                    SymbolId(toName),
-                    "INJECTS",
-                    document.RelativePath,
-                    Range.FromNode(document.Tree, parameter),
-                    parameter.ToString(),
-                    0.9));
-
-                AddValidatorUsageRelationship(document, type, parameter, declaredTypes, semanticModel, result);
+                continue;
             }
+
+            var dependencyName = parameter.Type.ToString();
+            AddOptionsUsageRelationship(document, type, parameter, declaredTypes, semanticModel, result);
+
+            if (!LooksLikeDependency(dependencyName))
+            {
+                continue;
+            }
+
+            var dependencySymbol = semanticModel.GetTypeInfo(parameter.Type).Type;
+            var toName = dependencySymbol is null
+                ? ResolveLikelyTypeName(type, dependencyName, declaredTypes)
+                : GetSymbolDisplayName(dependencySymbol);
+            result.References.Add(new ReferenceRecord(
+                "reference",
+                $"reference:csharp:{document.RelativePath}:{Range.FromNode(document.Tree, parameter).StartLine}:{dependencyName}",
+                dependencyName,
+                SymbolId(toName),
+                document.RelativePath,
+                Range.FromNode(document.Tree, parameter),
+                "constructor-parameter",
+                parameter.ToString(),
+                0.95));
+
+            result.Relationships.Add(new RelationshipRecord(
+                "relationship",
+                RelationshipId("injects", fromName, toName),
+                SymbolId(fromName),
+                SymbolId(toName),
+                "INJECTS",
+                document.RelativePath,
+                Range.FromNode(document.Tree, parameter),
+                parameter.ToString(),
+                0.95));
+
+            AddValidatorUsageRelationship(document, type, parameter, declaredTypes, semanticModel, result);
         }
     }
 
@@ -836,6 +932,17 @@ internal sealed class CSharpWorkspaceAnalyzer
             Range.FromNode(document.Tree, invocation),
             invocation.ToString(),
             0.95));
+
+        result.References.Add(new ReferenceRecord(
+            "reference",
+            $"reference:csharp:{document.RelativePath}:{Range.FromNode(document.Tree, invocation).StartLine}:{calleeName}",
+            calleeSymbol.Name,
+            SymbolId(calleeName),
+            document.RelativePath,
+            Range.FromNode(document.Tree, invocation),
+            "call",
+            invocation.ToString(),
+            0.98));
 
         if (IsRepositoryType(calleeSymbol.ContainingType))
         {
@@ -1575,14 +1682,63 @@ internal sealed class CSharpWorkspaceAnalyzer
         var root = File.Exists(inputPath) ? Path.GetDirectoryName(inputPath)! : inputPath;
         foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
         {
-            var segments = file.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (segments.Any(segment => IgnoredDirectories.Contains(segment)))
+            if (IsIgnoredPath(file))
             {
                 continue;
             }
 
             yield return file;
         }
+    }
+
+    private static IEnumerable<string> DiscoverWorkspaceInputs(string inputPath)
+    {
+        if (File.Exists(inputPath))
+        {
+            var extension = Path.GetExtension(inputPath);
+            if (extension.Equals(".sln", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return Path.GetFullPath(inputPath);
+            }
+            yield break;
+        }
+
+        if (!Directory.Exists(inputPath))
+        {
+            yield break;
+        }
+
+        var solutions = Directory
+            .EnumerateFiles(inputPath, "*.*", SearchOption.AllDirectories)
+            .Where(file => !IsIgnoredPath(file))
+            .Where(file => Path.GetExtension(file) is ".sln" or ".slnx")
+            .OrderBy(file => file.Count(character => character is '/' or '\\'))
+            .ThenBy(file => file, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (solutions.Count > 0)
+        {
+            foreach (var solution in solutions)
+            {
+                yield return solution;
+            }
+            yield break;
+        }
+
+        foreach (var project in Directory
+                     .EnumerateFiles(inputPath, "*.csproj", SearchOption.AllDirectories)
+                     .Where(file => !IsIgnoredPath(file))
+                     .OrderBy(file => file, StringComparer.OrdinalIgnoreCase))
+        {
+            yield return project;
+        }
+    }
+
+    private static bool IsIgnoredPath(string filePath)
+    {
+        var segments = Path.GetFullPath(filePath).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return segments.Any(segment => IgnoredDirectories.Contains(segment));
     }
 
     private static string ResolveWorkspaceRoot(string inputPath)
@@ -1748,7 +1904,12 @@ internal sealed class CSharpWorkspaceAnalyzer
     }
 }
 
-internal sealed record CSharpDocument(string FilePath, string RelativePath, SyntaxTree Tree, SyntaxNode Root);
+internal sealed record CSharpDocument(
+    string FilePath,
+    string RelativePath,
+    SyntaxTree Tree,
+    SyntaxNode Root,
+    SemanticModel SemanticModel);
 
 internal sealed record DbSetProperty(string ShortName, string PropertyName, string EntityName);
 

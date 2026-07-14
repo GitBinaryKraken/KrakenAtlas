@@ -2,7 +2,6 @@ import * as path from "path";
 import { Database } from "sql.js";
 import { openSqliteIndex } from "../storage/sqliteIndex";
 import { findSymbolsQuery, getProjectQuery } from "./queryBasic";
-import { CodeHealthFindingKind, findCodeHealthQuery } from "./queryCodeHealth";
 import {
   contextFromProjectSymbol,
   normalizeQueryContext,
@@ -37,13 +36,7 @@ import {
   findPropertyBridgeFlowContext,
   findRequestedPropertyFlowContext
 } from "./queryFlowContext";
-import {
-  findArchitectureHotspotsQuery,
-  findPatternMapQuery,
-  findPatternsQuery
-} from "./queryPatterns";
 import { withEndpointLocations } from "./queryNodeLocations";
-import { buildPlanChangeResponse } from "./queryPlanning";
 import {
   findReferencesQuery,
   findRelationshipsQuery,
@@ -53,8 +46,7 @@ import { strongAnchorRoleBoost } from "./queryScoring";
 import {
   findSearchQuery,
   rankSearchRowsForAgent,
-  relationshipTermScore,
-  scorePattern
+  relationshipTermScore
 } from "./querySearch";
 import {
   conceptMatchesText,
@@ -78,10 +70,6 @@ import {
   uniqueById,
   uniqueStrings
 } from "./queryUtils";
-import {
-  findWhereToAddQuery,
-  pruneWhereToAddRelationshipsForContext
-} from "./queryWhereToAdd";
 
 export type { QueryResponse, QueryServiceOptions, RelationshipQueryOptions } from "./queryTypes";
 
@@ -144,49 +132,6 @@ export class QueryService {
       relationshipMatchesContext: (row: Record<string, unknown>) => this.relationshipMatchesContext(row),
       withEndpointLocations: (rows: Array<Record<string, unknown>>) => withEndpointLocations(rows, this.endpointLocationDependencies())
     };
-  }
-
-  public findPatterns(query: string): QueryResponse {
-    return findPatternsQuery(query, this.patternQueryDependencies());
-  }
-
-  public findPatternMap(query = "pattern-map"): QueryResponse {
-    return findPatternMapQuery(query, this.patternQueryDependencies());
-  }
-
-  public findArchitectureHotspots(query = "hotspots"): QueryResponse {
-    return findArchitectureHotspotsQuery(query, this.patternQueryDependencies());
-  }
-
-  private patternQueryDependencies() {
-    return {
-      ambiguousContextResponse: (queryType: string, currentQuery: string) => this.ambiguousContextResponse(queryType, currentQuery),
-      execJson: (sql: string, params?: unknown[]) => this.execJson(sql, params),
-      execRows: (sql: string, params?: unknown[]) => this.execRows(sql, params),
-      queryContextFilePrefix: this.queryContext?.filePrefix,
-      relationshipContextWhere: (prefix: "AND" | "WHERE") => this.relationshipContextWhere(prefix),
-      scopePatternsToContext: (patterns: Array<Record<string, unknown>>) => this.scopePatternsToContext(patterns)
-    };
-  }
-
-  public findOrphans(query = ""): QueryResponse {
-    return this.findCodeHealthFindings("orphan-callable", query);
-  }
-
-  public findDuplicates(query = ""): QueryResponse {
-    return this.findCodeHealthFindings("duplicate-code-block", query);
-  }
-
-  public findDrift(query = ""): QueryResponse {
-    return this.findCodeHealthFindings("pattern-drift", query);
-  }
-
-  private findCodeHealthFindings(kind: CodeHealthFindingKind, query: string): QueryResponse {
-    return findCodeHealthQuery(kind, query, {
-      ambiguousContextResponse: (queryType, currentQuery) => this.ambiguousContextResponse(queryType, currentQuery),
-      execJson: (sql, params) => this.execJson(sql, params),
-      scopeFindingToContext: (finding) => this.scopeFindingToContext(finding)
-    });
   }
 
   public findFlow(query: string): QueryResponse {
@@ -308,42 +253,6 @@ export class QueryService {
     };
   }
 
-  public whereToAdd(query: string): QueryResponse {
-    return findWhereToAddQuery(query, this.whereToAddDependencies());
-  }
-
-  private whereToAddDependencies() {
-    return {
-      ambiguousContextResponse: (queryType: string, currentQuery: string) => this.ambiguousContextResponse(queryType, currentQuery),
-      execJson: (sql: string, params?: unknown[]) => this.execJson(sql, params),
-      execRows: (sql: string, params?: unknown[]) => this.execRows(sql, params),
-      findFlow: (currentQuery: string) => this.findFlow(currentQuery),
-      findRankedSearchRowsByTerms: (currentQuery: string, limit: number) => this.findRankedSearchRowsByTerms(currentQuery, limit),
-      findRelevantPatterns: (currentQuery: string) => this.findRelevantPatterns(currentQuery),
-      findSearchRowsByTerms: (currentQuery: string, limit: number) => this.findSearchRowsByTerms(currentQuery, limit),
-      scopePatternsToContext: (patterns: Array<Record<string, unknown>>) => this.scopePatternsToContext(patterns)
-    };
-  }
-
-  public planChange(query: string): QueryResponse {
-    const ambiguity = this.ambiguousContextResponse("plan-change", query);
-    if (ambiguity) {
-      return ambiguity;
-    }
-
-    const where = this.whereToAdd(query);
-    const hotspots = this.findArchitectureHotspots(query);
-    const drift = this.findDrift(query);
-    return buildPlanChangeResponse(
-      query,
-      where,
-      hotspots,
-      drift,
-      (planQuery, files, fileRecommendations, sharedContractBoundaries, relationships) =>
-        pruneWhereToAddRelationshipsForContext(planQuery, files, fileRecommendations, sharedContractBoundaries, relationships, this.whereToAddDependencies())
-    );
-  }
-
   private findSearchRowsByTerms(query: string, limit: number): Array<Record<string, unknown>> {
     const terms = queryTerms(query);
     if (terms.length === 0) {
@@ -380,22 +289,6 @@ export class QueryService {
       [...params, ...context.params]
     );
     return rankSearchRowsForAgent(query, rows).slice(0, limit);
-  }
-
-  private findRelevantPatterns(query: string): Array<Record<string, unknown>> {
-    const terms = queryTerms(query);
-    const allPatterns = this.execJson(
-      `SELECT json FROM patterns
-       ORDER BY confidence DESC, frequency DESC
-       LIMIT 30;`
-    );
-
-    return allPatterns
-      .map((pattern) => ({ pattern, score: scorePattern(pattern, terms) }))
-      .filter((entry) => entry.score > 0 || terms.length === 0)
-      .sort((left, right) => right.score - left.score || numberValue(right.pattern.confidence) - numberValue(left.pattern.confidence))
-      .map((entry) => entry.pattern)
-      .slice(0, 8);
   }
 
   private findSymbolIds(query: string): string[] {
@@ -641,27 +534,6 @@ export class QueryService {
     };
   }
 
-  private scopeFindingToContext(finding: Record<string, unknown>): Record<string, unknown> | undefined {
-    if (!this.queryContext) {
-      return finding;
-    }
-    const locations = Array.isArray(finding.locations)
-      ? (finding.locations as Array<Record<string, unknown>>).filter((location) => this.matchesContextFile(stringValue(location.file)))
-      : [];
-    if (!locations.length) {
-      return undefined;
-    }
-    if (finding.kind === "duplicate-code-block") {
-      const allLocations = finding.locations as Array<Record<string, unknown>>;
-      return {
-        ...finding,
-        contextLocationCount: locations.length,
-        crossContextLocationCount: allLocations.length - locations.length
-      };
-    }
-    return { ...finding, locations };
-  }
-
   private symbolContextWhere(prefix: "AND" | "WHERE"): { sql: string; params: string[] } {
     if (!this.queryContext) {
       return { sql: "", params: [] };
@@ -699,29 +571,6 @@ export class QueryService {
         `${this.queryContext.projectSymbolPrefix}%`
       ]
     };
-  }
-
-  private scopePatternsToContext(patterns: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
-    if (!this.queryContext) {
-      return patterns;
-    }
-
-    return patterns
-      .map((pattern) => {
-        const instances = Array.isArray(pattern.instances) ? pattern.instances as Array<Record<string, unknown>> : [];
-        const scopedInstances = instances.filter((instance) => this.instanceMatchesContext(instance));
-        return {
-          ...pattern,
-          instances: scopedInstances
-        };
-      })
-      .filter((pattern) => Array.isArray(pattern.instances) && pattern.instances.length > 0);
-  }
-
-  private instanceMatchesContext(instance: Record<string, unknown>): boolean {
-    const files = Array.isArray(instance.files) ? instance.files : [];
-    const symbols = Array.isArray(instance.symbols) ? instance.symbols : [];
-    return files.some((file) => this.matchesContextFile(stringValue(file))) || symbols.some((symbol) => this.matchesContextSymbol(stringValue(symbol)));
   }
 
   private matchesContextFile(file: string): boolean {

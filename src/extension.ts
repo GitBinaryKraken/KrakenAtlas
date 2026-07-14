@@ -69,98 +69,10 @@ export function activate(context: vscode.ExtensionContext): void {
       const contextName = await promptForContext();
       await runQueryCommand(output, "references", query, contextName);
     }),
-    vscode.commands.registerCommand("krakenAtlas.queryPattern", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Show Detected Pattern",
-        prompt: "Pattern or convention to inspect",
-        placeHolder: "controller-service-flow"
-      });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "pattern", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.queryPatternMap", async () => {
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "pattern-map", "pattern-map", contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.queryHotspots", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Show Architecture Hotspots",
-        prompt: "Optional hotspot filter such as config, routing, service, or UI",
-        placeHolder: "Leave blank to inspect central shared files"
-      });
-      if (query === undefined) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "hotspots", query || "hotspots", contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.findOrphans", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Find Orphaned Code Candidates",
-        prompt: "Optional method, file, or feature filter",
-        placeHolder: "Leave blank to inspect all candidates"
-      });
-      if (query === undefined) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "orphans", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.findDuplicates", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Find Duplicate Code Blocks",
-        prompt: "Optional method, file, or feature filter",
-        placeHolder: "Leave blank to inspect all exact duplicate groups"
-      });
-      if (query === undefined) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "duplicates", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.findDrift", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Find Pattern Drift Candidates",
-        prompt: "Optional feature, file, or drift filter",
-        placeHolder: "Leave blank to inspect all drift candidates"
-      });
-      if (query === undefined) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "drift", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.whereToAdd", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Suggest Where To Add Code",
-        prompt: "Describe the change you want to make",
-        placeHolder: "add validation for a request"
-      });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "where-to-add", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.planChange", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Plan Code Change",
-        prompt: "Describe the feature or change to plan",
-        placeHolder: "add notification preferences"
-      });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "plan-change", query, contextName);
-    }),
     vscode.commands.registerCommand("krakenAtlas.searchMap", async () => {
       const query = await vscode.window.showInputBox({
         title: "Kraken Atlas: Search Map",
-        prompt: "Text to search across indexed files, symbols, relationships, and patterns",
+        prompt: "Text to search across indexed files, symbols, references, and relationships",
         placeHolder: "save button"
       });
       if (!query) {
@@ -268,7 +180,7 @@ async function runDoctorCommand(extensionPath: string, output: vscode.OutputChan
   );
 }
 
-type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "hotspots" | "flow" | "search" | "where-to-add" | "plan-change" | "orphans" | "duplicates" | "drift";
+type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "flow" | "search";
 
 async function runQueryCommand(output: vscode.OutputChannel, queryType: ExtensionQueryType, query: string, contextName?: string): Promise<void> {
   const workspaceRoot = getWorkspaceRoot();
@@ -298,34 +210,13 @@ async function runQueryCommand(output: vscode.OutputChannel, queryType: Extensio
         if (queryType === "relationships") {
           return service.findRelationships(query);
         }
-        if (queryType === "pattern") {
-          return service.findPatterns(query);
-        }
-        if (queryType === "pattern-map") {
-          return service.findPatternMap(query);
-        }
-        if (queryType === "hotspots") {
-          return service.findArchitectureHotspots(query);
-        }
         if (queryType === "flow") {
           return service.findFlow(query);
         }
         if (queryType === "search") {
           return service.search(query);
         }
-        if (queryType === "orphans") {
-          return service.findOrphans(query);
-        }
-        if (queryType === "duplicates") {
-          return service.findDuplicates(query);
-        }
-        if (queryType === "drift") {
-          return service.findDrift(query);
-        }
-        if (queryType === "plan-change") {
-          return service.planChange(query);
-        }
-        return service.whereToAdd(query);
+        return service.search(query);
       }, { projectContext: contextName });
 
       writeOutput(output, `${queryType}: ${query}${contextName ? ` [${contextName}]` : ""}`, renderForCommandPalette(renderAgentResponse(response)));
@@ -350,34 +241,13 @@ async function runQuery(workspaceRoot: string, queryType: ExtensionQueryType, qu
     if (queryType === "relationships") {
       return service.findRelationships(query);
     }
-    if (queryType === "pattern") {
-      return service.findPatterns(query);
-    }
-    if (queryType === "pattern-map") {
-      return service.findPatternMap(query);
-    }
-    if (queryType === "hotspots") {
-      return service.findArchitectureHotspots(query);
-    }
     if (queryType === "flow") {
       return service.findFlow(query);
     }
     if (queryType === "search") {
       return service.search(query);
     }
-    if (queryType === "orphans") {
-      return service.findOrphans(query);
-    }
-    if (queryType === "duplicates") {
-      return service.findDuplicates(query);
-    }
-    if (queryType === "drift") {
-      return service.findDrift(query);
-    }
-    if (queryType === "plan-change") {
-      return service.planChange(query);
-    }
-    return service.whereToAdd(query);
+    return service.search(query);
   }, { projectContext: contextName });
 
   return renderAgentResponse(response);
@@ -615,7 +485,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext, _output: v
           return textToolResult("No VS Code workspace is open.");
         }
         const input = options.input as ToolQueryInput;
-        const queryType = normalizeToolQueryType(input.queryType || "where-to-add") ?? "where-to-add";
+        const queryType = normalizeToolQueryType(input.queryType || "flow") ?? "flow";
         const query = stringValue(input.query) ?? "project";
         const { renderContextPack } = await import("./context/agentContext");
         const { withQueryService } = await import("./query/queryService");
@@ -638,28 +508,7 @@ function registerLanguageModelTools(context: vscode.ExtensionContext, _output: v
           if (queryType === "references") {
             return service.findReferences(query);
           }
-          if (queryType === "pattern") {
-            return service.findPatterns(query);
-          }
-          if (queryType === "pattern-map") {
-            return service.findPatternMap(query);
-          }
-          if (queryType === "hotspots") {
-            return service.findArchitectureHotspots(query);
-          }
-          if (queryType === "orphans") {
-            return service.findOrphans(query);
-          }
-          if (queryType === "duplicates") {
-            return service.findDuplicates(query);
-          }
-          if (queryType === "drift") {
-            return service.findDrift(query);
-          }
-          if (queryType === "plan-change") {
-            return service.planChange(query);
-          }
-          return service.whereToAdd(query);
+          return service.findFlow(query);
         }, { projectContext: stringValue(input.context) });
         return textToolResult(renderContextPack(response, { workspaceRoot }));
       }
@@ -675,29 +524,14 @@ interface ToolQueryInput {
 }
 
 function normalizeToolQueryType(value: string | undefined): ExtensionQueryType | undefined {
-  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "pattern" || value === "pattern-map" || value === "hotspots" || value === "flow" || value === "search" || value === "where-to-add" || value === "plan-change" || value === "orphans" || value === "duplicates" || value === "drift") {
+  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "flow" || value === "search") {
     return value;
-  }
-  if (value === "plan") {
-    return "plan-change";
   }
   if (value === "symbols") {
     return "symbol";
   }
   if (value === "relationship") {
     return "relationships";
-  }
-  if (value === "patterns") {
-    return "pattern";
-  }
-  if (value === "patterns-map" || value === "map-patterns") {
-    return "pattern-map";
-  }
-  if (value === "hotspot" || value === "architecture-hotspots" || value === "architecture") {
-    return "hotspots";
-  }
-  if (value === "pattern-drift") {
-    return "drift";
   }
   return undefined;
 }
@@ -761,13 +595,8 @@ function renderForCommandPalette(body: string): string {
       output.push("- Run Command Palette: Kraken Atlas: Find Symbol");
       output.push("- Run Command Palette: Kraken Atlas: Find References");
       output.push("- Run Command Palette: Kraken Atlas: Trace Feature Flow");
-      output.push("- Run Command Palette: Kraken Atlas: Suggest Where To Add Code");
       output.push("- Run Command Palette: Kraken Atlas: Show Relationships");
-      output.push("- Run Command Palette: Kraken Atlas: Show Detected Pattern");
-      output.push("- Run Command Palette: Kraken Atlas: Show Pattern Map");
       output.push("- Run Command Palette: Kraken Atlas: Search Map");
-      output.push("- Run Command Palette: Kraken Atlas: Find Orphaned Code Candidates");
-      output.push("- Run Command Palette: Kraken Atlas: Find Duplicate Code Blocks");
       output.push("- Run Command Palette: Kraken Atlas: Export Context Pack");
       wrotePaletteHint = true;
       continue;

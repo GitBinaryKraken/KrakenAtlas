@@ -55,7 +55,6 @@ test("createProjectMetadata summarizes languages, project types, and analyzer co
     symbols,
     references: [],
     relationships,
-    patternsCount: 0,
     analyzerRuns: [
       {
         id: "roslyn",
@@ -63,8 +62,7 @@ test("createProjectMetadata summarizes languages, project types, and analyzer co
         recordCounts: {
           symbols: symbols.length,
           references: 0,
-          relationships: relationships.length,
-          patterns: 0
+          relationships: relationships.length
         }
       }
     ],

@@ -3,33 +3,13 @@ import type { DoctorResult } from "../doctor/mapDoctor";
 import type { UpdateProjectResult } from "../rebuild/updateProject";
 
 export function renderAgentResponse(response: QueryResponse): string {
-  let evidence = selectEvidence(response);
-  const isWhereToAdd = evidence.some((item) => item.recordType === "fileRecommendation");
-  const isChangePlan = evidence.some((item) => item.recordType === "changePlanSummary");
+  const evidence = selectEvidence(response);
   const isJavaScriptInteractionFlow = response.flow.some((item) => ["EMITS_EVENT", "SUBSCRIBES_EVENT", "UPDATES_ELEMENT_STATE"].includes(stringValue(item.type)));
-  const fileLimit = isChangePlan ? 5 : isWhereToAdd ? 4 : 8;
-  const evidenceLimit = isChangePlan ? 8 : isWhereToAdd ? 4 : isJavaScriptInteractionFlow ? 11 : response.flow.length ? 9 : 6;
+  const fileLimit = 8;
+  const evidenceLimit = isJavaScriptInteractionFlow ? 11 : response.flow.length ? 9 : 6;
   const nextCommandLimit = 3;
   const responseFiles = response.flow.length ? visibleEvidenceFiles(evidence, evidenceLimit) : response.files;
   const files = responseFiles.slice(0, fileLimit);
-  const fileNumbers = new Map(files.map((file, index) => [file, index + 1]));
-  if (isWhereToAdd) {
-    const fileSet = new Set(files);
-    const fileEvidence = evidence.filter((item) => item.recordType === "fileRecommendation" && fileSet.has(stringValue(item.file)));
-    const caveats = evidence.filter((item) => item.recordType === "caveat");
-    const capability = evidence.filter((item) => item.recordType === "capabilityAssessment");
-    const sharedContracts = evidence.filter((item) => item.recordType === "sharedContractBoundary");
-    const sharedContractChecklists = evidence.filter((item) => item.recordType === "sharedContractChecklist");
-    const contextPruning = evidence.filter((item) => item.recordType === "contextPruning");
-    const patternFit = evidence.filter((item) => item.recordType === "patternFit");
-    const planSummary = evidence.filter((item) => item.recordType === "changePlanSummary");
-    const avoidFiles = evidence.filter((item) => item.recordType === "planAvoidFile");
-    const drift = evidence.filter((item) => item.recordType === "finding" && item.kind === "pattern-drift");
-    const contextPack = evidence.filter((item) => item.recordType === "contextPackCommand");
-    evidence = isChangePlan
-      ? [...planSummary, ...caveats, ...sharedContracts, ...sharedContractChecklists, ...contextPruning, ...capability, ...patternFit, ...fileEvidence, ...avoidFiles, ...drift, ...contextPack]
-      : [...caveats, ...sharedContracts, ...contextPruning, ...capability, ...patternFit, ...fileEvidence];
-  }
   const lines = [
     "Answer",
     `${compactAnswer(response.answer)} Confidence: ${formatScore(response.confidence)}.`,
@@ -45,7 +25,7 @@ export function renderAgentResponse(response: QueryResponse): string {
 
   lines.push("", "Evidence");
   if (evidence.length) {
-    lines.push(...evidence.slice(0, evidenceLimit).map((item) => formatEvidence(item, fileNumbers)));
+    lines.push(...evidence.slice(0, evidenceLimit).map(formatEvidence));
   } else {
     lines.push("- No evidence records returned.");
   }
@@ -79,8 +59,6 @@ export function renderAgentBuildResult(result: UpdateProjectResult): string {
     `- Symbols: ${result.symbolCount}`,
     `- References: ${result.referenceCount}`,
     `- Relationships: ${result.relationshipCount}`,
-    `- Patterns: ${result.patternCount}`,
-    `- Findings: ${result.findingCount}`,
     ...(result.scanSummary ? [`- Excluded files/folders: ${result.scanSummary.excludedFiles}`] : []),
     `- Added files: ${result.addedFiles.length}`,
     `- Changed files: ${result.changedFiles.length}`,
@@ -141,18 +119,15 @@ function doctorRemediationCommands(result: DoctorResult): string[] {
 
 function selectEvidence(response: QueryResponse): Array<Record<string, unknown>> {
   if (response.flow.length) {
-    const summaries = response.evidence.filter((item) => ["flowCoverage", "caveat", "capabilityAssessment", "contextExpansion"].includes(stringValue(item.recordType)));
+    const summaries = response.evidence.filter((item) => ["flowCoverage", "caveat", "contextExpansion"].includes(stringValue(item.recordType)));
     const anchors = response.evidence.filter((item) => item.recordType === "strongAnchor");
     return [...summaries, ...response.flow, ...anchors];
   }
-  if (response.evidence.some((item) => ["fileRecommendation", "caveat", "flowCoverage", "relationshipFilter", "capabilityAssessment", "patternFit", "changePlanSummary", "sharedContractBoundary", "sharedContractChecklist", "contextPruning", "planAvoidFile", "contextPackCommand", "reference", "referenceSummary", "datatypeProjectUsage", "nodeRoleSummary", "nodeTagSummary", "nodeMemberSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary", "patternMapArea", "architectureHotspot", "hotspotSummary", "finding", "findingSummary"].includes(stringValue(item.recordType)))) {
+  if (response.evidence.some((item) => ["caveat", "flowCoverage", "relationshipFilter", "reference", "referenceSummary", "datatypeProjectUsage", "nodeRoleSummary", "nodeTagSummary", "nodeMemberSummary", "contextExpansion", "searchSummary", "exactFileSearch", "projectSummary"].includes(stringValue(item.recordType)))) {
     return response.evidence;
   }
   if (response.relationships.length) {
     return response.relationships;
-  }
-  if (response.patterns.length) {
-    return response.patterns;
   }
   return response.evidence;
 }
@@ -173,35 +148,7 @@ function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
 }
 
-function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, number>): string {
-  if (item.recordType === "fileRecommendation") {
-    const reasons = Array.isArray(item.reasons) ? item.reasons.filter((reason): reason is string => typeof reason === "string") : [];
-    const file = stringValue(item.file);
-    const prefix = fileNumbers.has(file) ? `${fileNumbers.get(file)}.` : `- ${file}:`;
-    const relationship = firstRecord(item.relationshipDetails);
-    const anchor = firstRecord(item.anchorDetails);
-    const matchedTags = Array.isArray(item.matchedTags) ? item.matchedTags.filter((tag): tag is string => typeof tag === "string").slice(0, 3) : [];
-    const roles = uniqueStrings([
-      ...(Array.isArray(item.nodeRoles) ? item.nodeRoles.filter((role): role is string => typeof role === "string") : []),
-      ...(Array.isArray(item.symbolRoles) ? item.symbolRoles.filter((role): role is string => typeof role === "string") : [])
-    ]).slice(0, 3);
-    const projectHint = item.projectHint && typeof item.projectHint === "object" ? item.projectHint as Record<string, unknown> : {};
-    const project = stringValue(projectHint.project);
-    const memberHints = Array.isArray(item.memberHints) ? item.memberHints.filter((member): member is Record<string, unknown> => Boolean(member) && typeof member === "object").slice(0, 3) : [];
-    const tagSuffix = matchedTags.length ? `; tags ${matchedTags.join(", ")}` : "";
-    const roleSuffix = roles.length ? `; roles ${roles.join(", ")}` : "";
-    const projectSuffix = project ? `; project ${project}` : "";
-    const memberSuffix = memberHints.length ? `; members ${memberHints.map((member) => stringValue(member.name)).filter(Boolean).join(", ")}` : "";
-    const guidanceSuffix = `${tagSuffix}${projectSuffix}${roleSuffix}${memberSuffix}`;
-    if (relationship) {
-      return `${prefix} ${stringValue(relationship.type)}: ${compactId(stringValue(relationship.from))} -> ${compactId(stringValue(relationship.to))}${formatLocation(relationship)}${guidanceSuffix}`;
-    }
-    if (anchor) {
-      return `${prefix} anchor: ${compactId(stringValue(anchor.name) || stringValue(anchor.id))}${formatLocation(anchor)}${guidanceSuffix}`;
-    }
-    return `${prefix} ${compactReason(reasons[0] ?? "ranked text match")}${guidanceSuffix}`;
-  }
-
+function formatEvidence(item: Record<string, unknown>): string {
   if (item.recordType === "caveat") {
     return `- Caveat: ${truncate(stringValue(item.message), 160)}`;
   }
@@ -245,89 +192,10 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
     const projects = Array.isArray(item.projects) ? item.projects.filter((value): value is string => typeof value === "string") : [];
     return [
       `- Workspace: ${stringValue(item.workspaceName)}; schema ${stringValue(item.schemaVersion)}; generated ${stringValue(item.generatedAt)}.`,
-      `- Records: ${counts.files ?? 0} files, ${counts.symbols ?? 0} symbols, ${counts.relationships ?? 0} relationships, ${counts.references ?? 0} references, ${counts.patterns ?? 0} patterns, ${counts.findings ?? 0} findings.`,
+      `- Records: ${counts.files ?? 0} files, ${counts.symbols ?? 0} symbols, ${counts.relationships ?? 0} relationships, ${counts.references ?? 0} references.`,
       `- Languages: ${languages}.`,
       `- Projects: ${projects.length ? projects.join(", ") : "no .csproj files indexed"}.`
     ].join("\n");
-  }
-
-  if (item.recordType === "patternMapArea") {
-    const patterns = Array.isArray(item.patterns) ? item.patterns.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
-    const names = patterns.slice(0, 3).map((pattern) => `${stringValue(pattern.name)} (${pattern.frequency ?? 0})`).join(", ");
-    return `- Pattern area: ${stringValue(item.category)}; ${item.patternCount ?? 0} pattern(s), ${item.totalFrequency ?? 0} observed edge(s), avg confidence ${formatDecimal(item.averageConfidence)}.${names ? ` Top: ${names}.` : ""}`;
-  }
-
-  if (item.recordType === "hotspotSummary") {
-    return `- Scope: ${truncate(stringValue(item.message), 190)}`;
-  }
-
-  if (item.recordType === "architectureHotspot") {
-    const relationshipTypes = Array.isArray(item.topRelationshipTypes)
-      ? item.topRelationshipTypes.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object")
-      : [];
-    const topTypes = relationshipTypes.slice(0, 3).map((row) => `${stringValue(row.type)}=${row.count ?? 0}`).join(", ");
-    return `- Hotspot: ${stringValue(item.file)} [${stringValue(item.role)}]; ${item.relationshipCount ?? 0} relationship(s), ${item.distinctRelationshipTypes ?? 0} type(s), ${item.sharedEndpointCount ?? 0} shared endpoint(s).${topTypes ? ` Top: ${topTypes}.` : ""} ${truncate(stringValue(item.guidance), 130)}`;
-  }
-
-  if (item.recordType === "findingSummary") {
-    return `- Scope: ${truncate(stringValue(item.message), 190)}`;
-  }
-
-  if (item.recordType === "finding") {
-    const locations = Array.isArray(item.locations) ? item.locations.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
-    const locationText = locations.slice(0, 4).map((location) => {
-      const range = location.range && typeof location.range === "object" ? location.range as { startLine?: unknown } : {};
-      return `${stringValue(location.file)}${typeof range.startLine === "number" ? `:${range.startLine}` : ""}`;
-    }).join(", ");
-    const prefix = item.kind === "orphan-callable" ? "Candidate" : item.kind === "duplicate-code-block" ? "Duplicate" : "Drift";
-    const expansion = typeof item.crossContextLocationCount === "number" && item.crossContextLocationCount > 0
-      ? ` ${item.contextLocationCount} in context; ${item.crossContextLocationCount} directly matching duplicate(s) outside context.`
-      : "";
-    return `- ${prefix}: ${stringValue(item.title)}${locationText ? ` [${locationText}]` : ""}. ${truncate(stringValue(item.summary), 150)}${expansion}`;
-  }
-
-  if (item.recordType === "capabilityAssessment") {
-    return `- Capability: ${truncate(stringValue(item.message), 160)}`;
-  }
-
-  if (item.recordType === "changePlanSummary") {
-    return `- Plan: ${item.editFileCount ?? 0} likely edit file(s), ${item.patternFitCount ?? 0} pattern fit(s), ${item.avoidFileCount ?? 0} central file(s) to avoid initially, ${item.driftCount ?? 0} drift candidate(s). ${truncate(stringValue(item.message), 120)}`;
-  }
-
-  if (item.recordType === "planAvoidFile") {
-    return `- Avoid initially: ${stringValue(item.file)}${item.role ? ` [${stringValue(item.role)}]` : ""}. ${truncate(stringValue(item.reason), 140)}`;
-  }
-
-  if (item.recordType === "contextPackCommand") {
-    return `- Context pack: ${stringValue(item.command)}`;
-  }
-
-  if (item.recordType === "patternFit") {
-    const matchedFiles = Array.isArray(item.matchedFiles) ? item.matchedFiles.filter((value): value is string => typeof value === "string") : [];
-    const exampleFiles = Array.isArray(item.exampleFiles) ? item.exampleFiles.filter((value): value is string => typeof value === "string") : [];
-    const examples = matchedFiles.length ? matchedFiles : exampleFiles;
-    const exampleText = examples.length ? ` Examples: ${examples.slice(0, 3).join(", ")}.` : "";
-    return `- Pattern fit: ${stringValue(item.patternName) || stringValue(item.patternId)} (${stringValue(item.category)}). ${truncate(stringValue(item.guidance), 140)}${exampleText}`;
-  }
-
-  if (item.recordType === "sharedContractBoundary") {
-    const roles = Array.isArray(item.roles) ? item.roles.filter((value): value is string => typeof value === "string") : [];
-    const usedFrom = Array.isArray(item.usedFrom) ? item.usedFrom.filter((value): value is string => typeof value === "string") : [];
-    const members = Array.isArray(item.members) ? item.members.filter((value): value is string => typeof value === "string") : [];
-    const memberText = members.length ? ` Members: ${members.slice(0, 5).join(", ")}.` : "";
-    return `- Shared contract: ${compactId(stringValue(item.nodeId))}${roles.length ? ` [${roles.join(", ")}]` : ""}; declared ${formatCounts(item.declaredIn)}; used ${usedFrom.join(", ") || formatCounts(item.referencedFrom)}. ${truncate(stringValue(item.message), 150)}${memberText}`;
-  }
-
-  if (item.recordType === "sharedContractChecklist") {
-    const checklistItems = Array.isArray(item.items) ? item.items.filter((value): value is Record<string, unknown> => Boolean(value) && typeof value === "object") : [];
-    const labels = checklistItems.slice(0, 6).map((entry) => stringValue(entry.label)).filter(Boolean);
-    return `- Contract checklist: ${stringValue(item.name) || compactId(stringValue(item.nodeId))}; ${labels.join("; ")}. ${truncate(stringValue(item.message), 120)}`;
-  }
-
-  if (item.recordType === "contextPruning") {
-    const tags = Array.isArray(item.tags) ? item.tags.filter((value): value is string => typeof value === "string") : [];
-    const projects = Array.isArray(item.projects) ? item.projects.filter((value): value is string => typeof value === "string") : [];
-    return `- Context focus: kept ${item.keptRelationshipCount ?? 0}/${item.originalRelationshipCount ?? 0} relationship(s)${tags.length ? `; tags ${tags.slice(0, 4).join(", ")}` : ""}${projects.length ? `; projects ${projects.slice(0, 4).join(", ")}` : ""}.`;
   }
 
   if (item.recordType === "referenceSummary") {
@@ -385,27 +253,7 @@ function formatEvidence(item: Record<string, unknown>, fileNumbers: Map<string, 
 }
 
 function compactAnswer(answer: string): string {
-  return answer
-    .replace(/^Likely edit locations for "(.+)" ranked by text matches, feature-flow edges, and detected project patterns\.$/u, "Likely edit locations for \"$1\".")
-    .replace(/^Feature-flow slice for "(.+)" with \d+ connected edge\(s\)\.$/u, "Feature-flow slice for \"$1\".");
-}
-
-function compactReason(reason: string): string {
-  return reason
-    .replace(/^Search match in (record|symbol) /u, "match: ")
-    .replace(/^Participates in ([A-Z_]+) feature-flow evidence\.$/u, "$1 edge")
-    .replace(/^Follows detected pattern: (.+)\.$/u, "pattern: $1")
-    .replace(
-      /^Composition root; inspect only when the request is about startup, DI, routing, middleware, or config\.$/u,
-      "composition root; only for startup/DI/routing/config"
-    )
-    .replace(/^Likely test file; use for validation unless the requested change is test-specific\.$/u, "test file; use for validation");
-}
-
-function firstRecord(value: unknown): Record<string, unknown> | undefined {
-  return Array.isArray(value) && value[0] && typeof value[0] === "object"
-    ? value[0] as Record<string, unknown>
-    : undefined;
+  return answer.replace(/^Feature-flow slice for "(.+)" with \d+ connected edge\(s\)\.$/u, "Feature-flow slice for \"$1\".");
 }
 
 function compactId(value: string): string {

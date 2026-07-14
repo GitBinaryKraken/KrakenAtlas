@@ -29,7 +29,6 @@
     "workspace-index",
     "relationships",
     "feature-flow",
-    "where-to-add",
     "csharp",
     "dotnet",
     "aspnetcore",
@@ -50,14 +49,6 @@
     "onCommand:krakenAtlas.querySymbol",
     "onCommand:krakenAtlas.queryReferences",
     "onCommand:krakenAtlas.queryRelationships",
-    "onCommand:krakenAtlas.queryPattern",
-    "onCommand:krakenAtlas.queryPatternMap",
-    "onCommand:krakenAtlas.queryHotspots",
-    "onCommand:krakenAtlas.findOrphans",
-    "onCommand:krakenAtlas.findDuplicates",
-    "onCommand:krakenAtlas.findDrift",
-    "onCommand:krakenAtlas.whereToAdd",
-    "onCommand:krakenAtlas.planChange",
     "onCommand:krakenAtlas.searchMap",
     "onCommand:krakenAtlas.exportContextPack",
     "onCommand:krakenAtlas.installAgentInstructions",
@@ -84,6 +75,9 @@
     "README.md",
     "CHANGELOG.md",
     "GETTING_STARTED.md",
+    "NEXT_STEPS.md",
+    "PRODUCT_REQUIREMENTS.md",
+    "WHERE_WE_LEFT_OFF.md",
     "package.json"
   ],
   "contributes": {
@@ -119,38 +113,6 @@
       {
         "command": "krakenAtlas.queryRelationships",
         "title": "Kraken Atlas: Show Relationships"
-      },
-      {
-        "command": "krakenAtlas.queryPattern",
-        "title": "Kraken Atlas: Show Detected Pattern"
-      },
-      {
-        "command": "krakenAtlas.queryPatternMap",
-        "title": "Kraken Atlas: Show Pattern Map"
-      },
-      {
-        "command": "krakenAtlas.queryHotspots",
-        "title": "Kraken Atlas: Show Architecture Hotspots"
-      },
-      {
-        "command": "krakenAtlas.findOrphans",
-        "title": "Kraken Atlas: Find Orphaned Code Candidates"
-      },
-      {
-        "command": "krakenAtlas.findDuplicates",
-        "title": "Kraken Atlas: Find Duplicate Code Blocks"
-      },
-      {
-        "command": "krakenAtlas.findDrift",
-        "title": "Kraken Atlas: Find Pattern Drift Candidates"
-      },
-      {
-        "command": "krakenAtlas.whereToAdd",
-        "title": "Kraken Atlas: Suggest Where To Add Code"
-      },
-      {
-        "command": "krakenAtlas.planChange",
-        "title": "Kraken Atlas: Plan Code Change"
       },
       {
         "command": "krakenAtlas.searchMap",
@@ -190,7 +152,7 @@
       {
         "name": "kraken_atlas_query",
         "displayName": "Kraken Atlas: Query Code Map",
-        "modelDescription": "Query the local Kraken Atlas code map before opening source files. Use queryType plan-change for an implementation plan, where-to-add for planned edits, flow for existing behavior, pattern-map for an architecture pattern overview, hotspots for central shared files, drift for pattern drift candidates, relationships for a known file or symbol, orphans for unreferenced callable candidates, duplicates for exact duplicate callable bodies, search for fallback discovery, symbol or references for known names, pattern for detected conventions, and project for a summary.",
+        "modelDescription": "Query the local Kraken Atlas relationship map before opening source files. Use relationships for a known file or symbol, references for usages, flow for connected behavior, symbol for declarations, search for fallback discovery, and project for a map summary.",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -198,21 +160,13 @@
               "type": "string",
               "enum": [
                 "project",
-                "plan-change",
-                "where-to-add",
-                "orphans",
-                "duplicates",
                 "flow",
                 "relationships",
                 "search",
                 "symbol",
-                "references",
-                "pattern",
-                "pattern-map",
-                "hotspots",
-                "drift"
+                "references"
               ],
-              "description": "The kind of map query to run. Use plan-change for an implementation plan, pattern-map for an overview of detected architecture patterns, hotspots for central shared files, drift for possible local-pattern violations, and pattern for a specific convention."
+              "description": "The direct map query to run."
             },
             "query": {
               "type": "string",
@@ -238,19 +192,11 @@
             "queryType": {
               "type": "string",
               "enum": [
-                "where-to-add",
-                "plan-change",
                 "flow",
                 "relationships",
                 "search",
                 "symbol",
                 "references",
-                "pattern",
-                "pattern-map",
-                "hotspots",
-                "drift",
-                "orphans",
-                "duplicates",
                 "project"
               ],
               "description": "The source query type for the context pack."

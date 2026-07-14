@@ -23,7 +23,7 @@ interface CliOptions {
   limit?: number;
 }
 
-type QueryCommandType = "project" | "symbol" | "references" | "relationships" | "pattern" | "pattern-map" | "hotspots" | "flow" | "search" | "where-to-add" | "plan-change" | "orphans" | "duplicates" | "drift";
+type QueryCommandType = "project" | "symbol" | "references" | "relationships" | "flow" | "search";
 
 async function main(): Promise<number> {
   const args = process.argv.slice(2);
@@ -203,37 +203,11 @@ function runQuery(service: QueryService, queryType: string, query: string, optio
     case "relationships":
     case "relationship":
       return service.findRelationships(query, { edgeTypes: options.edgeTypes, limit: options.limit });
-    case "pattern":
-    case "patterns":
-      return service.findPatterns(query);
-    case "pattern-map":
-    case "patterns-map":
-    case "map-patterns":
-      return service.findPatternMap(query || "pattern-map");
-    case "hotspots":
-    case "hotspot":
-    case "architecture-hotspots":
-    case "architecture":
-      return service.findArchitectureHotspots(query || "hotspots");
     case "flow":
       return service.findFlow(query);
     case "search":
     case "examples":
       return service.search(query);
-    case "where-to-add":
-      return service.whereToAdd(query);
-    case "plan-change":
-    case "plan":
-      return service.planChange(query);
-    case "orphans":
-    case "orphan":
-      return service.findOrphans(query);
-    case "duplicates":
-    case "duplicate":
-      return service.findDuplicates(query);
-    case "drift":
-    case "pattern-drift":
-      return service.findDrift(query);
     default:
       throw new Error(`Unknown query type: ${queryType}`);
   }
@@ -265,37 +239,11 @@ function normalizeQueryType(value: string): QueryCommandType | undefined {
     case "relationship":
     case "relationships":
       return "relationships";
-    case "pattern":
-    case "patterns":
-      return "pattern";
-    case "pattern-map":
-    case "patterns-map":
-    case "map-patterns":
-      return "pattern-map";
-    case "hotspots":
-    case "hotspot":
-    case "architecture-hotspots":
-    case "architecture":
-      return "hotspots";
     case "flow":
       return "flow";
     case "search":
     case "examples":
       return "search";
-    case "where-to-add":
-      return "where-to-add";
-    case "plan-change":
-    case "plan":
-      return "plan-change";
-    case "orphan":
-    case "orphans":
-      return "orphans";
-    case "duplicate":
-    case "duplicates":
-      return "duplicates";
-    case "drift":
-    case "pattern-drift":
-      return "drift";
     default:
       return undefined;
   }
@@ -326,8 +274,6 @@ function printBuildResult(result: UpdateProjectResult, options: CliOptions): voi
 - Symbols: ${result.symbolCount}
 - References: ${result.referenceCount}
 - Relationships: ${result.relationshipCount}
-- Patterns: ${result.patternCount}
-- Findings: ${result.findingCount}
 - Output: ${result.outputFolder}
 - Reason: ${result.reason}
 - Excluded files/folders: ${result.scanSummary?.excludedFiles ?? 0}
@@ -349,9 +295,7 @@ function printBuildResult(result: UpdateProjectResult, options: CliOptions): voi
         files: result.fileCount,
         symbols: result.symbolCount,
         references: result.referenceCount,
-        relationships: result.relationshipCount,
-        patterns: result.patternCount,
-        findings: result.findingCount
+        relationships: result.relationshipCount
       },
       scan: result.scanSummary
     }, null, 2));
@@ -488,22 +432,16 @@ Usage:
   kraken-atlas update [--workspace <path>] [--format json|info|md|agent] [--quiet]
   kraken-atlas doctor [--workspace <path>] [--format json|info|md|agent]
   kraken-atlas install-agent [--workspace <path>] [--format json|info|md|agent]
-  kraken-atlas context [flow|where-to-add|plan-change|search|relationships|symbol|references|pattern|pattern-map|hotspots|project|orphans|duplicates|drift] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
-  kraken-atlas query <project|symbol|references|relationships|pattern|pattern-map|hotspots|flow|search|where-to-add|plan-change|orphans|duplicates|drift> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--limit <n>]
+  kraken-atlas context [flow|search|relationships|symbol|references|project] <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent]
+  kraken-atlas query <project|symbol|references|relationships|flow|search> <text> [--workspace <path>] [--context <project-or-folder>] [--format json|info|md|agent] [--edge <type>] [--limit <n>]
 
 Agent loop:
   kraken-atlas doctor --workspace . --format agent
   kraken-atlas update --workspace . --format agent
   kraken-atlas query flow "feature or behavior" --workspace . --format agent
-  kraken-atlas query pattern-map --workspace . --format agent
-  kraken-atlas query hotspots --workspace . --format agent
   kraken-atlas query flow "feature or behavior" --workspace . --context WebApp --format agent
-  kraken-atlas query plan-change "requested change" --workspace . --format agent
-  kraken-atlas query where-to-add "requested change" --workspace . --format agent
-  kraken-atlas query orphans --workspace . --context WebUI --format agent
-  kraken-atlas query duplicates --workspace . --context WebUI --format agent
-  kraken-atlas query drift --workspace . --context WebUI --format agent
-  kraken-atlas context plan-change "requested change" --workspace . --context WebApp --format md
+  kraken-atlas query relationships "Namespace.Type.Method" --workspace . --edge CALLS --format agent
+  kraken-atlas context relationships "Namespace.Type" --workspace . --format md
 
 Options:
   --workspace <path>  Workspace root. Defaults to current directory.

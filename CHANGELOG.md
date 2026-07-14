@@ -2,10 +2,12 @@
 
 ## Unreleased
 
-- Continued the behavior-preserving `reactAnalyzer.ts` split by extracting shared source-text scanning and ID helpers, route/store/context conventions, compiler-AST TypeScript declaration/type-parameter discovery, JSX composition/prop evidence, and TypeScript prop/interface/enum member discovery into focused modules.
-- Continued the next `queryService.ts` split by extracting project metadata, symbol lookup, code-health, references, relationships, pattern, pattern-map, hotspots, search, exact-file, flow-context, endpoint-location, and where-to-add orchestration helpers into focused modules.
-- Split the oversized query-service test file into core, where-to-add/context-pruning, and search/reference/relationship/flow suites.
-- Split the oversized web-analyzer test file into Razor/HTML, JavaScript-flow, React prop/type, and React route/workflow suites.
+- Reset the product around its original purpose: a local, AI-agent-queryable relationship map, with .NET Core/C# semantic accuracy as the highest priority.
+- Reduced the public query surface to `project`, `symbol`, `references`, `relationships`, `flow`, and `search` across the CLI, VS Code commands, agent tools, context packs, and generated instructions.
+- Removed recommendation, change-planning, pattern, hotspot, code-health, orphan, drift, and duplicate-analysis modules and storage outputs. The previous implementation remains available on `july13th-offtrack`.
+- Upgraded the C# analyzer to load real solutions and projects through Roslyn `MSBuildWorkspace`, preserving project references and compilation context while retaining loose-file fallback behavior.
+- Added fixture coverage for cross-project SDK-style projects, file-scoped namespaces, records, interface implementation, primary-constructor injection, DI registration, Minimal API routes, and semantic call references.
+- Replaced the feature roadmap with a requirements contract and structure-driven .NET relationship verification matrix.
 
 ## 0.2.3
 

@@ -1,5 +1,7 @@
 # Kraken Atlas Packaged Release History Audit
 
+> Historical record only. Entries below describe previously packaged behavior, including features removed from the refocused `main` branch. Current scope is governed by [PRODUCT_REQUIREMENTS.md](../PRODUCT_REQUIREMENTS.md).
+
 Source: `E:\Projects2026\CodeKraken\pack-artifacts`
 
 | Version | VSIX | Packaged Changelog | Version Notes | README Release Heading |

@@ -6,7 +6,6 @@ export interface QueryResponse {
   files: string[];
   symbols: string[];
   relationships: Array<Record<string, unknown>>;
-  patterns: Array<Record<string, unknown>>;
   flow: Array<Record<string, unknown>>;
   nextQueries: string[];
   estimatedContextSavings: string;

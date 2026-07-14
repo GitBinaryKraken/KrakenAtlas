@@ -3,12 +3,8 @@ import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
 import test from "node:test";
-import { renderContextPack } from "../src/context/agentContext";
-import { renderAgentResponse } from "../src/format/agentFormatter";
-import { FileRecord, PatternRecord, ReferenceRecord, RelationshipRecord, SymbolRecord } from "../src/model/records";
-import { buildContextPruningResult } from "../src/query/queryContextPruning";
+import { FileRecord, ReferenceRecord, RelationshipRecord, SymbolRecord } from "../src/model/records";
 import { QueryService } from "../src/query/queryService";
-import type { FileRecommendation } from "../src/query/whereToAddRanking";
 import { openSqliteIndex, rebuildSqliteIndex } from "../src/storage/sqliteIndex";
 import { fileRecord, range, stringValue } from "../test-support/queryTestHelpers";
 
@@ -48,7 +44,7 @@ test("search diversifies repeated hits from the same file", async () => {
     }
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships: [], references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships: [], references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const result = new QueryService(database, { projectContext: "Web" }).search("connection string database");
@@ -101,7 +97,7 @@ test("references use connected graph evidence when semantic reference rows are e
     }
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const result = new QueryService(database).findReferences("PageMediaBlockConfig");
@@ -185,7 +181,7 @@ test("relationship and flow queries keep exact property anchors inspectable", as
     }
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const service = new QueryService(database, { projectContext: "Kelp2025_WebUI" });
@@ -274,7 +270,7 @@ test("flow includes exact requested metadata property anchors across page editor
     }
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const flow = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).findFlow("page editor saves MetaDescription MetaKeywords PageTitle block");
@@ -308,7 +304,7 @@ test("flow confidence drops when requested feature concepts are missing", async 
     confidence: 0.95
   }];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols: [], relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const flow = new QueryService(database, { projectContext: "Web" }).findFlow("authenticated user flags a location review for moderation");
@@ -379,7 +375,7 @@ test("natural-language flow pivots to strong exact symbol anchors", async () => 
     }
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const flow = new QueryService(database, { projectContext: "Web" }).findFlow("authenticated user flags a location review for moderation");
@@ -461,12 +457,11 @@ test("browser-state intent outranks lexical server symbols and multi-edge output
     }))
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const service = new QueryService(database, { projectContext: "Web" });
     const flow = service.findFlow("map filters change browser query string");
-    const whereToAdd = service.whereToAdd("write map filters into the browser query string");
     const filtered = service.findRelationships("kelp-map-explorer.js", { edgeTypes: ["READS_QUERY_STRING", "CONTAINS"], limit: 30 });
 
     assert.strictEqual(flow.files[0], scriptPath);
@@ -474,8 +469,6 @@ test("browser-state intent outranks lexical server symbols and multi-edge output
     assert.ok(!flow.files.includes("Web/Services/MapSearchProtectionService.cs"));
     assert.ok(flow.confidence <= 0.65);
     assert.ok(flow.evidence.some((item) => item.recordType === "caveat" && /no browser URL writer/.test(stringValue(item.message))));
-    assert.deepStrictEqual(whereToAdd.files, [scriptPath]);
-    assert.ok(whereToAdd.evidence.some((item) => item.recordType === "capabilityAssessment" && item.status === "adjacent-only"));
     assert.strictEqual(filtered.relationships[0].type, "READS_QUERY_STRING");
     assert.ok(filtered.relationships.some((relationship) => relationship.type === "CONTAINS"));
     assert.ok(filtered.evidence.some((item) => item.recordType === "relationshipFilter"));
@@ -510,7 +503,7 @@ test("exact relationship queries include and label graph-connected edges outside
       type: "REGISTERS", file: "Web/Program.cs", range: range(), evidence: "AddScoped", confidence: 0.9
     }
   ];
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const result = new QueryService(database, { projectContext: "Web" }).findRelationships(interfaceId);
@@ -592,7 +585,7 @@ test("relationship queries bridge C# model symbols to Razor value lifecycle edge
     }
   ];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [], patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, relationships, references: [] });
   const database = await openSqliteIndex(indexPath);
   try {
     const result = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).findRelationships("ProfileHomePortFormModel");
@@ -685,7 +678,7 @@ test("relationship queries summarize cross-project datatype usage", async () => 
     confidence: 0.82
   }];
 
-  await rebuildSqliteIndex(indexPath, { files, symbols, references, relationships, patterns: [] });
+  await rebuildSqliteIndex(indexPath, { files, symbols, references, relationships });
   const database = await openSqliteIndex(indexPath);
   try {
     const result = new QueryService(database, { projectContext: "Kelp2025_WebUI" }).findRelationships("SavePageDraftRequest");

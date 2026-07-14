@@ -209,8 +209,7 @@ test("Razor injection resolves interfaces and supports direct reverse-reference 
     files,
     symbols: [...csharpSymbols, ...result.symbols],
     references: result.references,
-    relationships: [...structuralRelationships, ...result.relationships],
-    patterns: []
+    relationships: [...structuralRelationships, ...result.relationships]
   });
   const database = await openSqliteIndex(indexPath);
   try {
