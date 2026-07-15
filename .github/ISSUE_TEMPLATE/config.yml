@@ -1,5 +1,1 @@
 blank_issues_enabled: true
-contact_links:
-  - name: Alpha feedback guide
-    url: https://github.com/GitBinaryKraken/KrakenAtlas/blob/main/ALPHA_FEEDBACK.md
-    about: Read what to include so feedback can become a regression test.

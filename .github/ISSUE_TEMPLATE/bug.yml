@@ -1,0 +1,24 @@
+name: Bug report
+description: Report a reproducible Kraken Atlas extension or Cartographer failure.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Describe the smallest workspace and steps that reproduce the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: Include Kraken Atlas output and remove secrets.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Kraken Atlas, VS Code, .NET SDK, Node.js, and operating system.

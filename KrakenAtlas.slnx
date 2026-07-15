@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/cartographer/">
+    <Project Path="cartographer/KrakenAtlas.Core/KrakenAtlas.Core.csproj" />
+    <Project Path="cartographer/KrakenAtlas.Protocol/KrakenAtlas.Protocol.csproj" />
+    <Project Path="cartographer/KrakenAtlas.Storage.Sqlite/KrakenAtlas.Storage.Sqlite.csproj" />
+    <Project Path="cartographer/KrakenAtlas.Workspace/KrakenAtlas.Workspace.csproj" />
+    <Project Path="cartographer/KrakenAtlas.Cartographer/KrakenAtlas.Cartographer.csproj" />
+  </Folder>
+</Solution>

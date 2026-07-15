@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Maps C#/.NET Core, React/TypeScript, vanilla JavaScript, and HTML/Razor codebases into local queryable code facts for AI context reduction.",
-  "version": "0.2.3",
+  "description": "Builds a local semantic Atlas of .NET, database, TypeScript, and React code for precise AI-agent queries and compact context packs.",
+  "version": "0.3.0",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -10,8 +10,21 @@
   },
   "publisher": "BinaryKraken",
   "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GitBinaryKraken/KrakenAtlas.git"
+  },
   "engines": {
     "vscode": "^1.90.0"
+  },
+  "extensionKind": [
+    "workspace"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    },
+    "virtualWorkspaces": false
   },
   "categories": [
     "Machine Learning",
@@ -21,290 +34,90 @@
   "keywords": [
     "ai",
     "ai-agent",
-    "agent",
     "code-map",
     "code-analysis",
     "context-reduction",
-    "token-reduction",
-    "workspace-index",
-    "relationships",
-    "feature-flow",
     "csharp",
     "dotnet",
     "aspnetcore",
-    "razor",
-    "javascript",
+    "database",
     "react",
-    "typescript",
-    "jsx",
-    "tsx",
-    "html"
+    "typescript"
   ],
   "activationEvents": [
-    "onCommand:krakenAtlas.rebuildIndex",
-    "onCommand:krakenAtlas.updateIndex",
-    "onCommand:krakenAtlas.doctor",
-    "onCommand:krakenAtlas.showProject",
-    "onCommand:krakenAtlas.queryFlow",
-    "onCommand:krakenAtlas.querySymbol",
-    "onCommand:krakenAtlas.queryReferences",
-    "onCommand:krakenAtlas.queryRelationships",
-    "onCommand:krakenAtlas.searchMap",
-    "onCommand:krakenAtlas.exportContextPack",
-    "onCommand:krakenAtlas.installAgentInstructions",
-    "onCommand:krakenAtlas.installWorkspaceCli",
-    "onCommand:krakenAtlas.installAiAgentSetup",
-    "onCommand:krakenAtlas.openMapFolder",
-    "workspaceContains:.kraken-atlas/manifest.json"
+    "onCommand:krakenAtlas.showStatus",
+    "onCommand:krakenAtlas.buildAtlas",
+    "onCommand:krakenAtlas.showAtlasSummary",
+    "onCommand:krakenAtlas.lookupEntity",
+    "onCommand:krakenAtlas.restartCartographer",
+    "onCommand:krakenAtlas.openPlanning"
   ],
   "main": "./dist/extension.js",
-  "bin": {
-    "kraken-atlas": "./dist/cli.js"
-  },
   "files": [
     "dist/**",
-    "node_modules/sql.js/package.json",
-    "node_modules/sql.js/dist/sql-wasm.js",
-    "node_modules/sql.js/dist/sql-wasm.wasm",
-    "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/*.csproj",
-    "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/*.cs",
-    "analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish/**",
+    "cartographer/KrakenAtlas.Cartographer/publish/**",
+    "docs/planning/**",
     "images/**",
-    "AGENT_SKILL.md",
-    "ALPHA_FEEDBACK.md",
     "README.md",
     "CHANGELOG.md",
     "GETTING_STARTED.md",
-    "NEXT_STEPS.md",
-    "PRODUCT_REQUIREMENTS.md",
-    "WHERE_WE_LEFT_OFF.md",
     "package.json"
   ],
   "contributes": {
     "commands": [
       {
-        "command": "krakenAtlas.rebuildIndex",
-        "title": "Kraken Atlas: Rebuild Map From Workspace"
+        "command": "krakenAtlas.showStatus",
+        "title": "Kraken Atlas: Show Status",
+        "icon": "$(pulse)"
       },
       {
-        "command": "krakenAtlas.updateIndex",
-        "title": "Kraken Atlas: Update Map For Changed Files"
+        "command": "krakenAtlas.buildAtlas",
+        "title": "Kraken Atlas: Build Atlas",
+        "icon": "$(database)"
       },
       {
-        "command": "krakenAtlas.doctor",
-        "title": "Kraken Atlas: Check Map Health"
+        "command": "krakenAtlas.showAtlasSummary",
+        "title": "Kraken Atlas: Show Atlas Summary",
+        "icon": "$(list-tree)"
       },
       {
-        "command": "krakenAtlas.showProject",
-        "title": "Kraken Atlas: Show Project Summary"
+        "command": "krakenAtlas.lookupEntity",
+        "title": "Kraken Atlas: Lookup Entity",
+        "icon": "$(symbol-key)"
       },
       {
-        "command": "krakenAtlas.queryFlow",
-        "title": "Kraken Atlas: Trace Feature Flow"
+        "command": "krakenAtlas.restartCartographer",
+        "title": "Kraken Atlas: Restart Cartographer",
+        "icon": "$(refresh)"
       },
       {
-        "command": "krakenAtlas.querySymbol",
-        "title": "Kraken Atlas: Find Symbol"
-      },
-      {
-        "command": "krakenAtlas.queryReferences",
-        "title": "Kraken Atlas: Find References"
-      },
-      {
-        "command": "krakenAtlas.queryRelationships",
-        "title": "Kraken Atlas: Show Relationships"
-      },
-      {
-        "command": "krakenAtlas.searchMap",
-        "title": "Kraken Atlas: Search Map"
-      },
-      {
-        "command": "krakenAtlas.exportContextPack",
-        "title": "Kraken Atlas: Export Context Pack"
-      },
-      {
-        "command": "krakenAtlas.installAgentInstructions",
-        "title": "Kraken Atlas: Install Agent Instructions"
-      },
-      {
-        "command": "krakenAtlas.installWorkspaceCli",
-        "title": "Kraken Atlas: Install CLI For Workspace Terminals"
-      },
-      {
-        "command": "krakenAtlas.installAiAgentSetup",
-        "title": "Kraken Atlas: Install AI Agent Setup"
-      },
-      {
-        "command": "krakenAtlas.openMapFolder",
-        "title": "Kraken Atlas: Open Map Folder"
+        "command": "krakenAtlas.openPlanning",
+        "title": "Kraken Atlas: Open Architecture Plan",
+        "icon": "$(book)"
       }
-    ],
-    "languageModelTools": [
-      {
-        "name": "kraken_atlas_doctor",
-        "displayName": "Kraken Atlas: Check Map Health",
-        "modelDescription": "Check whether the local Kraken Atlas code map is ready, stale, missing, or degraded before reading source files.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {}
-        }
-      },
-      {
-        "name": "kraken_atlas_query",
-        "displayName": "Kraken Atlas: Query Code Map",
-        "modelDescription": "Query the local Kraken Atlas relationship map before opening source files. Use relationships for a known file or symbol, references for usages, flow for connected behavior, symbol for declarations, search for fallback discovery, and project for a map summary.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "queryType": {
-              "type": "string",
-              "enum": [
-                "project",
-                "flow",
-                "relationships",
-                "search",
-                "symbol",
-                "references"
-              ],
-              "description": "The direct map query to run."
-            },
-            "query": {
-              "type": "string",
-              "description": "Natural-language task, symbol name, file path, route, pattern, or search text."
-            },
-            "context": {
-              "type": "string",
-              "description": "Optional project or folder context for multi-project workspaces, such as WebUI or AdminTools."
-            }
-          },
-          "required": [
-            "queryType"
-          ]
-        }
-      },
-      {
-        "name": "kraken_atlas_context_pack",
-        "displayName": "Kraken Atlas: Export Context Pack",
-        "modelDescription": "Create a compact markdown context pack from a narrowed Kraken Atlas query after likely edit files have been identified.",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "queryType": {
-              "type": "string",
-              "enum": [
-                "flow",
-                "relationships",
-                "search",
-                "symbol",
-                "references",
-                "project"
-              ],
-              "description": "The source query type for the context pack."
-            },
-            "query": {
-              "type": "string",
-              "description": "Natural-language task, symbol name, file path, route, pattern, or search text."
-            },
-            "context": {
-              "type": "string",
-              "description": "Optional project or folder context for multi-project workspaces."
-            }
-          },
-          "required": [
-            "query"
-          ]
-        }
-      }
-    ],
-    "configuration": {
-      "title": "Kraken Atlas",
-      "properties": {
-        "krakenAtlas.outputFolder": {
-          "type": "string",
-          "default": ".kraken-atlas",
-          "description": "Workspace-relative folder where Kraken Atlas outputs are written."
-        },
-        "krakenAtlas.maxFileSizeBytes": {
-          "type": "number",
-          "default": 1048576,
-          "description": "Maximum file size to index."
-        },
-        "krakenAtlas.updateOnSave": {
-          "type": "boolean",
-          "default": false,
-          "description": "Update Kraken Atlas after saving supported C#/.NET, React/TypeScript, vanilla JavaScript, HTML, or Razor files."
-        },
-        "krakenAtlas.excludeDirectories": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Additional directory names to exclude from indexing."
-        },
-        "krakenAtlas.excludeGlobs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Additional workspace-relative glob patterns to exclude from indexing."
-        },
-        "krakenAtlas.excludeExtensions": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Additional file extensions to exclude from indexing, such as .bak or .tmp."
-        },
-        "krakenAtlas.excludeFiles": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Additional file names or workspace-relative file paths to exclude from indexing."
-        },
-        "krakenAtlas.includeGlobs": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "default": [],
-          "description": "Workspace-relative glob patterns to include even when a broader ignore rule would exclude them."
-        },
-        "krakenAtlas.ignoreFile": {
-          "type": "string",
-          "default": ".kraken-atlas-ignore",
-          "description": "Workspace-relative ignore file used for Kraken Atlas scan rules."
-        }
-      }
-    }
+    ]
   },
   "scripts": {
-    "compile": "tsc -p ./",
-    "compile:test": "tsc -p ./tsconfig.test.json",
-    "publish:analyzer": "dotnet publish analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/KrakenAtlas.RoslynAnalyzer.csproj -c Release -o analyzers/dotnet/KrakenAtlas.RoslynAnalyzer/publish",
-    "pack:dry": "npm pack --dry-run",
+    "clean:extension": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "clean:tests": "node -e \"require('node:fs').rmSync('dist-test', { recursive: true, force: true })\"",
+    "clean:cartographer-publish": "node -e \"require('node:fs').rmSync('cartographer/KrakenAtlas.Cartographer/publish', { recursive: true, force: true })\"",
+    "compile": "npm run clean:extension && tsc -p ./tsconfig.json",
+    "compile:test": "npm run clean:tests && tsc -p ./tsconfig.test.json",
+    "build:cartographer": "dotnet build KrakenAtlas.slnx -c Release",
+    "publish:cartographer": "npm run clean:cartographer-publish && dotnet publish cartographer/KrakenAtlas.Cartographer/KrakenAtlas.Cartographer.csproj -c Release -o cartographer/KrakenAtlas.Cartographer/publish --no-self-contained",
+    "test:node": "node --test --test-concurrency=1 \"dist-test/test/**/*.js\"",
+    "test": "npm run compile && npm run build:cartographer && npm run compile:test && npm run test:node",
     "package:vsix": "node scripts/vsce-package.cjs package --no-rewrite-relative-links --allow-missing-repository --skip-license",
+    "check:vsix": "npm test && npm run publish:cartographer && npm run package:vsix",
     "release:bump": "node scripts/release-bump.cjs",
     "release:check-version": "node scripts/release-check-version.cjs",
-    "release:history-from-vsix": "node scripts/release-history-from-vsix.cjs",
     "release:vsix": "node scripts/release-vsix.cjs",
-    "check:vsix": "npm run compile && npm run publish:analyzer && npm run package:vsix",
-    "check:package": "npm run compile && npm run publish:analyzer && npm pack --dry-run",
-    "test": "npm run compile && npm run compile:test && node --test --test-concurrency=1 \"dist-test/test/**/*.js\"",
-    "vscode:prepublish": "node -e \"\""
+    "vscode:prepublish": "npm run compile && npm run publish:cartographer"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.90.0",
-    "@vscode/vsce": "^2.32.0",
+    "@vscode/vsce": "^3.9.2",
     "typescript": "^5.4.5"
-  },
-  "dependencies": {
-    "@types/sql.js": "^1.4.11",
-    "sql.js": "^1.14.1"
   }
 }

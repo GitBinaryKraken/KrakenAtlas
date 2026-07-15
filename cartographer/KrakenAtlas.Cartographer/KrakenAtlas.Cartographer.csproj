@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Version>0.3.0</Version>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\KrakenAtlas.Core\KrakenAtlas.Core.csproj" />
+    <ProjectReference Include="..\KrakenAtlas.Protocol\KrakenAtlas.Protocol.csproj" />
+    <ProjectReference Include="..\KrakenAtlas.Storage.Sqlite\KrakenAtlas.Storage.Sqlite.csproj" />
+    <ProjectReference Include="..\KrakenAtlas.Workspace\KrakenAtlas.Workspace.csproj" />
+  </ItemGroup>
+</Project>

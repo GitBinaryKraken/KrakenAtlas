@@ -4,5 +4,9 @@
     "outDir": "dist-test",
     "rootDir": "."
   },
-  "include": ["src", "test", "test-support"]
+  "include": [
+    "src/cartographer/**/*.ts",
+    "src/foundation/**/*.ts",
+    "test/**/*.ts"
+  ]
 }

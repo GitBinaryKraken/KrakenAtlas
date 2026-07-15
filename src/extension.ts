@@ -1,645 +1,135 @@
 import * as vscode from "vscode";
-import * as path from "path";
-import { readConfiguration, scanOptionsFromConfiguration } from "./config/configuration";
+import { renderAtlasSummary, renderEntityDetail } from "./atlas/render";
+import { CartographerClient } from "./cartographer/client";
+import { renderFoundationStatus } from "./foundation/status";
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Kraken Atlas");
-  void refreshInstalledWorkspaceCli(context.extensionPath);
+  const workspaceRoots = vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath) ?? [];
+  const storageRoot = context.storageUri ?? vscode.Uri.joinPath(context.globalStorageUri, "no-workspace");
+  const atlasPath = vscode.Uri.joinPath(storageRoot, "atlas.sqlite3").fsPath;
+  const client = new CartographerClient(
+    context.extensionPath,
+    workspaceRoots,
+    atlasPath,
+    (message) => output.appendLine(message)
+  );
+  const version = String(context.extension.packageJSON.version ?? "unknown");
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("krakenAtlas.rebuildIndex", async () => {
-      const { rebuildIndex } = await import("./commands/rebuildIndex");
-      await rebuildIndex(context.extensionPath);
+    client,
+    output,
+    vscode.commands.registerCommand("krakenAtlas.showStatus", async () => {
+      await runCommand(() => showStatus(client, output, version));
     }),
-    vscode.commands.registerCommand("krakenAtlas.updateIndex", async () => {
-      const { updateIndex } = await import("./commands/updateIndex");
-      await updateIndex(context.extensionPath);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.doctor", async () => {
-      await runDoctorCommand(context.extensionPath, output);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.showProject", async () => {
-      await runQueryCommand(output, "project", "project");
-    }),
-    vscode.commands.registerCommand("krakenAtlas.queryFlow", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Trace Feature Flow",
-        prompt: "Feature, behavior, or flow to inspect",
-        placeHolder: "login"
+    vscode.commands.registerCommand("krakenAtlas.buildAtlas", async () => {
+      await runCommand(async () => {
+        if (workspaceRoots.length === 0) {
+          throw new Error("Open a workspace folder before building the Atlas.");
+        }
+        const result = await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Kraken Atlas: discovering workspace",
+            cancellable: false
+          },
+          () => client.buildAtlas()
+        );
+        await showAtlasSummary(client, output, version);
+        vscode.window.showInformationMessage(
+          `Kraken Atlas generation ${result.generation}: ${result.counts.projects} projects, ${result.counts.files} files.`
+        );
       });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "flow", query, contextName);
     }),
-    vscode.commands.registerCommand("krakenAtlas.querySymbol", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Find Symbol",
-        prompt: "Symbol, class, method, or file name to inspect",
-        placeHolder: "UserService"
+    vscode.commands.registerCommand("krakenAtlas.showAtlasSummary", async () => {
+      await runCommand(() => showAtlasSummary(client, output, version));
+    }),
+    vscode.commands.registerCommand("krakenAtlas.lookupEntity", async () => {
+      await runCommand(async () => {
+        const value = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Lookup Entity",
+          prompt: "Enter an exact stable key or numeric entity ID",
+          ignoreFocusOut: true
+        });
+        if (!value) {
+          return;
+        }
+        const numericId = /^\d+$/.test(value) ? Number(value) : undefined;
+        const entity = await client.getEntity(numericId === undefined ? value : undefined, numericId);
+        if (!entity) {
+          vscode.window.showWarningMessage("Kraken Atlas: No current entity matched that exact identity.");
+          return;
+        }
+        output.clear();
+        output.appendLine(renderEntityDetail(entity));
+        output.show(true);
       });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "symbol", query, contextName);
     }),
-    vscode.commands.registerCommand("krakenAtlas.queryRelationships", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Show Relationships",
-        prompt: "Symbol, relationship type, file, or graph id to inspect",
-        placeHolder: "UserService"
+    vscode.commands.registerCommand("krakenAtlas.restartCartographer", async () => {
+      await runCommand(async () => {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Kraken Atlas: restarting Cartographer",
+            cancellable: false
+          },
+          async () => {
+            await client.restart();
+          }
+        );
+        await showStatus(client, output, version);
       });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "relationships", query, contextName);
     }),
-    vscode.commands.registerCommand("krakenAtlas.queryReferences", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Find References",
-        prompt: "Symbol, method, type, or graph id to find references for",
-        placeHolder: "UserService"
+    vscode.commands.registerCommand("krakenAtlas.openPlanning", async () => {
+      await runCommand(async () => {
+        const uri = vscode.Uri.joinPath(context.extensionUri, "docs", "planning", "README.md");
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { preview: true });
       });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "references", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.searchMap", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Search Map",
-        prompt: "Text to search across indexed files, symbols, references, and relationships",
-        placeHolder: "save button"
-      });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await runQueryCommand(output, "search", query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.exportContextPack", async () => {
-      const query = await vscode.window.showInputBox({
-        title: "Kraken Atlas: Export Context Pack",
-        prompt: "Feature, behavior, or symbol to write into .kraken-atlas/context-pack.md",
-        placeHolder: "login"
-      });
-      if (!query) {
-        return;
-      }
-      const contextName = await promptForContext();
-      await exportContextPack(output, query, contextName);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.installAgentInstructions", async () => {
-      await installAgentInstructionsCommand(output);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.installWorkspaceCli", async () => {
-      await installWorkspaceCliCommand(context.extensionPath, output);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.installAiAgentSetup", async () => {
-      await installAiAgentSetupCommand(context.extensionPath, output);
-    }),
-    vscode.commands.registerCommand("krakenAtlas.openMapFolder", async () => {
-      const workspaceRoot = getWorkspaceRoot();
-      if (!workspaceRoot) {
-        return;
-      }
-      const mapFolder = vscode.Uri.file(path.join(workspaceRoot, readConfiguration().outputFolder));
-      await vscode.commands.executeCommand("revealFileInOS", mapFolder);
-    }),
-    vscode.workspace.onDidSaveTextDocument((document) => {
-      if (readConfiguration().updateOnSave && shouldUpdateOnSave(document)) {
-        void import("./commands/updateIndex").then(({ updateIndex }) => updateIndex(context.extensionPath, { silent: true }));
-      }
-    }),
-    output
+    })
   );
-
-  registerLanguageModelTools(context, output);
 }
 
 export function deactivate(): void {
-  // Nothing to clean up yet.
+  // Disposables registered during activation own process shutdown.
 }
 
-function shouldUpdateOnSave(document: vscode.TextDocument): boolean {
-  if (document.uri.scheme !== "file") {
-    return false;
-  }
-
-  const workspaceFolder = vscode.workspace.getWorkspaceFolder(document.uri);
-  if (!workspaceFolder) {
-    return false;
-  }
-
-  const configuration = readConfiguration();
-  const relativePath = path.relative(workspaceFolder.uri.fsPath, document.uri.fsPath);
-  if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-    return false;
-  }
-
-  if (relativePath.split(/[\\/]/).includes(configuration.outputFolder)) {
-    return false;
-  }
-
-  return new Set([".cs", ".csproj", ".sln", ".props", ".targets", ".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".html", ".htm", ".cshtml", ".razor"]).has(
-    path.extname(document.uri.fsPath).toLowerCase()
-  );
-}
-
-async function runDoctorCommand(extensionPath: string, output: vscode.OutputChannel): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  await vscode.window.withProgress(
+async function showStatus(
+  client: CartographerClient,
+  output: vscode.OutputChannel,
+  version: string
+): Promise<void> {
+  const status = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: "Kraken Atlas: running doctor",
+      title: "Kraken Atlas: checking foundation status",
       cancellable: false
     },
-    async () => {
-      const { inspectMap } = await import("./doctor/mapDoctor");
-      const { renderAgentDoctor } = await import("./format/agentFormatter");
-      const configuration = readConfiguration();
-      const result = await inspectMap({
-        extensionPath,
-        workspaceRoot,
-        outputFolder: configuration.outputFolder,
-        maxFileSizeBytes: configuration.maxFileSizeBytes,
-        scanOptions: scanOptionsFromConfiguration(configuration)
-      });
-
-      writeOutput(output, "Doctor", renderAgentDoctor(result));
-      vscode.window.showInformationMessage(`Kraken Atlas doctor: ${result.status}.`);
-    }
+    () => client.getFoundationStatus()
   );
-}
-
-type ExtensionQueryType = "project" | "symbol" | "references" | "relationships" | "flow" | "search";
-
-async function runQueryCommand(output: vscode.OutputChannel, queryType: ExtensionQueryType, query: string, contextName?: string): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: `Kraken Atlas: ${queryType}`,
-      cancellable: false
-    },
-    async () => {
-      const { renderAgentResponse } = await import("./format/agentFormatter");
-      const { withQueryService } = await import("./query/queryService");
-      const response = await withQueryService(workspaceRoot, (service) => {
-        if (queryType === "project") {
-          return service.getProject(query);
-        }
-        if (queryType === "symbol") {
-          return service.findSymbols(query);
-        }
-        if (queryType === "references") {
-          return service.findReferences(query);
-        }
-        if (queryType === "relationships") {
-          return service.findRelationships(query);
-        }
-        if (queryType === "flow") {
-          return service.findFlow(query);
-        }
-        if (queryType === "search") {
-          return service.search(query);
-        }
-        return service.search(query);
-      }, { projectContext: contextName });
-
-      writeOutput(output, `${queryType}: ${query}${contextName ? ` [${contextName}]` : ""}`, renderForCommandPalette(renderAgentResponse(response)));
-      vscode.window.showInformationMessage(`Kraken Atlas ${queryType} query returned ${response.files.length} file(s).`);
-    }
-  );
-}
-
-async function runQuery(workspaceRoot: string, queryType: ExtensionQueryType, query: string, contextName?: string): Promise<string> {
-  const { renderAgentResponse } = await import("./format/agentFormatter");
-  const { withQueryService } = await import("./query/queryService");
-  const response = await withQueryService(workspaceRoot, (service) => {
-    if (queryType === "project") {
-      return service.getProject(query);
-    }
-    if (queryType === "symbol") {
-      return service.findSymbols(query);
-    }
-    if (queryType === "references") {
-      return service.findReferences(query);
-    }
-    if (queryType === "relationships") {
-      return service.findRelationships(query);
-    }
-    if (queryType === "flow") {
-      return service.findFlow(query);
-    }
-    if (queryType === "search") {
-      return service.search(query);
-    }
-    return service.search(query);
-  }, { projectContext: contextName });
-
-  return renderAgentResponse(response);
-}
-
-async function exportContextPack(output: vscode.OutputChannel, query: string, contextName?: string): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title: "Kraken Atlas: exporting context pack",
-      cancellable: false
-    },
-    async () => {
-      const fs = await import("fs/promises");
-      const { renderContextPack } = await import("./context/agentContext");
-      const { renderAgentResponse } = await import("./format/agentFormatter");
-      const { withQueryService } = await import("./query/queryService");
-      const response = await withQueryService(workspaceRoot, (service) => service.findFlow(query), { projectContext: contextName });
-      const outputPath = path.join(workspaceRoot, readConfiguration().outputFolder, "context-pack.md");
-      await fs.writeFile(outputPath, renderContextPack(response, { workspaceRoot }), "utf8");
-
-      writeOutput(output, `context pack: ${query}${contextName ? ` [${contextName}]` : ""}`, renderForCommandPalette(renderAgentResponse(response)));
-      vscode.window.showInformationMessage(`Kraken Atlas wrote context pack: ${outputPath}`);
-    }
-  );
-}
-
-async function installAgentInstructionsCommand(output: vscode.OutputChannel): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  const { installAgentInstructions, installAgentSkill } = await import("./agent/terminalInstructions");
-  const result = await installAgentInstructions(workspaceRoot);
-  const skill = await installAgentSkill(workspaceRoot, extensionVersion());
-  writeOutput(output, "Install Agent Instructions", [
-    "Answer",
-    `Kraken Atlas agent instructions ${result.action}; project skill ${skill.action}.`,
-    "",
-    "Open These Files",
-    `- ${result.filePath}`,
-    `- ${skill.skillPath}`,
-    `- ${path.join(skill.referencesFolder, "query-playbooks.md")}`,
-    "",
-    "Evidence",
-    "- AGENTS.md now contains query-first Kraken Atlas guidance.",
-    "- .agents/skills/kraken-atlas now contains a project-local agent skill.",
-    "",
-    "Next Commands",
-    "- Run Command Palette: Kraken Atlas: Check Map Health",
-    "- Run Command Palette: Kraken Atlas: Show Project Summary",
-    "",
-    "Stop Condition",
-    "- Stop here once the agent instructions are installed."
-  ].join("\n"));
-  vscode.window.showInformationMessage(`Kraken Atlas agent instructions ${result.action}; project skill ${skill.action}.`);
-}
-
-async function installAiAgentSetupCommand(extensionPath: string, output: vscode.OutputChannel): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  const { installAgentInstructions, installAgentSkill } = await import("./agent/terminalInstructions");
-  const instructions = await installAgentInstructions(workspaceRoot);
-  const skill = await installAgentSkill(workspaceRoot, extensionVersion());
-  await installWorkspaceCli(extensionPath);
-
-  writeOutput(output, "Install AI Agent Setup", [
-    "Answer",
-    "Kraken Atlas AI agent setup installed.",
-    "",
-    "Open These Files",
-    `- ${instructions.filePath}`,
-    `- ${skill.skillPath}`,
-    `- ${path.join(skill.referencesFolder, "query-playbooks.md")}`,
-    `- ${path.join(workspaceRoot, readConfiguration().outputFolder, "bin")}`,
-    "- .vscode/settings.json",
-    "",
-    "Evidence",
-    "- AGENTS.md contains Kraken Atlas query-first instructions and playbooks.",
-    "- .agents/skills/kraken-atlas contains a project-local skill for agent surfaces that scan .agents/skills.",
-    "- New VS Code integrated terminals will include the workspace CLI shim on PATH.",
-    "- External agent terminals can call the shim directly when they do not inherit VS Code PATH settings.",
-    "- Native VS Code language-model tools are registered when the editor supports them.",
-    "",
-    "Next Commands",
-    "- Close existing VS Code terminals.",
-    "- Open a new VS Code terminal.",
-    "- Run: kraken-atlas --help",
-    "- If an agent still cannot find PATH, run: .\\.kraken-atlas\\bin\\kraken-atlas.cmd --help",
-    "- Run: kraken-atlas doctor --workspace . --format agent",
-    "",
-    "Stop Condition",
-    "- Stop here once AGENTS.md exists and a new integrated terminal can run kraken-atlas."
-  ].join("\n"));
-  vscode.window.showInformationMessage("Kraken Atlas AI agent setup installed. Open a new terminal before testing kraken-atlas.");
-}
-
-async function installWorkspaceCliCommand(extensionPath: string, output: vscode.OutputChannel): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  const installed = await installWorkspaceCli(extensionPath);
-
-  writeOutput(output, "Install Workspace CLI", [
-    "Answer",
-    "Kraken Atlas workspace CLI shims installed.",
-    "",
-    "Open These Files",
-    `- ${installed.binFolder}`,
-    "- .vscode/settings.json",
-    "",
-    "Evidence",
-    `- Windows cmd shim: ${installed.cmdPath}`,
-    `- PowerShell shim: ${installed.ps1Path}`,
-    `- POSIX shell shim: ${installed.shPath}`,
-    "- New VS Code integrated terminals will include the shim folder on PATH.",
-    "- External agent terminals can call the shim directly when they do not inherit VS Code PATH settings.",
-    "",
-    "Next Commands",
-    "- Close existing VS Code terminals.",
-    "- Open a new VS Code terminal.",
-    "- Run: kraken-atlas --help",
-    "- If an agent still cannot find PATH, run: .\\.kraken-atlas\\bin\\kraken-atlas.cmd --help",
-    "- Run: kraken-atlas doctor --workspace . --format agent",
-    "",
-    "Stop Condition",
-    "- Stop here once a new integrated terminal can run kraken-atlas."
-  ].join("\n"));
-  vscode.window.showInformationMessage("Kraken Atlas CLI installed for new workspace terminals. Open a new terminal before testing PATH.");
-}
-
-async function installWorkspaceCli(extensionPath: string): Promise<{ binFolder: string; cmdPath: string; ps1Path: string; shPath: string }> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    throw new Error("Kraken Atlas needs an open workspace.");
-  }
-
-  const binFolder = path.join(workspaceRoot, readConfiguration().outputFolder, "bin");
-  const { cmdPath, ps1Path, shPath } = await writeWorkspaceCliShims(extensionPath, binFolder);
-
-  await prependWorkspaceTerminalPath(binFolder);
-  return { binFolder, cmdPath, ps1Path, shPath };
-}
-
-async function refreshInstalledWorkspaceCli(extensionPath: string): Promise<void> {
-  const workspaceRoot = getWorkspaceRoot();
-  if (!workspaceRoot) {
-    return;
-  }
-
-  const binFolder = path.join(workspaceRoot, readConfiguration().outputFolder, "bin");
-  const cmdPath = path.join(binFolder, "kraken-atlas.cmd");
-  const ps1Path = path.join(binFolder, "kraken-atlas.ps1");
-  const shPath = path.join(binFolder, "kraken-atlas");
-  if (!(await pathExists(cmdPath)) && !(await pathExists(ps1Path)) && !(await pathExists(shPath))) {
-    return;
-  }
-
-  try {
-    await writeWorkspaceCliShims(extensionPath, binFolder);
-  } catch {
-    // Best-effort upgrade repair. The explicit install command reports failures to the user.
-  }
-}
-
-async function writeWorkspaceCliShims(extensionPath: string, binFolder: string): Promise<{ cmdPath: string; ps1Path: string; shPath: string }> {
-  const fs = await import("fs/promises");
-  const { renderWorkspaceCliShimScripts } = await import("./agent/workspaceCliShim");
-  const scripts = renderWorkspaceCliShimScripts(extensionPath);
-  await fs.mkdir(binFolder, { recursive: true });
-
-  const cmdPath = path.join(binFolder, "kraken-atlas.cmd");
-  const ps1Path = path.join(binFolder, "kraken-atlas.ps1");
-  const shPath = path.join(binFolder, "kraken-atlas");
-  await fs.writeFile(cmdPath, scripts.cmd, "utf8");
-  await fs.writeFile(ps1Path, scripts.ps1, "utf8");
-  await fs.writeFile(shPath, scripts.sh, "utf8");
-  return { cmdPath, ps1Path, shPath };
-}
-
-function registerLanguageModelTools(context: vscode.ExtensionContext, _output: vscode.OutputChannel): void {
-  if (!vscode.lm?.registerTool) {
-    return;
-  }
-
-  context.subscriptions.push(
-    vscode.lm.registerTool("kraken_atlas_doctor", {
-      async invoke() {
-        const workspaceRoot = getWorkspaceRoot();
-        if (!workspaceRoot) {
-          return textToolResult("No VS Code workspace is open.");
-        }
-        const { inspectMap } = await import("./doctor/mapDoctor");
-        const { renderAgentDoctor } = await import("./format/agentFormatter");
-        const configuration = readConfiguration();
-        const result = await inspectMap({
-          extensionPath: context.extensionPath,
-          workspaceRoot,
-          outputFolder: configuration.outputFolder,
-          maxFileSizeBytes: configuration.maxFileSizeBytes,
-          scanOptions: scanOptionsFromConfiguration(configuration)
-        });
-        return textToolResult(renderAgentDoctor(result));
-      }
-    }),
-    vscode.lm.registerTool("kraken_atlas_query", {
-      async invoke(options) {
-        const workspaceRoot = getWorkspaceRoot();
-        if (!workspaceRoot) {
-          return textToolResult("No VS Code workspace is open.");
-        }
-        const input = options.input as ToolQueryInput;
-        const queryType = normalizeToolQueryType(input.queryType);
-        if (!queryType) {
-          return textToolResult(`Unknown Kraken Atlas queryType: ${String(input.queryType)}.`);
-        }
-        return textToolResult(await runQuery(workspaceRoot, queryType, stringValue(input.query) ?? "project", stringValue(input.context)));
-      }
-    }),
-    vscode.lm.registerTool("kraken_atlas_context_pack", {
-      async invoke(options) {
-        const workspaceRoot = getWorkspaceRoot();
-        if (!workspaceRoot) {
-          return textToolResult("No VS Code workspace is open.");
-        }
-        const input = options.input as ToolQueryInput;
-        const queryType = normalizeToolQueryType(input.queryType || "flow") ?? "flow";
-        const query = stringValue(input.query) ?? "project";
-        const { renderContextPack } = await import("./context/agentContext");
-        const { withQueryService } = await import("./query/queryService");
-        const response = await withQueryService(workspaceRoot, (service) => {
-          if (queryType === "project") {
-            return service.getProject(query);
-          }
-          if (queryType === "flow") {
-            return service.findFlow(query);
-          }
-          if (queryType === "search") {
-            return service.search(query);
-          }
-          if (queryType === "relationships") {
-            return service.findRelationships(query);
-          }
-          if (queryType === "symbol") {
-            return service.findSymbols(query);
-          }
-          if (queryType === "references") {
-            return service.findReferences(query);
-          }
-          return service.findFlow(query);
-        }, { projectContext: stringValue(input.context) });
-        return textToolResult(renderContextPack(response, { workspaceRoot }));
-      }
-    })
-  );
-
-}
-
-interface ToolQueryInput {
-  queryType?: string;
-  query?: string;
-  context?: string;
-}
-
-function normalizeToolQueryType(value: string | undefined): ExtensionQueryType | undefined {
-  if (value === "project" || value === "symbol" || value === "references" || value === "relationships" || value === "flow" || value === "search") {
-    return value;
-  }
-  if (value === "symbols") {
-    return "symbol";
-  }
-  if (value === "relationship") {
-    return "relationships";
-  }
-  return undefined;
-}
-
-function textToolResult(value: string): vscode.LanguageModelToolResult {
-  return new vscode.LanguageModelToolResult([new vscode.LanguageModelTextPart(value.trimEnd())]);
-}
-
-async function prependWorkspaceTerminalPath(binFolder: string): Promise<void> {
-  const config = vscode.workspace.getConfiguration();
-  const updates: Array<[string, string]> = [
-    ["terminal.integrated.env.windows", `${binFolder};\${env:PATH}`],
-    ["terminal.integrated.env.linux", `${toPosixPath(binFolder)}:\${env:PATH}`],
-    ["terminal.integrated.env.osx", `${toPosixPath(binFolder)}:\${env:PATH}`]
-  ];
-
-  for (const [setting, pathValue] of updates) {
-    const existing = config.get<Record<string, string | null>>(setting) ?? {};
-    await config.update(setting, { ...existing, PATH: pathValue }, vscode.ConfigurationTarget.Workspace);
-  }
-}
-
-function toPosixPath(value: string): string {
-  return value.replace(/\\/g, "/");
-}
-
-function stringValue(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-async function promptForContext(): Promise<string | undefined> {
-  const value = await vscode.window.showInputBox({
-    title: "Kraken Atlas: Query Context",
-    prompt: "Optional project/folder context for parent workspaces",
-    placeHolder: "AdminTools",
-    value: ""
-  });
-  return value?.trim() || undefined;
-}
-
-function writeOutput(output: vscode.OutputChannel, title: string, body: string): void {
+  const rendered = renderFoundationStatus(status, version);
   output.clear();
-  output.appendLine(`# ${title}`);
-  output.appendLine("");
-  output.append(body.trimEnd());
-  output.appendLine("");
+  output.appendLine(rendered);
+  output.show(true);
+  vscode.window.showInformationMessage(`Kraken Atlas Cartographer: ${status.cartographerState}; Atlas: ${status.atlasState}.`);
+}
+
+async function showAtlasSummary(
+  client: CartographerClient,
+  output: vscode.OutputChannel,
+  version: string
+): Promise<void> {
+  const summary = await client.getAtlasSummary();
+  output.clear();
+  output.appendLine(renderAtlasSummary(summary, version));
   output.show(true);
 }
 
-function renderForCommandPalette(body: string): string {
-  const lines = body.trimEnd().split(/\r?\n/);
-  const output: string[] = [];
-  let inNextCommands = false;
-  let wrotePaletteHint = false;
-
-  for (const line of lines) {
-    if (line === "Next Commands") {
-      inNextCommands = true;
-      output.push(line);
-      output.push("- Run Command Palette: Kraken Atlas: Show Project Summary");
-      output.push("- Run Command Palette: Kraken Atlas: Find Symbol");
-      output.push("- Run Command Palette: Kraken Atlas: Find References");
-      output.push("- Run Command Palette: Kraken Atlas: Trace Feature Flow");
-      output.push("- Run Command Palette: Kraken Atlas: Show Relationships");
-      output.push("- Run Command Palette: Kraken Atlas: Search Map");
-      output.push("- Run Command Palette: Kraken Atlas: Export Context Pack");
-      wrotePaletteHint = true;
-      continue;
-    }
-
-    if (inNextCommands) {
-      if (line === "Stop Condition") {
-        inNextCommands = false;
-        output.push(line);
-      }
-      continue;
-    }
-
-    output.push(line);
-  }
-
-  if (!wrotePaletteHint) {
-    output.push("", "Next Commands", "- Run Command Palette: Kraken Atlas: Show Project Summary");
-  }
-
-  return `${output.join("\n").trimEnd()}\n`;
-}
-
-async function pathExists(filePath: string): Promise<boolean> {
-  const fs = await import("fs/promises");
+async function runCommand(action: () => Promise<void>): Promise<void> {
   try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
+    await action();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(`Kraken Atlas: ${message}`);
   }
-}
-
-function getWorkspaceRoot(): string | undefined {
-  const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-  if (!workspaceFolder) {
-    vscode.window.showErrorMessage("Kraken Atlas needs an open workspace.");
-    return undefined;
-  }
-  return workspaceFolder.uri.fsPath;
-}
-
-function extensionVersion(): string {
-  const extension = vscode.extensions.getExtension("BinaryKraken.kraken-atlas");
-  return extension?.packageJSON?.version ?? "0.2.3";
 }

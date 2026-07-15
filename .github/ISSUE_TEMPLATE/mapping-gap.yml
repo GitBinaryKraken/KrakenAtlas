@@ -1,0 +1,29 @@
+name: Mapping or query gap
+description: Propose a missing entity, relation, evidence source, or agent query.
+title: "[Map] "
+labels: ["mapping"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: Agent question
+      description: What should an agent be able to ask?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Expected evidence
+      description: Which code, database, or documentation facts should answer it?
+    validations:
+      required: true
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Relation domain
+      options:
+        - Code usage
+        - Documentation
+        - Full-stack route
+        - Database
+        - Index health
