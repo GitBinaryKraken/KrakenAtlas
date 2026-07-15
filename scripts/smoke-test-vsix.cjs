@@ -196,6 +196,16 @@ try {
     throw new Error(`Atlas did not reopen correctly: ${JSON.stringify(reopened)}`);
   }
 
+  const orientation = cartographer(assembly, "orientation");
+  if (
+    orientation.atlasState !== "current" ||
+    orientation.projects?.length !== 2 ||
+    orientation.commands?.length !== 7 ||
+    !orientation.coverage?.includedSources?.includes("dotnet_projects")
+  ) {
+    throw new Error(`Packaged workspace orientation was incomplete: ${JSON.stringify(orientation)}`);
+  }
+
   const secondBuild = cartographer(assembly, "build");
   if (secondBuild.generation !== 2) {
     throw new Error(`Cartographer restart build did not advance the generation: ${JSON.stringify(secondBuild)}`);
@@ -210,7 +220,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, built and reopened two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, queried workspace orientation, built and reopened two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {

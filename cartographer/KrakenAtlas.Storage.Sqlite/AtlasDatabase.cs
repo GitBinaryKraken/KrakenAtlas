@@ -4,7 +4,7 @@ namespace KrakenAtlas.Storage.Sqlite;
 
 internal static class AtlasDatabase
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
 
     private static readonly IReadOnlyList<string> Migrations =
     [
@@ -164,6 +164,76 @@ internal static class AtlasDatabase
         CREATE INDEX ix_relations_target ON relations(target_entity_id, generation_id, relation_kind);
         CREATE INDEX ix_relation_evidence_generation ON relation_evidence(relation_id, generation_id);
         CREATE INDEX ix_analyzer_runs_generation ON analyzer_runs(workspace_id, generation_id);
+        """,
+        """
+        CREATE TABLE project_facets (
+            id INTEGER PRIMARY KEY,
+            stable_key TEXT NOT NULL UNIQUE,
+            entity_id INTEGER NOT NULL REFERENCES entities(id),
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+            generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            project_id INTEGER NOT NULL REFERENCES projects(id),
+            facet TEXT NOT NULL,
+            source_file_id INTEGER NOT NULL REFERENCES files(id),
+            source_line INTEGER NOT NULL,
+            provenance TEXT NOT NULL,
+            condition TEXT
+        );
+
+        CREATE TABLE build_dimensions (
+            id INTEGER PRIMARY KEY,
+            stable_key TEXT NOT NULL UNIQUE,
+            entity_id INTEGER NOT NULL REFERENCES entities(id),
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+            generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            project_id INTEGER REFERENCES projects(id),
+            dimension_kind TEXT NOT NULL,
+            value TEXT NOT NULL,
+            source_file_id INTEGER NOT NULL REFERENCES files(id),
+            source_line INTEGER NOT NULL,
+            provenance TEXT NOT NULL,
+            condition TEXT
+        );
+
+        CREATE TABLE workspace_commands (
+            id INTEGER PRIMARY KEY,
+            stable_key TEXT NOT NULL UNIQUE,
+            entity_id INTEGER NOT NULL REFERENCES entities(id),
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+            generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            target_entity_id INTEGER NOT NULL REFERENCES entities(id),
+            command_kind TEXT NOT NULL,
+            name TEXT NOT NULL,
+            command_text TEXT NOT NULL,
+            working_directory TEXT NOT NULL,
+            source_file_id INTEGER NOT NULL REFERENCES files(id),
+            source_line INTEGER NOT NULL,
+            provenance TEXT NOT NULL,
+            condition TEXT
+        );
+
+        CREATE TABLE repository_rules (
+            id INTEGER PRIMARY KEY,
+            stable_key TEXT NOT NULL UNIQUE,
+            entity_id INTEGER NOT NULL REFERENCES entities(id),
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+            generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            category TEXT NOT NULL,
+            name TEXT NOT NULL,
+            value TEXT,
+            summary TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            authority TEXT NOT NULL,
+            precedence INTEGER NOT NULL,
+            source_file_id INTEGER NOT NULL REFERENCES files(id),
+            source_line INTEGER NOT NULL,
+            provenance TEXT NOT NULL
+        );
+
+        CREATE INDEX ix_project_facets_generation ON project_facets(workspace_id, generation_id, project_id);
+        CREATE INDEX ix_build_dimensions_generation ON build_dimensions(workspace_id, generation_id, project_id);
+        CREATE INDEX ix_workspace_commands_generation ON workspace_commands(workspace_id, generation_id, command_kind);
+        CREATE INDEX ix_repository_rules_generation ON repository_rules(workspace_id, generation_id, precedence);
         """
     ];
 

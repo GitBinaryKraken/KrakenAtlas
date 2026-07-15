@@ -23,6 +23,7 @@ test("preserves the published identity and exposes only Phase 1 commands", () =>
     "krakenAtlas.showStatus",
     "krakenAtlas.buildAtlas",
     "krakenAtlas.showAtlasSummary",
+    "krakenAtlas.showWorkspaceOrientation",
     "krakenAtlas.lookupEntity",
     "krakenAtlas.restartCartographer",
     "krakenAtlas.exportDiagnostics",

@@ -77,7 +77,7 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                     JsonRpcResponse.Success(request.Id, new InitializeResult(
                         ProtocolVersion,
                         GetServiceVersion(),
-                        ["foundation.status", "atlas.build", "atlas.summary", "entity.get"])),
+                        ["foundation.status", "atlas.build", "atlas.summary", "workspace.orientation", "entity.get"])),
                     false);
             }
 
@@ -107,6 +107,11 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                     JsonRpcResponse.Success(
                         request.Id,
                         await session.GetAtlasSummaryAsync(cancellationToken)),
+                    false),
+                "get_workspace_orientation" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.GetWorkspaceOrientationAsync(cancellationToken)),
                     false),
                 "get_entity" => (
                     JsonRpcResponse.Success(

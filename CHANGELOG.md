@@ -8,6 +8,12 @@
 - Add a .NET 10 runtime preflight, source-free diagnostic export, invited-alpha
   testing instructions, and explicit privacy, storage, telemetry, and license
   status documentation.
+- Add durable workspace orientation for C# and package.json projects, including
+  multi-valued project facets, build dimensions and conditions, executable
+  commands, structured repository rules, governing instruction references, and
+  exact source evidence.
+- Expose `get_workspace_orientation` through CLI, JSON-RPC, and VS Code, and add
+  schema migration and mixed .NET/React fixture coverage for the new facts.
 
 ## 0.3.1 - 2026-07-15
 

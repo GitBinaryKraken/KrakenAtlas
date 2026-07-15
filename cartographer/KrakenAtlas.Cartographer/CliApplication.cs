@@ -29,6 +29,7 @@ internal static class CliApplication
             {
                 "build" => await session.BuildAtlasAsync(cancellationToken),
                 "summary" => await session.GetAtlasSummaryAsync(cancellationToken),
+                "orientation" => await session.GetWorkspaceOrientationAsync(cancellationToken),
                 "entity" => await session.GetEntityAsync(
                     new GetEntityParams(options.StableKey, options.Id),
                     cancellationToken),
@@ -48,9 +49,9 @@ internal static class CliApplication
 
     private static CliOptions Parse(IReadOnlyList<string> arguments)
     {
-        if (arguments.Count == 0 || arguments[0] is not ("build" or "summary" or "entity"))
+        if (arguments.Count == 0 || arguments[0] is not ("build" or "summary" or "orientation" or "entity"))
         {
-            throw new ArgumentException("A build, summary, or entity command is required.");
+            throw new ArgumentException("A build, summary, orientation, or entity command is required.");
         }
 
         var roots = new List<string>();
@@ -101,7 +102,7 @@ internal static class CliApplication
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|entity> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>]";
 

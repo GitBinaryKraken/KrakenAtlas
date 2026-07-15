@@ -67,3 +67,75 @@ export interface EntityDetail {
   outgoingRelations: number;
   locations: EntityLocationDetail[];
 }
+
+export interface OrientationEvidence {
+  relativePath: string;
+  line: number;
+  provenance: string;
+  condition?: string;
+}
+
+export interface ProjectFacetDetail {
+  stableKey: string;
+  facet: string;
+  evidence: OrientationEvidence;
+}
+
+export interface BuildDimensionDetail {
+  stableKey: string;
+  kind: string;
+  value: string;
+  evidence: OrientationEvidence;
+}
+
+export interface ProjectOrientation {
+  stableKey: string;
+  name: string;
+  relativePath: string;
+  language: string;
+  projectKind: string;
+  sdk?: string;
+  facets: ProjectFacetDetail[];
+  buildDimensions: BuildDimensionDetail[];
+}
+
+export interface WorkspaceCommandDetail {
+  stableKey: string;
+  targetKey: string;
+  kind: string;
+  name: string;
+  commandText: string;
+  workingDirectory: string;
+  evidence: OrientationEvidence;
+}
+
+export interface RepositoryRuleDetail {
+  stableKey: string;
+  category: string;
+  name: string;
+  value?: string;
+  summary: string;
+  scope: string;
+  authority: string;
+  precedence: number;
+  evidence: OrientationEvidence;
+}
+
+export interface WorkspaceOrientationCoverage {
+  status: "partial" | "complete";
+  includedSources: string[];
+  pendingSources: string[];
+}
+
+export interface WorkspaceOrientation {
+  atlasState: "not_created" | "requires_rebuild" | "current";
+  generation?: number;
+  workspaceKey?: string;
+  workspaceName?: string;
+  roots: string[];
+  coverage: WorkspaceOrientationCoverage;
+  projects: ProjectOrientation[];
+  workspaceBuildDimensions: BuildDimensionDetail[];
+  commands: WorkspaceCommandDetail[];
+  repositoryRules: RepositoryRuleDetail[];
+}

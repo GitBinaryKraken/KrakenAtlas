@@ -59,6 +59,14 @@ internal sealed class CartographerSession
             : activeRepository.GetSummaryAsync(workspaceKey, cancellationToken);
     }
 
+    public Task<WorkspaceOrientation> GetWorkspaceOrientationAsync(CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        return workspaceKey is null
+            ? Task.FromResult(WorkspaceOrientation.NotCreated())
+            : activeRepository.GetWorkspaceOrientationAsync(workspaceKey, cancellationToken);
+    }
+
     public Task<EntityDetail?> GetEntityAsync(
         GetEntityParams parameters,
         CancellationToken cancellationToken)

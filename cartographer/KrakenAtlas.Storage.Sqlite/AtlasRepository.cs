@@ -7,7 +7,7 @@ namespace KrakenAtlas.Storage.Sqlite;
 public sealed partial class AtlasRepository(string databasePath)
 {
     private const string DiscoveryAnalyzer = "workspace-discovery";
-    private const string DiscoveryVersion = "1.0.0";
+    private const string DiscoveryVersion = "1.1.0";
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
@@ -224,6 +224,18 @@ public sealed partial class AtlasRepository(string databasePath)
                 reference.Line,
                 cancellationToken);
         }
+
+        await PersistOrientationAsync(
+            connection,
+            transaction,
+            workspaceId,
+            generation,
+            snapshot,
+            projectIds,
+            fileIds,
+            entityIds,
+            filesByPath,
+            cancellationToken);
 
         stopwatch.Stop();
         await InsertAnalyzerRunAsync(

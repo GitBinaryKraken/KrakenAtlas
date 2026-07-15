@@ -1,8 +1,10 @@
 # Getting Started
 
-Kraken Atlas `0.3.1` is the first durable slice of the complete rewrite. It can
-discover .NET solutions, projects, project references, and relevant files, then
-store and query that structural map from a versioned SQLite Atlas.
+Kraken Atlas `0.3.1` established the first durable slice of the complete
+rewrite. The current development line discovers .NET solutions, C# and
+package.json projects, project references, relevant files, project roles, build
+dimensions, commands, and governing rules, then stores and queries that
+structural map from a versioned SQLite Atlas.
 
 ## Requirements
 
@@ -35,10 +37,13 @@ npm run check:vsix
 2. Press `F5` to launch an Extension Development Host.
 3. Run `Kraken Atlas: Build Atlas`.
 4. Run `Kraken Atlas: Show Atlas Summary` and inspect the discovered projects.
-5. Run `Kraken Atlas: Lookup Entity` with a project stable key or numeric ID.
-6. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
-7. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
-8. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+5. Run `Kraken Atlas: Show Workspace Orientation` and inspect project roles,
+   build dimensions, commands, and governing rules.
+6. Run `Kraken Atlas: Lookup Entity` with a project, facet, command, rule, or
+   build-dimension stable key or numeric ID.
+7. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
+8. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
+9. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
 
 The Atlas database is stored under the VS Code workspace storage directory and

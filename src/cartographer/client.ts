@@ -1,7 +1,7 @@
 import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AtlasSummary, BuildAtlasResult, EntityDetail } from "../atlas/contracts";
+import { AtlasSummary, BuildAtlasResult, EntityDetail, WorkspaceOrientation } from "../atlas/contracts";
 import { FoundationStatus } from "../foundation/status";
 import { createDotnetRuntimeRequirementError, inspectDotnetRuntime } from "../runtime/dotnetRuntime";
 import { encodeJsonRpcMessage, JsonRpcFramer } from "./jsonRpcFraming";
@@ -91,6 +91,11 @@ export class CartographerClient {
   async getAtlasSummary(): Promise<AtlasSummary> {
     await this.ensureStarted();
     return this.request<AtlasSummary>("get_atlas_summary");
+  }
+
+  async getWorkspaceOrientation(): Promise<WorkspaceOrientation> {
+    await this.ensureStarted();
+    return this.request<WorkspaceOrientation>("get_workspace_orientation");
   }
 
   async getEntity(stableKey?: string, id?: number): Promise<EntityDetail | undefined> {

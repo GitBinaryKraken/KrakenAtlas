@@ -99,15 +99,16 @@ The map should help choose:
 
 ## Current Kraken Atlas Coverage
 
-The current Phase 1 baseline supports solution, project, project-reference,
-file, generation, and exact structural entity facts. It reduces initial
-discovery cost but does not yet satisfy the complete workspace-orientation
-requirement.
+The current Phase 1 baseline supports solution, C# and package.json project,
+project-reference, file, generation, and exact structural entity facts. Its
+first workspace-orientation slice persists multi-valued project facets,
+framework and build dimensions, derived .NET commands, package scripts,
+structured conventions, and governing instruction references.
 
-Kraken Atlas must also persist and query project facets, framework and build
-dimensions, executable hosts, build/test/run/generation commands, and governing
-repository conventions. These are part of the Atlas itself; an agent should not
-have to rediscover them through unrestricted file reads on every task.
+The orientation response reports included and pending source families. CI and
+task-file commands, executable entry-point nodes, conditional source inclusion,
+and prose instruction bodies remain incomplete, so clients can distinguish
+canonical Atlas answers from areas that still require focused repository reads.
 
 The following capabilities require later phases:
 

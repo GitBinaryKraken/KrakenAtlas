@@ -23,7 +23,12 @@ Exit gate:
 
 ## Phase 1: Walking Cartographer
 
-Status: complete.
+Status: in progress. The durable structural foundation is complete, and the
+first workspace-orientation slice now covers C# and package.json projects,
+multi-valued roles, build dimensions, derived .NET commands, package scripts,
+structured conventions, and governing instruction references. CI/task command
+extraction, executable entry-point nodes, and broader conditional build facts
+remain before the full exit gate is met.
 
 Deliverables:
 

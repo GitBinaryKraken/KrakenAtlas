@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net9.0</TargetFrameworks>
+    <RuntimeIdentifiers>win-x64;linux-x64</RuntimeIdentifiers>
+    <Configurations>Debug;Release;Staging</Configurations>
+    <DefineConstants Condition="'$(Configuration)' == 'Staging'">STAGING</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\data\Migrations\Migrations.csproj" />
+  </ItemGroup>
+</Project>

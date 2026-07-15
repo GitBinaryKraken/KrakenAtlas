@@ -264,14 +264,16 @@ public sealed partial class AtlasRepository
         string relationKind,
         long evidenceFileId,
         int evidenceLine,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string relationDomain = "code",
+        string provenance = "syntax")
     {
         await using var relation = CreateCommand(connection, transaction,
             """
             INSERT INTO relations(
                 workspace_id, generation_id, source_entity_id, target_entity_id,
                 relation_domain, relation_kind)
-            VALUES ($workspaceId, $generation, $sourceEntityId, $targetEntityId, 'code', $relationKind)
+            VALUES ($workspaceId, $generation, $sourceEntityId, $targetEntityId, $relationDomain, $relationKind)
             ON CONFLICT(source_entity_id, target_entity_id, relation_domain, relation_kind) DO UPDATE SET
                 generation_id = excluded.generation_id
             RETURNING id;
@@ -280,6 +282,7 @@ public sealed partial class AtlasRepository
         relation.Parameters.AddWithValue("$generation", generation);
         relation.Parameters.AddWithValue("$sourceEntityId", sourceEntityId);
         relation.Parameters.AddWithValue("$targetEntityId", targetEntityId);
+        relation.Parameters.AddWithValue("$relationDomain", relationDomain);
         relation.Parameters.AddWithValue("$relationKind", relationKind);
         var relationId = Convert.ToInt64(await relation.ExecuteScalarAsync(cancellationToken));
 
@@ -289,7 +292,7 @@ public sealed partial class AtlasRepository
                 relation_id, file_id, generation_id, analyzer, provenance, resolution,
                 start_line, start_column, end_line, end_column)
             VALUES (
-                $relationId, $fileId, $generation, $analyzer, 'syntax', 'exact',
+                $relationId, $fileId, $generation, $analyzer, $provenance, 'exact',
                 $line, 1, $line, 1)
             ON CONFLICT(relation_id, file_id, analyzer, start_line, start_column) DO UPDATE SET
                 generation_id = excluded.generation_id,
@@ -299,6 +302,7 @@ public sealed partial class AtlasRepository
         evidence.Parameters.AddWithValue("$fileId", evidenceFileId);
         evidence.Parameters.AddWithValue("$generation", generation);
         evidence.Parameters.AddWithValue("$analyzer", DiscoveryAnalyzer);
+        evidence.Parameters.AddWithValue("$provenance", provenance);
         evidence.Parameters.AddWithValue("$line", evidenceLine);
         await evidence.ExecuteNonQueryAsync(cancellationToken);
     }
@@ -341,7 +345,9 @@ public sealed partial class AtlasRepository
             INSERT INTO analyzer_runs(
                 workspace_id, generation_id, analyzer, analyzer_version,
                 capability, status, duration_ms)
-            VALUES ($workspaceId, $generation, $analyzer, $version, 'workspace.discovery', 'succeeded', $durationMs);
+            VALUES
+                ($workspaceId, $generation, $analyzer, $version, 'workspace.discovery', 'succeeded', $durationMs),
+                ($workspaceId, $generation, $analyzer, $version, 'workspace.orientation', 'succeeded', $durationMs);
             """);
         command.Parameters.AddWithValue("$workspaceId", workspaceId);
         command.Parameters.AddWithValue("$generation", generation);

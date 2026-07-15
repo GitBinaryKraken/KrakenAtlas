@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 using System.Xml.Linq;
 using KrakenAtlas.Core;
@@ -66,6 +67,14 @@ public sealed class WorkspaceDiscovery
             projectReferences.AddRange(references);
         }
 
+        foreach (var candidate in candidates.Where(candidate => candidate.Name.Equals(
+                     "package.json",
+                     StringComparison.OrdinalIgnoreCase)))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            projects.Add(ReadPackageProject(workspaceKey, candidate));
+        }
+
         var orderedProjects = projects.OrderBy(project => project.StableKey, StringComparer.Ordinal).ToArray();
         var projectsByPath = orderedProjects.ToDictionary(
             project => NormalizeAbsolutePath(Path.Combine(project.RootPath, project.RelativePath)),
@@ -96,7 +105,8 @@ public sealed class WorkspaceDiscovery
         {
             cancellationToken.ThrowIfCancellationRequested();
             var projectKey = projectDirectories.FirstOrDefault(item =>
-                IsWithin(candidate.FullPath, item.Directory))?.Project.StableKey;
+                IsWithin(candidate.FullPath, item.Directory)
+                && CanOwnFile(item.Project, candidate))?.Project.StableKey;
             await using var stream = File.OpenRead(candidate.FullPath);
             var hash = Convert.ToHexString(await SHA256.HashDataAsync(stream, cancellationToken)).ToLowerInvariant();
             files.Add(new DiscoveredFile(
@@ -114,6 +124,11 @@ public sealed class WorkspaceDiscovery
         var fingerprint = HashText(string.Join(
             "\n",
             orderedFiles.Select(file => $"{file.StableKey}:{file.ContentHash}")));
+        var orientation = WorkspaceOrientationDiscovery.Discover(
+            workspaceKey,
+            solutions,
+            orderedProjects,
+            orderedFiles);
 
         return new WorkspaceSnapshot(
             workspaceKey,
@@ -123,7 +138,89 @@ public sealed class WorkspaceDiscovery
             solutions,
             orderedProjects,
             resolvedReferences,
-            orderedFiles);
+            orderedFiles,
+            orientation.ProjectFacets,
+            orientation.BuildDimensions,
+            orientation.Commands,
+            orientation.RepositoryRules);
+    }
+
+    private static DiscoveredProject ReadPackageProject(string workspaceKey, FileCandidate candidate)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(candidate.FullPath));
+        var root = document.RootElement;
+        var name = root.TryGetProperty("name", out var nameElement)
+            && nameElement.ValueKind == JsonValueKind.String
+            && !string.IsNullOrWhiteSpace(nameElement.GetString())
+                ? nameElement.GetString()!
+                : new DirectoryInfo(Path.GetDirectoryName(candidate.FullPath)!).Name;
+        var packageDirectory = Path.GetDirectoryName(candidate.FullPath)!;
+        var dependencies = EnumeratePackageNames(root).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hasTypeScript = dependencies.Contains("typescript")
+            || Directory.EnumerateFiles(packageDirectory, "tsconfig*.json", SearchOption.TopDirectoryOnly).Any();
+        var isFrontend = dependencies.Contains("react")
+            || dependencies.Contains("react-dom")
+            || dependencies.Contains("vite")
+            || dependencies.Contains("next");
+
+        return new DiscoveredProject(
+            StableKey(workspaceKey, "project", candidate.RootPath, candidate.RelativePath),
+            name,
+            candidate.RootPath,
+            candidate.RelativePath,
+            hasTypeScript ? "typescript" : "javascript",
+            isFrontend ? "frontend" : "library",
+            null,
+            DetectPackageManager(packageDirectory));
+    }
+
+    private static IEnumerable<string> EnumeratePackageNames(JsonElement root)
+    {
+        foreach (var propertyName in new[] { "dependencies", "devDependencies", "peerDependencies" })
+        {
+            if (!root.TryGetProperty(propertyName, out var dependencies)
+                || dependencies.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+            foreach (var dependency in dependencies.EnumerateObject())
+            {
+                yield return dependency.Name;
+            }
+        }
+    }
+
+    private static string DetectPackageManager(string directory)
+    {
+        if (File.Exists(Path.Combine(directory, "pnpm-lock.yaml")))
+        {
+            return "pnpm";
+        }
+        if (File.Exists(Path.Combine(directory, "yarn.lock")))
+        {
+            return "yarn";
+        }
+        return "npm";
+    }
+
+    private static bool CanOwnFile(DiscoveredProject project, FileCandidate candidate)
+    {
+        if (project.Language == "csharp")
+        {
+            return candidate.Extension is not (".ts" or ".tsx" or ".js" or ".jsx")
+                && !candidate.Name.Equals("package.json", StringComparison.OrdinalIgnoreCase)
+                && !candidate.Name.Equals("package-lock.json", StringComparison.OrdinalIgnoreCase)
+                && !candidate.Name.Equals("pnpm-lock.yaml", StringComparison.OrdinalIgnoreCase)
+                && !candidate.Name.Equals("yarn.lock", StringComparison.OrdinalIgnoreCase)
+                && !candidate.Name.StartsWith("tsconfig", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return candidate.Extension is ".ts" or ".tsx" or ".js" or ".jsx"
+            || candidate.Name.Equals("package.json", StringComparison.OrdinalIgnoreCase)
+            || candidate.Name.Equals("package-lock.json", StringComparison.OrdinalIgnoreCase)
+            || candidate.Name.Equals("pnpm-lock.yaml", StringComparison.OrdinalIgnoreCase)
+            || candidate.Name.Equals("yarn.lock", StringComparison.OrdinalIgnoreCase)
+            || candidate.Name.StartsWith("tsconfig", StringComparison.OrdinalIgnoreCase);
     }
 
     private static (DiscoveredProject Project, IReadOnlyList<PendingProjectReference> References) ReadProject(
@@ -242,7 +339,8 @@ public sealed class WorkspaceDiscovery
     private static bool IsAtlasFile(FileCandidate candidate)
     {
         if (candidate.Extension is ".cs" or ".cshtml" or ".razor" or ".csproj" or ".sln" or ".slnx"
-            or ".props" or ".targets" or ".ts" or ".tsx" or ".js" or ".jsx" or ".sql" or ".md")
+            or ".props" or ".targets" or ".ts" or ".tsx" or ".js" or ".jsx" or ".sql" or ".md"
+            or ".editorconfig" or ".yml" or ".yaml")
         {
             return true;
         }
@@ -268,7 +366,7 @@ public sealed class WorkspaceDiscovery
         ".md" => "markdown",
         ".csproj" or ".props" or ".targets" or ".slnx" => "xml",
         ".json" => "json",
-        ".yaml" => "yaml",
+        ".yml" or ".yaml" => "yaml",
         _ => "text"
     };
 

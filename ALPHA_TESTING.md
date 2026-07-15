@@ -5,9 +5,11 @@
 This preview validates the Walking Cartographer foundation in real VS Code
 environments. It is intentionally narrower than the planned product.
 
-The preview currently discovers solutions, .NET projects, project references,
-and relevant workspace files; persists that structural map in SQLite; and offers
-status, summary, exact-entity, restart, and diagnostic commands.
+The preview currently discovers solutions, .NET and package.json projects,
+project references, relevant workspace files, project roles, build dimensions,
+supported commands, structured conventions, and governing instruction files. It
+persists that structural map in SQLite and offers status, summary, orientation,
+exact-entity, restart, and diagnostic commands.
 
 It does not yet provide Roslyn symbols, code usages, call graphs, ASP.NET/EF Core
 semantics, TypeScript/React semantics, MCP tools, Context Packs, or AI-authored
@@ -46,14 +48,17 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
    and file counts.
 3. Run `Kraken Atlas: Show Atlas Summary` and compare its project list with the
    solutions and projects you expect.
-4. Copy a project stable key from the summary and run
+4. Run `Kraken Atlas: Show Workspace Orientation`. Compare its project roles,
+   target frameworks, runtime identifiers, build/test/run commands, package
+   scripts, and governing rules with the repository.
+5. Copy a project or orientation stable key and run
    `Kraken Atlas: Lookup Entity`.
-5. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
+6. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
    existing Atlas generation should reopen successfully.
-6. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
+7. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
    lock errors or stale Cartographer processes.
-7. Close and reopen VS Code, then show the summary again to verify persistence.
-8. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
+8. Close and reopen VS Code, then show the summary again to verify persistence.
+9. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
 
 Kraken Atlas performs static discovery and does not execute the application,
@@ -67,6 +72,8 @@ Please include:
 - VS Code, Kraken Atlas, and installed .NET runtime versions.
 - Workspace shape: solution count, project count, approximate file count, and
   whether it is a multi-root workspace.
+- Missing or incorrect project roles, commands, build dimensions, and governing
+  repository rules.
 - Atlas counts and build duration.
 - Expected projects that were missing or unexpected projects that appeared.
 - The exact command that failed and the visible error.

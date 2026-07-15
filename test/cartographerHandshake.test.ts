@@ -6,7 +6,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
-import { AtlasSummary, BuildAtlasResult, EntityDetail } from "../src/atlas/contracts";
+import { AtlasSummary, BuildAtlasResult, EntityDetail, WorkspaceOrientation } from "../src/atlas/contracts";
 import { encodeJsonRpcMessage, JsonRpcFramer } from "../src/cartographer/jsonRpcFraming";
 
 interface RpcResponse<T> {
@@ -129,6 +129,7 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       "foundation.status",
       "atlas.build",
       "atlas.summary",
+      "workspace.orientation",
       "entity.get"
     ]);
     return cartographer;
@@ -138,6 +139,8 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
   try {
     const initialStatus = await cartographer.request<{ atlasState: string }>("foundation/status");
     assert.equal(initialStatus.atlasState, "not_created");
+    const initialOrientation = await cartographer.request<WorkspaceOrientation>("get_workspace_orientation");
+    assert.equal(initialOrientation.atlasState, "not_created");
 
     const firstBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
     assert.equal(firstBuild.generation, 1);
@@ -145,8 +148,8 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       solutions: 1,
       projects: 2,
       files: 7,
-      entities: 11,
-      relations: 11,
+      entities: 34,
+      relations: 34,
       projectDependencies: 1
     });
     assert.equal(fs.existsSync(atlasPath), true);
@@ -160,13 +163,23 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     assert.equal(app.targetFrameworks, "net10.0");
     assert.equal(app.dependencyCount, 1);
 
+    const orientation = await cartographer.request<WorkspaceOrientation>("get_workspace_orientation");
+    assert.equal(orientation.projects.length, 2);
+    assert.deepEqual(
+      orientation.projects.find(project => project.name === "App")?.facets.map(facet => facet.facet),
+      ["application"]
+    );
+    assert.ok(orientation.commands.some(command => command.commandText.includes("dotnet run")));
+    assert.ok(orientation.workspaceBuildDimensions.some(dimension =>
+      dimension.kind === "dotnet_sdk_version" && dimension.value === "10.0.100"));
+
     const firstEntity = await cartographer.request<EntityDetail>("get_entity", {
       stableKey: app.stableKey
     });
     assert.equal(firstEntity.kind, "project");
     assert.equal(firstEntity.qualifiedName, "src/App/App.csproj");
-    assert.equal(firstEntity.incomingRelations, 1);
-    assert.equal(firstEntity.outgoingRelations, 3);
+    assert.equal(firstEntity.incomingRelations, 5);
+    assert.equal(firstEntity.outgoingRelations, 7);
     assert.equal(firstEntity.locations[0]?.relativePath, "src/App/App.csproj");
 
     const secondBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
@@ -198,6 +211,17 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       atlasPath
     ], { encoding: "utf8" })) as AtlasSummary;
     assert.equal(cliSummary.generation, 2);
+
+    const cliOrientation = JSON.parse(execFileSync("dotnet", [
+      assembly,
+      "orientation",
+      "--workspace",
+      workspaceRoot,
+      "--atlas",
+      atlasPath
+    ], { encoding: "utf8" })) as WorkspaceOrientation;
+    assert.equal(cliOrientation.generation, 2);
+    assert.equal(cliOrientation.commands.length, 7);
 
     const cliEntity = JSON.parse(execFileSync("dotnet", [
       assembly,

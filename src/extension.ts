@@ -1,6 +1,6 @@
 import * as os from "node:os";
 import * as vscode from "vscode";
-import { renderAtlasSummary, renderEntityDetail } from "./atlas/render";
+import { renderAtlasSummary, renderEntityDetail, renderWorkspaceOrientation } from "./atlas/render";
 import { CartographerClient } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
@@ -49,6 +49,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand("krakenAtlas.showAtlasSummary", async () => {
       await runCommand(() => showAtlasSummary(client, output, version));
+    }),
+    vscode.commands.registerCommand("krakenAtlas.showWorkspaceOrientation", async () => {
+      await runCommand(async () => {
+        const orientation = await client.getWorkspaceOrientation();
+        output.clear();
+        output.appendLine(renderWorkspaceOrientation(orientation, version));
+        output.show(true);
+      });
     }),
     vscode.commands.registerCommand("krakenAtlas.lookupEntity", async () => {
       await runCommand(async () => {

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/apps/">
+    <Project Path="apps/Web/Web.csproj" />
+  </Folder>
+  <Folder Name="/services/">
+    <Project Path="services/Worker/Worker.csproj" />
+  </Folder>
+  <Folder Name="/data/">
+    <Project Path="data/Migrations/Migrations.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Web.Tests/Web.Tests.csproj" />
+  </Folder>
+</Solution>

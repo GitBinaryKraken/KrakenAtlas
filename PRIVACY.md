@@ -17,6 +17,10 @@ The Phase 1 structural Atlas may contain:
 - Relative solution, project, and relevant file paths.
 - Solution and project names, project kinds, languages, target frameworks, and
   project-reference relationships.
+- Package-project names, package-manager and framework markers, package-script
+  command names, and derived .NET build/test/run/package/migration commands.
+- Structured build and EditorConfig values plus references to governing
+  repository instruction files, with scope and precedence.
 - Deterministic stable identifiers and file content hashes.
 - Atlas generations, analyzer names, status, timings, and diagnostics.
 - SQLite operational metadata required for persistence and migrations.
