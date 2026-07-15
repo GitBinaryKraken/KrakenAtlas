@@ -76,12 +76,24 @@ An agent entering an unfamiliar workspace should be able to ask:
 - What target frameworks, package managers, and major frameworks are present?
 - What are the executable entry points, ASP.NET Core endpoints, React routes,
   hosted services, migration projects, and primary database contexts?
+- What commands build, test, run, format, generate, package, and migrate each
+  project or the complete workspace?
+- Which repository rules and conventions govern the task, what scope does each
+  rule cover, and which source has precedence when instructions conflict?
 - What are the most important Landmarks by project and relation dimension?
 - Which projects failed to index or have degraded semantic fidelity?
 - How fresh is the Atlas relative to the workspace and unsaved editor buffers?
 
-This query should return a compact project topology and suggested next queries,
-not source bodies.
+These are canonical Atlas facts, not tasks left for the client to reconstruct by
+reading filenames. The orientation response should return a compact project
+topology, project roles, hosts and entry points, build/configuration matrix,
+command catalog, governing-rule summary, completeness, and suggested next
+queries. Prose bodies remain in the separate documentation plane and are
+retrieved only when requested.
+
+The primary operation is `get_workspace_orientation(scope?, configuration?,
+include_commands?, include_conventions?)`. `get_atlas_summary` remains the
+smaller health and count response.
 
 ### 2. Symbol Discovery and Definition
 
@@ -211,6 +223,52 @@ Context Packs must not silently include documentation. The request uses a
   selected sections with a separate documentation token allowance.
 
 The response reports code tokens and documentation tokens separately.
+
+### 9. Feature Implementation Planning
+
+When asked to add a feature to an existing project, an agent should be able to
+retrieve a bounded implementation plan rather than manually reconstructing the
+feature from repeated repository searches. Required questions include:
+
+- What existing feature is the closest structural and behavioral precedent?
+- What entry point, runtime composition, contracts, value flow, side effects,
+  failure paths, configuration, and tests form this feature slice?
+- Which entities `must_change`, are `likely_change`, or only require `verify`?
+- Which files are canonical edit locations and which are generated outputs?
+- Which focused build, test, generation, migration, and formatting commands are
+  required?
+
+Planned composite operations include `find_similar_features`,
+`get_feature_blueprint`, `trace_value_flow`, `get_runtime_composition`,
+`get_contract_boundary`, `get_failure_paths`, `get_configuration_matrix`,
+`get_change_surface`, `get_related_tests`, and
+`build_feature_context_pack`.
+
+The full workflow and required relationship dimensions are defined in
+[AI Feature Implementation Workflow](FEATURE_IMPLEMENTATION_WORKFLOW.md).
+
+Most answers should be available from exact node knowledge rather than generated
+from scratch for every task. `get_entity_context` selects orientation, feature,
+behavior, contract, effect, change-surface, failure, lifecycle, test,
+documentation, and assessment dimensions for one canonical entity.
+
+Automatically reproducible facts remain separate from reusable AI conclusions.
+Agents can record typed claims through explicit analysis sessions. Stored claims
+include evidence, dependencies, provenance, scope, confidence, and freshness;
+they never overwrite compiler or framework facts. The full contract is defined
+in [Node Knowledge and Assessment Model](NODE_KNOWLEDGE_MODEL.md).
+
+Agents write those claims through one versioned JSON contract and the
+`decorate_nodes` operation defined in
+[Node Decoration Command](NODE_DECORATION_COMMAND.md). Agents never write Atlas
+tables directly or mix assessment payloads into ordinary read queries.
+
+The update format distinguishes architectural role classification, feature and
+pattern membership, assessed edges, behavior, effects, contracts, failures,
+lifecycle, change guidance, tests, documentation, Landmarks, precedents,
+dynamic-target resolution, knowledge gaps, and review of earlier assessments.
+The autonomous recording policy is defined in
+[AI Self-Enrichment](AI_SELF_ENRICHMENT.md).
 
 ## Documentation Relationship Plane
 

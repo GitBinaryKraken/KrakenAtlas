@@ -13,6 +13,12 @@
    index.
 8. Every relation has a domain; code usage and documentation relationships are
    queried independently.
+9. Canonical and deterministic facts are never overwritten by agent assessments
+   or manual annotations.
+10. Every reusable assessment records a typed claim, evidence, dependencies,
+    provenance, scope, and freshness.
+11. Changed dependencies mark assessments stale rather than silently carrying
+    conclusions into a new generation.
 
 ## Logical SQLite Schema
 
@@ -21,7 +27,17 @@
 - `workspaces`: normalized workspace identity and roots.
 - `projects`: language, project kind, target framework, configuration, and
   project identity.
+- `project_facets`: one project may be an application, library, test, web host,
+  worker, migration project, database project, frontend, tool, or generator,
+  with evidence and applicable conditions for each facet.
 - `project_dependencies`: project and package dependency edges.
+- `workspace_commands`: build, test, run, format, generate, package, and migrate
+  commands with working directory, target scope, conditions, source, and
+  precedence.
+- `repository_rules`: structured conventions and instruction references with
+  category, scope, authority, precedence, source, and generation.
+- `build_dimensions`: target frameworks, configurations, platforms, runtime
+  identifiers, compilation constants, and feature conditions.
 - `files`: normalized path, project, language, content hash, generated flag, and
   last successful generation.
 - `analyzer_runs`: analyzer version, capability, timing, status, diagnostics, and
@@ -55,6 +71,22 @@
 - `document_fts`: a separate FTS5 index for document and section content.
 - `file_relations` and `project_relations`: materialized aggregate projections
   derived from symbol-level evidence.
+- `analysis_sessions`: bounded agent or tool analysis passes tied to an exact
+  Atlas generation and input fingerprints.
+- `assessment_claims`: typed, schema-versioned agent or manual conclusions with
+  status, scope, confidence, and validated generation.
+- `assessment_updates`: idempotent typed update intents submitted by an agent,
+  including the exact versioned payload kind and resulting claims or projections.
+- `assessment_evidence`: entity, relation, source-location, Route, and document
+  evidence supporting a claim.
+- `assessment_dependencies`: generation, file-hash, document-fingerprint, and
+  algorithm dependencies used to invalidate stale claims.
+- `feature_memberships`, `pattern_instances`, `entity_effects`,
+  `lifecycle_facets`, `change_surface_snapshots`, and `change_surface_items`:
+  typed node-knowledge dimensions and materialized projections.
+- `assessment_groups` and `assessment_group_memberships`: agent-authored feature,
+  pattern, Blueprint, workflow, boundary, capability, or concern nodes and their
+  role-bearing membership edges.
 
 Common fields are typed columns. Analyzer-specific extension data may use
 versioned JSON, but JSON must not replace the canonical relation model.
@@ -66,6 +98,27 @@ versioned JSON, but JSON must not replace the canonical relation model.
 `workspace`, `solution`, `project`, `package`, `namespace`, `file`, `type`,
 `method`, `constructor`, `property`, `field`, `event`, `parameter`, `local`, and
 `external_symbol`.
+
+### Workspace Orientation
+
+`project_facet`, `framework`, `target_framework`, `build_configuration`,
+`runtime_identifier`, `build_command`, `test_command`, `run_command`,
+`format_command`, `generation_command`, `package_command`, `migration_command`,
+`repository_rule`, `convention`, `build_target`, and `entry_point`.
+
+Project role is multi-valued. For example, a project can be both an application
+and an ASP.NET Core host, or both a tool and a migration runner. It must not be
+forced into one lossy `project_kind` value.
+
+### Assessment-Owned Grouping Nodes
+
+`assessed_feature`, `assessed_pattern`, `assessed_blueprint`,
+`assessed_subsystem`, `assessed_bounded_context`, `assessed_workflow`,
+`assessed_boundary`, `assessed_business_capability`, and `assessed_concern`.
+
+These nodes organize canonical entities but are never represented as compiler or
+configuration truth. Their keys, definitions, memberships, participant roles,
+evidence, confidence, status, and freshness come from the assessment ledger.
 
 ### ASP.NET Core
 
@@ -98,6 +151,16 @@ call.
 `contains`, `declares`, `references`, `calls`, `constructs`, `inherits`,
 `implements`, `overrides`, `uses_type`, `reads`, `writes`, `returns`, and
 `accepts`.
+
+### Workspace Orientation
+
+`has_facet`, `targets`, `builds`, `tests`, `runs`, `formats`, `generates`,
+`packages`, `governs`, `applies_to`, `takes_precedence_over`, `hosts`, and
+`enters_at`.
+
+Command relations identify the projects, solutions, or workspace they operate
+on. Rule and convention relations identify scope and precedence. Host and entry
+relations distinguish executable composition from ordinary project containment.
 
 ### ASP.NET Core
 
@@ -205,6 +268,14 @@ The default for implementation and usage queries is `none`.
 ## Initial Query API
 
 - `get_atlas_summary(project?, language?)`
+- `get_workspace_orientation(scope?, configuration?, include_commands?, include_conventions?)`
+- `get_entity_context(entity, dimensions?, configuration?, assessment_policy?, budget?)`
+- `get_entity_facts(entity, dimensions?, configuration?, evidence?)`
+- `get_entity_assessments(entity, dimensions?, freshness?, status?, limit?)`
+- `get_feature_context(feature, dimensions?, configuration?, assessment_policy?, budget?)`
+- `get_assessed_group(group_key, include_members?, include_routes?, freshness?)`
+- `get_knowledge_gaps(scope?, kinds?, blocks_reuse?, freshness?, limit?)`
+- `decorate_nodes(payload)` using the versioned node-decoration batch schema
 - `search_symbols(query, kinds?, project?, limit?)`
 - `get_symbol(stable_key_or_id, include_evidence?)`
 - `find_usages(entity, usage_kinds?, scope?, direction?, include_tests?, limit?)`
@@ -220,3 +291,8 @@ The default for implementation and usage queries is `none`.
 
 VS Code tools, MCP tools, CLI commands, and UI views adapt these operations. They
 must not implement separate retrieval behavior.
+
+Assessment writes follow the strict contract in
+[Node Decoration Command](NODE_DECORATION_COMMAND.md). They are generation-pinned,
+idempotent, evidence-backed, and transactional; they never mutate canonical
+analyzer facts.

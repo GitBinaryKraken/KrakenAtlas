@@ -1,0 +1,1661 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/GitBinaryKraken/KrakenAtlas/main/docs/planning/contracts/node-decoration-batch.schema.json",
+  "title": "Kraken Atlas Node Decoration Batch",
+  "description": "Version 1.0 command payload for recording evidence-backed agent assessments against exact Atlas nodes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "$schema",
+    "schemaVersion",
+    "operationId",
+    "workspace",
+    "session",
+    "decorations"
+  ],
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/GitBinaryKraken/KrakenAtlas/main/docs/planning/contracts/node-decoration-batch.schema.json"
+    },
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "workspace": {
+      "$ref": "#/$defs/workspace"
+    },
+    "session": {
+      "$ref": "#/$defs/session"
+    },
+    "options": {
+      "$ref": "#/$defs/options"
+    },
+    "decorations": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/decoration"
+      }
+    }
+  },
+  "$defs": {
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workspaceKey",
+        "expectedAtlasGeneration"
+      ],
+      "properties": {
+        "workspaceKey": {
+          "type": "string",
+          "pattern": "^workspace:[a-f0-9]{64}$"
+        },
+        "expectedAtlasGeneration": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agent",
+        "purpose"
+      ],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "agent": {
+          "$ref": "#/$defs/agent"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "taskFingerprint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        }
+      }
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "client": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "clientVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "roots": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1024
+          }
+        },
+        "configuration": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "targetFramework": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "runtimeIdentifier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "atomic": {
+          "type": "boolean",
+          "default": true
+        },
+        "dryRun": {
+          "type": "boolean",
+          "default": false
+        },
+        "completeSession": {
+          "type": "boolean",
+          "default": true
+        },
+        "conflictPolicy": {
+          "type": "string",
+          "enum": [
+            "record",
+            "reject"
+          ],
+          "default": "record"
+        },
+        "missingSubjectPolicy": {
+          "const": "reject"
+        }
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "stableKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "entityId": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "expectedKind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "expectedQualifiedName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "stableKey"
+          ],
+          "properties": {
+            "stableKey": {}
+          }
+        },
+        {
+          "required": [
+            "entityId"
+          ],
+          "properties": {
+            "entityId": {}
+          }
+        }
+      ]
+    },
+    "conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "targetFramework": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "runtimeIdentifier": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "environment": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "symbols": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "notes": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "decoration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientUpdateId",
+        "subject",
+        "update",
+        "statement",
+        "confidence",
+        "requestedStatus",
+        "dependencyPolicy",
+        "evidence"
+      ],
+      "properties": {
+        "clientUpdateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "subject": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "update": {
+          "$ref": "#/$defs/update"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "requestedStatus": {
+          "type": "string",
+          "enum": [
+            "proposed",
+            "accepted"
+          ]
+        },
+        "conditions": {
+          "$ref": "#/$defs/conditions"
+        },
+        "dependencyPolicy": {
+          "type": "string",
+          "enum": [
+            "capture_from_evidence",
+            "explicit"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/dependency"
+          }
+        },
+        "supersedesClaimIds": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "dependencyPolicy": {
+                "const": "explicit"
+              }
+            },
+            "required": [
+              "dependencyPolicy"
+            ]
+          },
+          "then": {
+            "required": [
+              "dependencies"
+            ],
+            "properties": {
+              "dependencies": {
+                "type": "array",
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "update": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/classifyRoleUpdate"
+        },
+        {
+          "$ref": "#/$defs/addMembershipUpdate"
+        },
+        {
+          "$ref": "#/$defs/connectNodesUpdate"
+        },
+        {
+          "$ref": "#/$defs/describeBehaviorUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordEffectUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordContractUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordFailureUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordLifecycleUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordChangeGuidanceUpdate"
+        },
+        {
+          "$ref": "#/$defs/linkTestUpdate"
+        },
+        {
+          "$ref": "#/$defs/linkDocumentationUpdate"
+        },
+        {
+          "$ref": "#/$defs/markLandmarkUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordPrecedentUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordDesignIntentUpdate"
+        },
+        {
+          "$ref": "#/$defs/recordConstraintUpdate"
+        },
+        {
+          "$ref": "#/$defs/addAliasUpdate"
+        },
+        {
+          "$ref": "#/$defs/resolveDynamicTargetUpdate"
+        },
+        {
+          "$ref": "#/$defs/reportKnowledgeGapUpdate"
+        },
+        {
+          "$ref": "#/$defs/reviewAssessmentUpdate"
+        }
+      ]
+    },
+    "shortStringList": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 512
+      }
+    },
+    "groupRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "key",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "feature",
+            "pattern",
+            "blueprint",
+            "subsystem",
+            "bounded_context",
+            "workflow",
+            "architectural_boundary",
+            "business_capability",
+            "cross_cutting_concern"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 256,
+          "pattern": "^[a-z][a-z0-9._:-]*$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "definition": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "classifyRoleUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "role",
+        "layer"
+      ],
+      "properties": {
+        "kind": {
+          "const": "classify_role"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "endpoint",
+            "handler",
+            "service",
+            "application_service",
+            "domain_service",
+            "domain_logic",
+            "repository",
+            "data_access",
+            "validator",
+            "mapper",
+            "middleware",
+            "filter",
+            "worker",
+            "message_consumer",
+            "message_producer",
+            "scheduler",
+            "external_gateway",
+            "frontend_component",
+            "frontend_hook",
+            "state_store",
+            "composition_root",
+            "migration",
+            "test_fixture",
+            "generated_output",
+            "other"
+          ]
+        },
+        "layer": {
+          "type": "string",
+          "enum": [
+            "presentation",
+            "application",
+            "domain",
+            "infrastructure",
+            "data",
+            "integration",
+            "frontend",
+            "test",
+            "build",
+            "cross_cutting",
+            "unknown"
+          ]
+        },
+        "customRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "responsibility": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "addMembershipUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "group",
+        "participantRole",
+        "strength"
+      ],
+      "properties": {
+        "kind": {
+          "const": "add_membership"
+        },
+        "group": {
+          "$ref": "#/$defs/groupRef"
+        },
+        "participantRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-z][a-z0-9._:-]*$"
+        },
+        "strength": {
+          "type": "string",
+          "enum": [
+            "core",
+            "supporting",
+            "related"
+          ]
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "connectNodesUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "target",
+        "relationKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "connect_nodes"
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "relationKind": {
+          "type": "string",
+          "enum": [
+            "delegates_to",
+            "orchestrates",
+            "validates",
+            "transforms_to",
+            "persists_through",
+            "publishes_to",
+            "consumes_from",
+            "guards",
+            "configures",
+            "precedes",
+            "follows",
+            "similar_to",
+            "alternate_to",
+            "implements_intent_of",
+            "depends_on_runtime",
+            "crosses_boundary_to"
+          ]
+        },
+        "routeRole": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "describeBehaviorUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "responsibility"
+      ],
+      "properties": {
+        "kind": {
+          "const": "describe_behavior"
+        },
+        "responsibility": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "inputs": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "outputs": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "preconditions": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "postconditions": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "sideEffects": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "asyncBoundary": {
+          "type": "boolean"
+        },
+        "transactionBoundary": {
+          "type": "boolean"
+        }
+      }
+    },
+    "recordEffectUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "effectKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_effect"
+        },
+        "effectKind": {
+          "type": "string",
+          "enum": [
+            "database_read",
+            "database_write",
+            "cache_read",
+            "cache_write",
+            "message_publish",
+            "message_consume",
+            "external_call",
+            "file_io",
+            "state_change",
+            "telemetry",
+            "other"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "resource": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "operation": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "direct": {
+          "type": "boolean"
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "target"
+          ],
+          "properties": {
+            "target": {}
+          }
+        },
+        {
+          "required": [
+            "resource"
+          ],
+          "properties": {
+            "resource": {}
+          }
+        }
+      ]
+    },
+    "recordContractUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "target",
+        "contractRole",
+        "compatibility"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_contract"
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "contractRole": {
+          "type": "string",
+          "enum": [
+            "request",
+            "response",
+            "command",
+            "event",
+            "configuration",
+            "database_row",
+            "ui_model",
+            "serialization"
+          ]
+        },
+        "compatibility": {
+          "type": "string",
+          "enum": [
+            "public",
+            "internal",
+            "private",
+            "unknown"
+          ]
+        },
+        "format": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "recordFailureUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "failureKind",
+        "outcome"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_failure"
+        },
+        "failureKind": {
+          "type": "string",
+          "enum": [
+            "validation",
+            "authentication",
+            "authorization",
+            "not_found",
+            "conflict",
+            "timeout",
+            "cancellation",
+            "concurrency",
+            "transient_dependency",
+            "permanent_dependency",
+            "unhandled",
+            "other"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "transportStatus": {
+          "type": "string",
+          "maxLength": 128
+        }
+      }
+    },
+    "recordLifecycleUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "lifetime",
+        "boundary"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_lifecycle"
+        },
+        "lifetime": {
+          "type": "string",
+          "enum": [
+            "singleton",
+            "scoped",
+            "transient",
+            "request",
+            "background_iteration",
+            "process",
+            "component",
+            "custom",
+            "unknown"
+          ]
+        },
+        "boundary": {
+          "type": "string",
+          "enum": [
+            "request",
+            "background",
+            "message",
+            "transaction",
+            "component",
+            "process",
+            "other"
+          ]
+        },
+        "cancellation": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "retry": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "transaction": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "concurrency": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "recordChangeGuidanceUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "classification",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_change_guidance"
+        },
+        "classification": {
+          "type": "string",
+          "enum": [
+            "must_change",
+            "likely_change",
+            "verify",
+            "do_not_edit",
+            "generated_source_only"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "editInstead": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "verification": {
+          "$ref": "#/$defs/shortStringList"
+        }
+      }
+    },
+    "linkTestUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "target",
+        "coverageKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "link_test"
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "coverageKind": {
+          "type": "string",
+          "enum": [
+            "unit",
+            "integration",
+            "contract",
+            "end_to_end",
+            "snapshot",
+            "fixture"
+          ]
+        },
+        "scenarios": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "verificationCommand": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "linkDocumentationUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "relationKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "link_documentation"
+        },
+        "relationKind": {
+          "type": "string",
+          "enum": [
+            "explains",
+            "governs",
+            "runbook_for",
+            "decision_for",
+            "example_for",
+            "deprecates"
+          ]
+        },
+        "documentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "heading": {
+          "type": "string",
+          "maxLength": 512
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "documentId"
+          ],
+          "properties": {
+            "documentId": {}
+          }
+        },
+        {
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {}
+          }
+        }
+      ]
+    },
+    "markLandmarkUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "landmarkKind",
+        "importance"
+      ],
+      "properties": {
+        "kind": {
+          "const": "mark_landmark"
+        },
+        "landmarkKind": {
+          "type": "string",
+          "enum": [
+            "entry_point",
+            "hotspot",
+            "public_contract",
+            "data_boundary",
+            "composition_root",
+            "bridge",
+            "high_usage",
+            "security_boundary"
+          ]
+        },
+        "importance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "recordPrecedentUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "target",
+        "recommendation",
+        "applicability"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_precedent"
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "recommendation": {
+          "type": "string",
+          "enum": [
+            "use",
+            "avoid",
+            "conditional"
+          ]
+        },
+        "applicability": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "importantDifferences": {
+          "$ref": "#/$defs/shortStringList"
+        }
+      }
+    },
+    "recordDesignIntentUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "intentKind",
+        "rationale"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_design_intent"
+        },
+        "intentKind": {
+          "type": "string",
+          "enum": [
+            "design_decision",
+            "compatibility_requirement",
+            "migration_strategy",
+            "temporary_workaround",
+            "deprecation",
+            "security_assumption",
+            "performance_assumption",
+            "operational_assumption"
+          ]
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "expiresWhen": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "recordConstraintUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "constraintKind",
+        "rule",
+        "strength"
+      ],
+      "properties": {
+        "kind": {
+          "const": "record_constraint"
+        },
+        "constraintKind": {
+          "type": "string",
+          "enum": [
+            "architecture",
+            "security",
+            "performance",
+            "compatibility",
+            "operational",
+            "testing",
+            "generation",
+            "data"
+          ]
+        },
+        "rule": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000
+        },
+        "strength": {
+          "type": "string",
+          "enum": [
+            "required",
+            "enforced",
+            "preferred",
+            "advisory"
+          ]
+        },
+        "consequence": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    "addAliasUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "alias",
+        "aliasKind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "add_alias"
+        },
+        "alias": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "aliasKind": {
+          "type": "string",
+          "enum": [
+            "domain_term",
+            "legacy_name",
+            "acronym",
+            "search_term",
+            "external_name",
+            "ui_label",
+            "database_name"
+          ]
+        },
+        "locale": {
+          "type": "string",
+          "maxLength": 32
+        }
+      }
+    },
+    "resolveDynamicTargetUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "target",
+        "mechanism"
+      ],
+      "properties": {
+        "kind": {
+          "const": "resolve_dynamic_target"
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "mechanism": {
+          "type": "string",
+          "enum": [
+            "dependency_injection",
+            "dynamic_dispatch",
+            "reflection",
+            "configuration_binding",
+            "route_binding",
+            "generated_source",
+            "runtime_registration",
+            "other"
+          ]
+        },
+        "alternatives": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/nodeSelector"
+          }
+        },
+        "resolutionScope": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      }
+    },
+    "reportKnowledgeGapUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "gapKind",
+        "question"
+      ],
+      "properties": {
+        "kind": {
+          "const": "report_knowledge_gap"
+        },
+        "gapKind": {
+          "type": "string",
+          "enum": [
+            "unresolved_target",
+            "ambiguous_pattern",
+            "missing_test",
+            "dynamic_behavior",
+            "insufficient_evidence",
+            "stale_documentation",
+            "configuration_gap",
+            "other"
+          ]
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "suggestedQueries": {
+          "$ref": "#/$defs/shortStringList"
+        },
+        "blocksReuse": {
+          "type": "boolean"
+        }
+      }
+    },
+    "reviewAssessmentUpdate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "claimId",
+        "action",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "const": "review_assessment"
+        },
+        "claimId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "revalidate",
+            "dispute",
+            "reject",
+            "supersede"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "evidence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/entityEvidence"
+        },
+        {
+          "$ref": "#/$defs/relationEvidence"
+        },
+        {
+          "$ref": "#/$defs/sourceLocationEvidence"
+        },
+        {
+          "$ref": "#/$defs/documentationEvidence"
+        },
+        {
+          "$ref": "#/$defs/routeEvidence"
+        },
+        {
+          "$ref": "#/$defs/claimEvidence"
+        },
+        {
+          "$ref": "#/$defs/manualEvidence"
+        }
+      ]
+    },
+    "entityEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "entity"
+      ],
+      "properties": {
+        "kind": {
+          "const": "entity"
+        },
+        "entity": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "relationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source",
+        "relationKind",
+        "target"
+      ],
+      "properties": {
+        "kind": {
+          "const": "relation"
+        },
+        "source": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "relationKind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "target": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "sourceLocationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "startLine"
+      ],
+      "properties": {
+        "kind": {
+          "const": "source_location"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "contentHash": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "documentationEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "documentation"
+        },
+        "documentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "heading": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "documentId"
+          ],
+          "properties": {
+            "documentId": {}
+          }
+        },
+        {
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {}
+          }
+        }
+      ]
+    },
+    "routeEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "routeId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "route"
+        },
+        "routeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "claimEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "claimId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "claim"
+        },
+        "claimId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 1024
+        }
+      }
+    },
+    "manualEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "const": "manual"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 2000
+        }
+      }
+    },
+    "dependency": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/entityDependency"
+        },
+        {
+          "$ref": "#/$defs/fileDependency"
+        },
+        {
+          "$ref": "#/$defs/relationDependency"
+        },
+        {
+          "$ref": "#/$defs/documentationDependency"
+        },
+        {
+          "$ref": "#/$defs/analyzerDependency"
+        }
+      ]
+    },
+    "entityDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "entity",
+        "expectedGeneration"
+      ],
+      "properties": {
+        "kind": {
+          "const": "entity"
+        },
+        "entity": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "fileDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "contentHash"
+      ],
+      "properties": {
+        "kind": {
+          "const": "file"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "contentHash": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "relationDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "relationId",
+        "expectedGeneration"
+      ],
+      "properties": {
+        "kind": {
+          "const": "relation"
+        },
+        "relationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "expectedGeneration": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "documentationDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "documentId",
+        "fingerprint"
+      ],
+      "properties": {
+        "kind": {
+          "const": "documentation"
+        },
+        "documentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "fingerprint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "analyzerDependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name",
+        "version"
+      ],
+      "properties": {
+        "kind": {
+          "const": "analyzer"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    }
+  }
+}

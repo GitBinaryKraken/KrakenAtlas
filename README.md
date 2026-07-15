@@ -15,7 +15,7 @@ The new product focuses on:
 
 ## Current Status
 
-Version `0.3.0` completes the Phase 1 Walking Cartographer. It contains:
+Version `0.3.1` completes the Phase 1 Walking Cartographer. It contains:
 
 - A thin VS Code workspace extension and matching command-line surface.
 - An out-of-process .NET 10 Cartographer process using JSON-RPC 2.0.

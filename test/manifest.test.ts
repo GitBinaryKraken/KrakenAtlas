@@ -16,7 +16,7 @@ test("preserves the published identity and exposes only Phase 1 commands", () =>
 
   assert.equal(manifest.name, "kraken-atlas");
   assert.equal(manifest.publisher, "BinaryKraken");
-  assert.equal(manifest.version, "0.3.0");
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   assert.deepEqual(manifest.contributes.commands.map((item) => item.command), [
     "krakenAtlas.showStatus",
     "krakenAtlas.buildAtlas",

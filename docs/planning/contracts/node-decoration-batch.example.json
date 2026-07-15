@@ -1,0 +1,117 @@
+{
+  "$schema": "https://raw.githubusercontent.com/GitBinaryKraken/KrakenAtlas/main/docs/planning/contracts/node-decoration-batch.schema.json",
+  "schemaVersion": "1.0",
+  "operationId": "feature-customer-search-2026-07-15-01",
+  "workspace": {
+    "workspaceKey": "workspace:0000000000000000000000000000000000000000000000000000000000000000",
+    "expectedAtlasGeneration": 42
+  },
+  "session": {
+    "agent": {
+      "name": "codex",
+      "model": "gpt-5",
+      "client": "codex-desktop"
+    },
+    "purpose": "Classify the handler and record its customer-search pattern membership",
+    "taskFingerprint": "sha256:example-task-fingerprint",
+    "scope": {
+      "roots": [
+        "src/CustomerApi",
+        "src/customer-web"
+      ],
+      "configuration": "Debug",
+      "targetFramework": "net10.0"
+    }
+  },
+  "options": {
+    "atomic": true,
+    "dryRun": false,
+    "completeSession": true,
+    "conflictPolicy": "record",
+    "missingSubjectPolicy": "reject"
+  },
+  "decorations": [
+    {
+      "clientUpdateId": "classify-customer-search-handler",
+      "subject": {
+        "stableKey": "method:1111111111111111111111111111111111111111111111111111111111111111",
+        "expectedKind": "method",
+        "expectedQualifiedName": "CustomerApi.SearchCustomers.Handle"
+      },
+      "update": {
+        "kind": "classify_role",
+        "role": "handler",
+        "layer": "application",
+        "responsibility": "Coordinates validation, authorization, the customer query, and response mapping."
+      },
+      "statement": "This method is the application handler for the customer-search request.",
+      "confidence": 0.97,
+      "requestedStatus": "proposed",
+      "conditions": {
+        "configuration": "Debug",
+        "targetFramework": "net10.0"
+      },
+      "dependencyPolicy": "capture_from_evidence",
+      "evidence": [
+        {
+          "kind": "relation",
+          "source": {
+            "stableKey": "method:1111111111111111111111111111111111111111111111111111111111111111"
+          },
+          "relationKind": "calls",
+          "target": {
+            "stableKey": "method:3333333333333333333333333333333333333333333333333333333333333333"
+          },
+          "note": "The handler follows the shared validated-query pipeline."
+        },
+        {
+          "kind": "source_location",
+          "path": "src/CustomerApi/Features/SearchCustomers/Handler.cs",
+          "startLine": 18,
+          "endLine": 64,
+          "note": "The complete handler demonstrates the maintained feature structure."
+        }
+      ],
+      "tags": [
+        "customer-search",
+        "handler"
+      ]
+    },
+    {
+      "clientUpdateId": "join-customer-search-pattern",
+      "subject": {
+        "stableKey": "method:1111111111111111111111111111111111111111111111111111111111111111",
+        "expectedKind": "method"
+      },
+      "update": {
+        "kind": "add_membership",
+        "group": {
+          "kind": "pattern",
+          "key": "pattern:vertical-slice:customer-search",
+          "name": "Customer Search Vertical Slice",
+          "definition": "The endpoint-to-validation-to-handler-to-domain-to-data path for customer search."
+        },
+        "participantRole": "handler",
+        "strength": "core",
+        "ordinal": 2
+      },
+      "statement": "This node is the handler participant in the customer-search vertical-slice pattern.",
+      "confidence": 0.94,
+      "requestedStatus": "proposed",
+      "dependencyPolicy": "capture_from_evidence",
+      "evidence": [
+        {
+          "kind": "source_location",
+          "path": "src/CustomerApi/Features/SearchCustomers/Handler.cs",
+          "startLine": 18,
+          "endLine": 64,
+          "note": "The handler sits between the request pipeline and domain/data collaborators."
+        }
+      ],
+      "tags": [
+        "customer-search",
+        "vertical-slice"
+      ]
+    }
+  ]
+}

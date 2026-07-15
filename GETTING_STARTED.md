@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.3.0` is the first durable slice of the complete rewrite. It can
+Kraken Atlas `0.3.1` is the first durable slice of the complete rewrite. It can
 discover .NET solutions, projects, project references, and relevant files, then
 store and query that structural map from a versioned SQLite Atlas.
 

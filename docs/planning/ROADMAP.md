@@ -5,7 +5,7 @@ and a measurable gate.
 
 ## Phase 0: Planning and Ground Truth
 
-Status: complete.
+Status: structural baseline complete; expanded workspace orientation required.
 
 Deliverables:
 
@@ -33,7 +33,15 @@ Deliverables:
 - Minimal VS Code workspace extension that starts Cartographer and displays index
   status without eager activation.
 - Workspace discovery for .NET solutions and projects.
+- Multi-valued project facets for applications, libraries, tests, web hosts,
+  workers, migration/database projects, frontends, tools, and generators.
+- Framework, target-framework, build-configuration, runtime, and conditional
+  compilation facts.
+- Queryable build, test, run, format, generation, package, and migration commands.
+- Repository conventions and governing instructions with scope, evidence, and
+  precedence.
 - `get_atlas_summary` and exact entity lookup through CLI and extension.
+- `get_workspace_orientation` through the shared query contract.
 
 Exit gate:
 
@@ -41,6 +49,11 @@ Exit gate:
 - A fixture workspace can be indexed, queried, closed, reopened, and queried from
   the same durable Atlas.
 - Failed or cancelled indexing leaves the previous generation intact.
+- A mixed fixture workspace returns every project role, host, target framework,
+  dependency, supported command, and governing rule without client-side file
+  interpretation.
+- Conflicting or scoped instructions are returned with explicit precedence and
+  documentation links rather than silently merged.
 
 ## Phase 2: C# Semantic Atlas and Agent Loop
 
@@ -53,6 +66,20 @@ Deliverables:
   and impact queries.
 - First Context Pack builder with source slicing and token budgets.
 - Native VS Code agent tools and MCP mode over the same query services.
+- Bounded `get_entity_context` responses spanning semantic, feature, behavior,
+  contract, effect, failure, lifecycle, test, and assessment dimensions.
+- Versioned analysis sessions and the first assessment ledger for feature
+  membership, architectural role, preferred precedent, and verification risk.
+- Draft 2020-12 node-decoration JSON Schema and transactional `decorate_nodes`
+  command shared by CLI, JSON-RPC, MCP, and VS Code adapters.
+- Typed self-enrichment intents for roles, pattern/feature membership, assessed
+  edges, behavior, effects, contracts, failure/lifecycle, change guidance,
+  verification, Landmarks, precedents, design intent, constraints, aliases,
+  runtime resolution, gaps, and review.
+- Assessment-owned grouping nodes with participant roles for features, patterns,
+  Blueprints, workflows, boundaries, capabilities, and concerns.
+- Evidence and dependency-based assessment invalidation after Atlas generation
+  changes.
 
 Exit gate:
 
@@ -61,6 +88,10 @@ Exit gate:
   the fixture ground truth.
 - An agent can answer the fixture architecture questions from Context Packs
   without unrestricted repository reads.
+- A second agent can reuse a first agent's accepted feature assessment, and a
+  source change marks that assessment stale without altering canonical facts.
+- An agent-generated decoration batch can be dry-run, schema-validated, applied
+  idempotently, and queried back without modifying canonical analyzer facts.
 
 ## Phase 3: ASP.NET Core and Database Atlas
 

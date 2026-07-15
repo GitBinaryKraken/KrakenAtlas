@@ -2,7 +2,7 @@
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
   "description": "Builds a local semantic Atlas of .NET, database, TypeScript, and React code for precise AI-agent queries and compact context packs.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -118,6 +118,7 @@
     "@types/node": "^20.14.0",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.9.2",
+    "ajv": "^8.20.0",
     "typescript": "^5.4.5"
   }
 }

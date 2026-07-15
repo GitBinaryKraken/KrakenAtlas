@@ -11,6 +11,47 @@ The index is local, deterministic, inspectable, and useful without an LLM.
 
 ## Primary Workspaces
 
+### Complete Workspace Orientation
+
+Before semantic feature analysis, the Atlas must provide a durable, queryable
+orientation layer containing:
+
+- Solutions, projects, project and package dependencies, languages, SDKs, target
+  frameworks, build configurations, platforms, and runtime identifiers.
+- Multi-valued project roles including application, library, test, ASP.NET Core
+  host, worker, migration, database, frontend, tool, and generator.
+- Executable hosts and entry points.
+- Build, test, run, format, generate, package, and migration commands with their
+  working directory, target scope, conditions, and source evidence.
+- Repository conventions and instructions with category, scope, authority,
+  precedence, freshness, and exact source.
+
+Clients should not need to rediscover these facts by repeatedly listing files or
+reading project manifests, CI workflows, contribution guides, and instruction
+documents. Structured build facts and documentation sections remain separate
+relation domains, but `get_workspace_orientation` can return their linked,
+bounded orientation projection.
+
+### Reusable Node Knowledge
+
+Every canonical entity should expose bounded knowledge dimensions for workspace
+orientation, feature and pattern membership, behavior Routes, contracts, side
+effects, change surface, failure paths, lifecycle, tests, and documentation.
+
+Most dimensions are produced automatically and offline. When intent, preferred
+precedent, feature boundary, or risk cannot be determined statically, an AI agent
+may save a typed assessment with evidence and invalidation dependencies. Future
+agents can reuse current assessments without confusing them with canonical
+compiler facts or repeatedly performing the same analysis.
+
+Agents enrich nodes through typed intents: role classification, feature or
+pattern membership with participant roles, assessed relations, behavior,
+effects, contracts, failure and lifecycle facets, change guidance, test and
+documentation links, Landmarks, precedents, dynamic-target resolutions,
+knowledge gaps, and assessment review. This lets the Atlas learn useful project
+structure while keeping agent-authored grouping nodes visibly separate from
+analyzer-owned code entities.
+
 ### Modern .NET and C#
 
 The first-class target is a solution or workspace containing modern .NET and
@@ -88,17 +129,19 @@ token use separately.
 
 The first useful release must let a developer or agent:
 
-1. Find the exact symbol meant by a name without silently choosing an ambiguous
+1. Retrieve complete workspace topology, project roles, build dimensions,
+   supported commands, and governing conventions with evidence.
+2. Find the exact symbol meant by a name without silently choosing an ambiguous
    basename.
-2. Inspect callers, callees, inheritance, implementation, dependency, endpoint,
+3. Inspect callers, callees, inheritance, implementation, dependency, endpoint,
    and data-access relationships with source evidence.
-3. Trace a directed Route through selected relationship dimensions.
-4. Estimate the impact of changing a symbol, endpoint, DTO, entity, or database
+4. Trace a directed Route through selected relationship dimensions.
+5. Estimate the impact of changing a symbol, endpoint, DTO, entity, or database
    object.
-5. Request a token-budgeted Context Pack and understand why each item was
+6. Request a token-budgeted Context Pack and understand why each item was
    selected.
-6. Navigate every returned fact back to a file and source range.
-7. Retrieve documentation that explains or governs an exact code object without
+7. Navigate every returned fact back to a file and source range.
+8. Retrieve documentation that explains or governs an exact code object without
    mixing documentation mentions into code usage results.
 
 ## Principles

@@ -91,6 +91,9 @@ class CartographerHarness {
 }
 
 test("Cartographer persists an atomic workspace Atlas across process restarts", async () => {
+  const expectedVersion = (JSON.parse(
+    fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8")
+  ) as { version: string }).version;
   const assembly = path.resolve(
     process.cwd(),
     "cartographer",
@@ -121,7 +124,7 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       atlasPath
     });
     assert.equal(initialized.protocolVersion, "1.0");
-    assert.equal(initialized.serviceVersion, "0.3.0");
+    assert.equal(initialized.serviceVersion, expectedVersion);
     assert.deepEqual(initialized.capabilities, [
       "foundation.status",
       "atlas.build",

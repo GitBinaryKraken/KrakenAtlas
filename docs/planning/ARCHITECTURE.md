@@ -50,6 +50,30 @@ Discovers `.sln`, `.slnx`, `.csproj`, `global.json`, `Directory.Build.*`,
 `package.json`, lockfiles, `tsconfig.json`, project references, and multi-root VS
 Code workspaces. It builds a project graph before semantic indexing begins.
 
+Workspace discovery also emits first-class orientation facts:
+
+- Project roles including application, library, test, ASP.NET Core host, worker,
+  migration, database, frontend, tool, and generator.
+- Target frameworks, SDKs, package managers, major framework markers, build
+  configurations, runtime identifiers, and conditional source inclusion.
+- Executable hosts and entry points, including web hosts, hosted services,
+  workers, migration runners, and frontend development/build hosts.
+- Build, test, run, format, generate, package, and migration commands extracted
+  from structured sources such as project targets, package scripts, task files,
+  and CI workflows.
+- Repository conventions and instructions from `.editorconfig`,
+  `Directory.Build.*`, analyzer configuration, `global.json`, contribution files,
+  agent instruction files, and supported documentation sections.
+
+Commands and conventions retain source evidence, scope, conditions, authority,
+and precedence. Structured configuration facts use the code/build relation
+domain. Prose instructions remain document sections in the documentation domain,
+but orientation queries can report that governing instructions exist and provide
+their exact documentation links.
+
+Clients must not have to open and reinterpret workspace files to determine basic
+project roles, supported build commands, or governing repository rules.
+
 ### Roslyn Analyzer
 
 Uses Roslyn Workspaces and semantic models to emit compiler-bound facts. It owns
@@ -154,6 +178,31 @@ smallest coherent source unit.
 Documentation is selected through a separate documentation query and policy.
 The builder reports code and documentation token consumption independently and
 does not silently expand code usage queries into prose search.
+
+### Node Knowledge and Assessment Service
+
+The service assembles bounded entity knowledge envelopes from canonical facts,
+typed facets, derived projections, documentation links, and optional accepted
+agent assessments. It owns analysis sessions, schema-validated assessment
+claims, evidence, dependency fingerprints, conflict state, supersession, and
+automatic staleness after generation changes.
+
+Assessment writes use explicit protocol capabilities and Workspace Trust. They
+never update compiler-owned facts or store raw chain-of-thought. Read queries can
+select facts only, assessments only, or a labeled combination under an explicit
+assessment policy.
+
+The write boundary is the schema-validated `decorate_nodes` application
+operation. CLI, JSON-RPC, future MCP, and VS Code adapters pass the same versioned
+batch to it. The service pins writes to an expected Atlas generation, resolves
+stable node selectors, captures dependencies, and commits the analysis session
+and claims transactionally.
+
+The command dispatches a discriminated set of update intents rather than a
+generic property bag. It can classify roles, maintain assessment-owned feature or
+pattern groups, add assessed edges and behavioral facets, link tests and docs,
+record gaps, and review prior claims. Internal dimensions and storage projections
+are selected by Cartographer, not supplied as arbitrary table names by agents.
 
 ## Incremental Indexing
 

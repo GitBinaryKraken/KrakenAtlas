@@ -67,6 +67,56 @@ path during Cartographer initialization. CLI and future MCP clients pass an
 explicit Atlas path. Cartographer alone owns migrations, transactions, and
 queries; the repository never contains the generated SQLite database.
 
+### D-012: Workspace orientation is canonical Atlas data
+
+Solutions, projects, multi-valued project roles, frameworks, target frameworks,
+dependencies, executable hosts, build dimensions, supported commands, and
+governing repository conventions are persisted as queryable facts with evidence
+and freshness. Clients do not reconstruct this orientation layer from filenames
+or repeated source reads.
+
+Structured build and configuration rules use the code/build relation domain.
+Prose instructions remain in the documentation domain, while orientation facts
+record their scope, authority, precedence, and document-section identity.
+
+### D-013: Agent conclusions use a separate assessment ledger
+
+Reusable AI analysis is stored as typed assessment claims linked to canonical
+entities. Each claim records its analysis session, evidence, input dependencies,
+scope, confidence where meaningful, status, and validated generation. Claims can
+be accepted, disputed, superseded, rejected, or marked stale.
+
+Assessments never overwrite compiler, configuration, framework, or parser facts.
+The Atlas stores concise conclusions and evidence, not private chain-of-thought,
+raw prompts, or unbounded transcripts. Dependency changes invalidate claims so a
+future agent can revalidate rather than unknowingly reuse stale analysis.
+
+### D-014: Agent node decorations use one versioned JSON command
+
+Agents submit assessments through a strict Draft 2020-12 JSON Schema and the
+shared `decorate_nodes` application operation. Every batch is pinned to a
+workspace and expected Atlas generation, uses exact node selectors, contains
+evidence, and has idempotent transactional semantics.
+
+This lets Codex, other agents, CLI scripts, MCP clients, and VS Code record
+reusable knowledge without database coupling or adapter-specific behavior.
+Adding fields, dimensions, or claim kinds requires compatible schema evolution;
+the command cannot overwrite canonical analyzer facts.
+
+### D-015: AI enrichment uses typed intents and assessment-owned groups
+
+The agent does not submit a generic node property bag or choose Atlas tables. A
+decoration contains one discriminated update intent, such as role
+classification, pattern membership, assessed relation, behavior, failure,
+lifecycle, test link, precedent, runtime resolution, knowledge gap, or prior
+assessment review. Cartographer derives the internal dimensions and projections.
+
+Agents may create workspace-scoped grouping nodes for features, patterns,
+Blueprints, workflows, boundaries, capabilities, and concerns. These remain in
+the assessment plane, with evidence and freshness, and cannot impersonate
+compiler-owned code nodes. This gives agents a useful shared vocabulary while
+preserving the trust boundary around canonical analysis.
+
 ## Proposed Defaults Requiring Review
 
 ### Q-001: First SQL dialect
