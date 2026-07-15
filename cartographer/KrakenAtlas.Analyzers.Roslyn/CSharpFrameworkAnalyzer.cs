@@ -46,6 +46,13 @@ internal static partial class CSharpFrameworkAnalyzer
                 symbols,
                 endpoints,
                 AddRelation);
+            CollectTestCase(
+                workspaceKey,
+                entry.Key,
+                method,
+                methodEntity,
+                symbols,
+                AddRelation);
         }
 
         foreach (var analysis in projectAnalyses)
@@ -307,6 +314,45 @@ internal static partial class CSharpFrameworkAnalyzer
                     lifetime));
             }
         }
+    }
+
+    private static void CollectTestCase(
+        string workspaceKey,
+        string methodKey,
+        IMethodSymbol method,
+        DiscoveredCodeSymbol methodEntity,
+        Dictionary<string, DiscoveredCodeSymbol> symbols,
+        Action<DiscoveredCodeRelation> addRelation)
+    {
+        var framework = method.GetAttributes()
+            .Select(attribute => GetTestFramework(attribute.AttributeClass?.ToDisplayString()))
+            .FirstOrDefault(value => value is not null);
+        if (framework is null || methodEntity.Locations.Count == 0)
+        {
+            return;
+        }
+
+        var evidence = methodEntity.Locations[0];
+        var entityKey = CreateSyntheticKey("test_case", $"{workspaceKey}|{methodKey}|{framework}");
+        symbols[entityKey] = new DiscoveredCodeSymbol(
+            entityKey,
+            methodEntity.ProjectKey,
+            "test_case",
+            method.Name,
+            methodEntity.QualifiedName,
+            $"{framework} test | {methodEntity.Signature}",
+            "not_applicable",
+            methodKey,
+            [evidence],
+            "csharp");
+        addRelation(new DiscoveredCodeRelation(
+            entityKey,
+            methodKey,
+            "executes_test",
+            "direct",
+            evidence,
+            "framework",
+            framework));
     }
 
     private static void CollectHttpRequest(
@@ -650,6 +696,17 @@ internal static partial class CSharpFrameworkAnalyzer
         "HttpDeleteAttribute" => "DELETE",
         "HttpHeadAttribute" => "HEAD",
         "HttpOptionsAttribute" => "OPTIONS",
+        _ => null
+    };
+
+    private static string? GetTestFramework(string? attributeType) => attributeType switch
+    {
+        "Xunit.FactAttribute" or "Xunit.TheoryAttribute" => "xunit",
+        "NUnit.Framework.TestAttribute"
+            or "NUnit.Framework.TestCaseAttribute"
+            or "NUnit.Framework.TestCaseSourceAttribute" => "nunit",
+        "Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute"
+            or "Microsoft.VisualStudio.TestTools.UnitTesting.DataTestMethodAttribute" => "mstest",
         _ => null
     };
 

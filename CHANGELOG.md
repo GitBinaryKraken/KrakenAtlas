@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-07-15
+
+- Add bounded `get_change_surface` queries over code, framework, and database
+  relations with explicit dependency/dependent direction and exact evidence.
+- Group direct neighbors, bounded transitive neighbors, related tests, affected
+  projects, and focused build/test commands without claiming every result must
+  be edited.
+- Resolve graph entities to their owning projects through recursive containment
+  and classify test projects from canonical workspace facts.
+- Add canonical xUnit, NUnit, and MSTest `test_case` entities and
+  `framework/executes_test` relations from recognized test attributes.
+- Prevent default change-surface traversal from recursively expanding through
+  high-fanout code `reads`, `writes`, and `uses_type` relations while preserving
+  those relations directly on the seed and allowing explicit kind filters.
+- Expose change surfaces through CLI, JSON-RPC, the TypeScript client, and the
+  `Kraken Atlas: Show Change Surface` VS Code command.
+- Extend the deterministic feature-flow fixture with a test project and prove
+  exact test selection plus the focused `dotnet test` command.
+- Validate a Kelp Persona service surface with 5 direct and 9 transitive facts,
+  4 affected projects, and no truncation.
+
 ## 0.5.0 - 2026-07-15
 
 - Add cross-domain entity search for code symbols, service registrations, HTTP

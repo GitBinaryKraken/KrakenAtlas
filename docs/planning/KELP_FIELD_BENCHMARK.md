@@ -99,6 +99,26 @@ seconds:
 The Route returned 11 steps, visited 99 entities, did not truncate the loaded
 graph, and carried exact source evidence on every relation.
 
+## Change Surface Baseline
+
+On 2026-07-15, a default depth-3 change surface for
+`KelpApiLogicLayer.Services.PersonaService.GetPublicPersona` returned:
+
+- 5 direct and 9 transitive entities.
+- The API caller, anonymous `GET /Persona` endpoint, data-service
+  implementation, and PostgreSQL read operation.
+- 4 affected projects: `KelpApi`, `KelpApiLogicLayer`, `KelpPostGresData`, and
+  `KelpPostGresDomain`.
+- No graph or entity truncation.
+- No related tests because the indexed Kelp workspace contains no discovered
+  test project for this feature.
+
+An unrestricted prototype reached the 200-entity cap through shared model
+member reads/writes and type-use relations. The accepted default profile keeps
+those high-fanout code relations when directly attached to the seed but does not
+recursively expand through them. Explicit relation-kind filters remain available
+for intentional member/type impact exploration.
+
 ## Gold Persona Route
 
 The initial semantic and full-stack acceptance Route is the public Persona read:

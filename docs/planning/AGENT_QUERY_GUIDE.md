@@ -17,7 +17,9 @@ queries.
    across the `code`, `framework`, and `database` domains.
 6. Run `route` between exact entities. Add ordered `--via-key` values when the
    requested feature must pass through a particular contract or boundary.
-7. Read only the files and spans returned as evidence, then request broader
+7. Run `surface` before editing to retrieve direct/transitive neighbors, affected
+   projects, attributed tests, and focused build/test commands.
+8. Read only the files and spans returned as evidence, then request broader
    source context only when the map reports a gap or ambiguity.
 
 ## CLI Examples
@@ -37,6 +39,10 @@ cartographer relations --stable-key http_endpoint:<hash> --direction both --limi
 cartographer route --source-key csharp_symbol:<hash> `
   --via-key csharp_symbol:<connector-contract-hash> `
   --target-key database_object:<hash> --max-depth 16 --max-visited 5000
+
+# Inspect a bounded change surface and its verification targets.
+cartographer surface --stable-key csharp_symbol:<hash> `
+  --max-depth 3 --max-entities 200
 ```
 
 The examples abbreviate the executable. In a development checkout it is:
@@ -58,11 +64,19 @@ content-length framed JSON-RPC 2.0:
 - `find_usages`: `{ "stableKey": "...", "kinds": ["calls"], "limit": 50 }`.
 - `get_relations`: `{ "stableKey": "...", "direction": "both", "domains": ["code", "framework", "database"], "kinds": [], "limit": 50 }`.
 - `trace_route`: `{ "sourceStableKey": "...", "targetStableKey": "...", "viaStableKeys": ["..."], "domains": ["code", "framework", "database"], "maxDepth": 16, "maxVisited": 5000 }`.
+- `get_change_surface`: `{ "stableKey": "...", "domains": ["code", "framework", "database"], "kinds": [], "maxDepth": 3, "maxEntities": 200 }`.
 
 Omitted relation domains default to `code`, `framework`, and `database`.
 Relation results are capped at 200. Routes are forward-only, capped at 16 hops
 and 20,000 visited entities, exclude `contains` unless relation kinds are
 explicitly requested, and return one shortest path through each waypoint.
+
+Change surfaces are bidirectional and capped at depth 8 and 1,000 entities.
+`dependency` means the prior entity depends on the returned entity;
+`dependent` means the returned entity depends on the prior entity. By default,
+high-fanout code `reads`, `writes`, and `uses_type` relations are included only
+when directly attached to the seed and are not recursively expanded. Supplying
+explicit relation `kinds` opts into traversal through those kinds.
 
 ## Interpreting Results
 
@@ -77,6 +91,9 @@ explicitly requested, and return one shortest path through each waypoint.
 - `found: false` means no path exists inside the selected static graph and
   bounds. It does not prove that runtime reflection, dynamic URLs, configuration,
   or external services cannot connect the entities.
+- Change-surface results are inspection and verification candidates. They do not
+  claim an edit is mandatory without a proposed change type such as signature,
+  contract, or deletion.
 
 ## Code Versus Documentation
 

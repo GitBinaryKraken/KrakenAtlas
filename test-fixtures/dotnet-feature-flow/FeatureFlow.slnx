@@ -5,4 +5,5 @@
   <Project Path="Logic/Logic.csproj" />
   <Project Path="Api/Api.csproj" />
   <Project Path="WebUI/WebUI.csproj" />
+  <Project Path="Tests/Tests.csproj" />
 </Solution>

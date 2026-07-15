@@ -30,6 +30,7 @@ test("preserves the published identity and exposes the bounded semantic command 
     "krakenAtlas.findUsages",
     "krakenAtlas.showRelations",
     "krakenAtlas.traceRoute",
+    "krakenAtlas.showChangeSurface",
     "krakenAtlas.restartCartographer",
     "krakenAtlas.exportDiagnostics",
     "krakenAtlas.openPlanning"

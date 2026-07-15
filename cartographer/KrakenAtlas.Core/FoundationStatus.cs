@@ -8,7 +8,7 @@ public sealed record FoundationStatus(
     string Message)
 {
     public static FoundationStatus Create(AtlasSummary summary) => new(
-        Phase: "persona_route_alpha",
+        Phase: "change_surface_alpha",
         CartographerState: "available",
         AtlasState: summary.AtlasState,
         IndexingState: summary.Generation is null ? "not_started" : "current",

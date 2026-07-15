@@ -5,6 +5,7 @@ import {
   AtlasSummary,
   AtlasEntitySearchResult,
   BuildAtlasResult,
+  ChangeSurfaceResult,
   CodeUsageResult,
   EntityDetail,
   RelationQueryResult,
@@ -168,6 +169,21 @@ export class CartographerClient {
         maxDepth,
         maxVisited
       }
+    );
+  }
+
+  async getChangeSurface(
+    stableKey?: string,
+    id?: number,
+    domains?: string[],
+    kinds?: string[],
+    maxDepth = 3,
+    maxEntities = 200
+  ): Promise<ChangeSurfaceResult> {
+    await this.ensureStarted();
+    return this.request<ChangeSurfaceResult>(
+      "get_change_surface",
+      { stableKey, id, domains, kinds, maxDepth, maxEntities }
     );
   }
 

@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import {
   renderAtlasSummary,
   renderCodeUsages,
+  renderChangeSurface,
   renderEntityDetail,
   renderEntitySearch,
   renderRelations,
@@ -198,6 +199,21 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         output.clear();
         output.appendLine(renderRoute(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.showChangeSurface", async () => {
+      await runCommand(async () => {
+        const identity = await promptIdentity(
+          "Kraken Atlas: Show Change Surface",
+          "Enter the seed stable key or numeric entity ID"
+        );
+        if (!identity) {
+          return;
+        }
+        const result = await client.getChangeSurface(identity.stableKey, identity.id);
+        output.clear();
+        output.appendLine(renderChangeSurface(result));
         output.show(true);
       });
     }),

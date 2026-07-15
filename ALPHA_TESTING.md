@@ -1,10 +1,10 @@
-# Kraken Atlas Persona Route Alpha Testing
+# Kraken Atlas Change Surface Alpha Testing
 
 ## Purpose
 
-This alpha validates the durable Cartographer foundation and the first complete
-static .NET feature Route in real VS Code environments. It is intentionally
-narrower than the planned product.
+This alpha validates the durable Cartographer foundation, complete static .NET
+feature Routes, and the first evidence-backed change-surface projection in real
+VS Code environments. It is intentionally narrower than the planned product.
 
 The preview currently discovers solutions, .NET and package.json projects,
 project references, relevant workspace files, project roles, build dimensions,
@@ -20,6 +20,9 @@ attribute-routed ASP.NET Core controller actions, statically recoverable outboun
 HTTP requests, Dapper operations, and normalized PostgreSQL objects. General
 entity search, directional relation queries, and bounded forward Routes expose
 these facts through VS Code, JSON-RPC, and CLI.
+It also returns bounded direct/transitive neighbors, dependency direction,
+affected projects, attributed xUnit/NUnit/MSTest test cases, and focused build
+or test commands for an exact seed entity.
 
 It does not yet provide Minimal API or middleware semantics, EF Core model and
 migration mapping, TypeScript/React semantics, impact analysis, MCP tools,
@@ -81,12 +84,17 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 12. Check that the Route includes appropriate `calls`, `dispatches_to`,
     `sends_http`, `matches_endpoint`, `handled_by`, `executes_sql`, and database
     operation relations, without `contains` or documentation edges.
-13. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
+13. Run `Kraken Atlas: Show Change Surface` for a service method. Verify direct
+    dependencies and dependents, bounded transitive results, affected projects,
+    related attributed tests, evidence, and focused verification commands.
+14. Repeat with a high-fanout DTO or database object. The response must respect
+    depth/entity bounds and report truncation rather than flooding the output.
+15. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
    existing Atlas generation should reopen successfully.
-14. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
+16. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
    lock errors or stale Cartographer processes.
-15. Close and reopen VS Code, then show the summary again to verify persistence.
-16. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
+17. Close and reopen VS Code, then show the summary again to verify persistence.
+18. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
 
 Kraken Atlas performs static discovery and does not execute the application,
@@ -108,6 +116,9 @@ Please include:
   lifetimes, HTTP matches, SQL operation kinds, or database object names.
 - Routes that choose the wrong branch, omit a handoff, include structural edges,
   exceed their bounds, or lack source evidence.
+- Change surfaces that omit proven direct neighbors, expand through unrelated
+  shared types, misclassify dependency direction, miss attributed tests, or
+  suggest irrelevant projects and commands.
 - Atlas counts and build duration.
 - Expected projects that were missing or unexpected projects that appeared.
 - The exact command that failed and the visible error.
@@ -134,6 +145,13 @@ diagnostic export does not contain source bodies.
   are not mapped.
 - Route tracing is forward-only, shortest-path, bounded to 16 hops, and returns
   one route. Ordered stable-key waypoints disambiguate known feature branches.
+- Change surfaces are static bidirectional graph projections, not predictions
+  that every returned entity must be edited. Default traversal reports direct
+  member reads/writes and type use but does not recursively expand through those
+  high-fanout code relations. Explicit `--kind` filters override that profile.
+- Test selection currently recognizes xUnit `Fact`/`Theory`, NUnit test
+  attributes, and MSTest test-method attributes. Dynamic/custom test discovery
+  and per-test runner filters remain planned.
 - Symbol search matches name and qualified-name fragments and returns at most 100
   results.
 - The VSIX is framework-dependent and requires an installed .NET 10 runtime.

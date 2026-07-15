@@ -59,3 +59,11 @@ public sealed record TraceRouteParams(
     IReadOnlyList<string>? Kinds,
     int? MaxDepth,
     int? MaxVisited);
+
+public sealed record GetChangeSurfaceParams(
+    string? StableKey,
+    long? Id,
+    IReadOnlyList<string>? Domains,
+    IReadOnlyList<string>? Kinds,
+    int? MaxDepth,
+    int? MaxEntities);

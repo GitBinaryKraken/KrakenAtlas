@@ -87,7 +87,8 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             "entity.search",
                             "symbol.usages",
                             "relation.query",
-                            "route.trace"
+                            "route.trace",
+                            "change.surface"
                         ])),
                     false);
             }
@@ -164,6 +165,13 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                         request.Id,
                         await session.TraceRouteAsync(
                             DeserializeParams<TraceRouteParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "get_change_surface" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.GetChangeSurfaceAsync(
+                            DeserializeParams<GetChangeSurfaceParams>(request.Params),
                             cancellationToken)),
                     false),
                 _ => (

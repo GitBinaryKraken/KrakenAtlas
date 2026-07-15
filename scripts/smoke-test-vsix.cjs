@@ -190,20 +190,20 @@ try {
   }
 
   const firstBuild = cartographer(assembly, "build");
-  if (firstBuild.generation !== 1 || firstBuild.counts?.projects !== 6 || firstBuild.counts?.files !== 16) {
+  if (firstBuild.generation !== 1 || firstBuild.counts?.projects !== 7 || firstBuild.counts?.files !== 19) {
     throw new Error(`Unexpected first Atlas build result: ${JSON.stringify(firstBuild)}`);
   }
 
   const reopened = cartographer(assembly, "summary");
-  if (reopened.generation !== 1 || reopened.counts?.projects !== 6 || reopened.counts?.files !== 16) {
+  if (reopened.generation !== 1 || reopened.counts?.projects !== 7 || reopened.counts?.files !== 19) {
     throw new Error(`Atlas did not reopen correctly: ${JSON.stringify(reopened)}`);
   }
 
   const orientation = cartographer(assembly, "orientation");
   if (
     orientation.atlasState !== "current" ||
-    orientation.projects?.length !== 6 ||
-    orientation.commands?.length < 6 ||
+    orientation.projects?.length !== 7 ||
+    orientation.commands?.length < 8 ||
     !orientation.coverage?.includedSources?.includes("dotnet_projects")
   ) {
     throw new Error(`Packaged workspace orientation was incomplete: ${JSON.stringify(orientation)}`);
@@ -292,6 +292,30 @@ try {
     throw new Error(`Packaged Persona Route was incomplete: ${JSON.stringify(route)}`);
   }
 
+  const logicMethod = searchEntity(
+    "FeatureFlow.Logic.PersonaService.GetPublicPersonaAsync",
+    "method",
+    "FeatureFlow.Logic.PersonaService.GetPublicPersonaAsync(string, System.Threading.CancellationToken)"
+  );
+  const surface = cartographer(
+    assembly,
+    "surface",
+    "--stable-key",
+    logicMethod.stableKey,
+    "--max-depth",
+    "2",
+    "--max-entities",
+    "100"
+  );
+  if (
+    surface.atlasState !== "current" ||
+    surface.truncated !== false ||
+    !surface.relatedTests?.some(item => item.entity.kind === "test_case") ||
+    !surface.verificationCommands?.some(command => command.kind === "test")
+  ) {
+    throw new Error(`Packaged change surface was incomplete: ${JSON.stringify(surface)}`);
+  }
+
   const secondBuild = cartographer(assembly, "build");
   if (secondBuild.generation !== 2) {
     throw new Error(`Cartographer restart build did not advance the generation: ${JSON.stringify(secondBuild)}`);
@@ -306,7 +330,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route, built and reopened two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and its test-aware change surface, built and reopened two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {

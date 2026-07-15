@@ -191,6 +191,38 @@ export interface RouteQueryResult {
   steps: RouteStep[];
 }
 
+export interface ChangeSurfaceProject {
+  stableKey: string;
+  name: string;
+  relativePath: string;
+  projectKind: string;
+  isTest: boolean;
+}
+
+export interface ChangeSurfaceItem {
+  entity: RelationEntity;
+  depth: number;
+  pathDirection: "dependency" | "dependent";
+  viaRelation: AtlasRelationMatch;
+  project?: ChangeSurfaceProject;
+}
+
+export interface ChangeSurfaceResult {
+  atlasState: "not_created" | "entity_not_found" | "current";
+  generation?: number;
+  seed?: RelationEntity;
+  seedProject?: ChangeSurfaceProject;
+  truncated: boolean;
+  graphTruncated: boolean;
+  maxDepth: number;
+  maxEntities: number;
+  direct: ChangeSurfaceItem[];
+  transitive: ChangeSurfaceItem[];
+  relatedTests: ChangeSurfaceItem[];
+  affectedProjects: ChangeSurfaceProject[];
+  verificationCommands: WorkspaceCommandDetail[];
+}
+
 export interface OrientationEvidence {
   relativePath: string;
   line: number;

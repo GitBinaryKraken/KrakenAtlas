@@ -7,6 +7,7 @@ import test from "node:test";
 import {
   AtlasEntitySearchResult,
   BuildAtlasResult,
+  ChangeSurfaceResult,
   RelationQueryResult,
   RouteQueryResult
 } from "../src/atlas/contracts";
@@ -54,7 +55,7 @@ test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, an
     const build = invoke<BuildAtlasResult>("build");
     assert.equal(build.generation, 1);
     assert.equal(build.counts.solutions, 1);
-    assert.equal(build.counts.projects, 6);
+    assert.equal(build.counts.projects, 7);
 
     const source = findEntity(
       "PersonaController.Index",
@@ -74,9 +75,20 @@ test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, an
       "service_registration",
       "FeatureFlow.Logic.IPersonaService -> FeatureFlow.Logic.PersonaService"
     );
+    const logicMethod = findEntity(
+      "FeatureFlow.Logic.PersonaService.GetPublicPersonaAsync",
+      "method",
+      "FeatureFlow.Logic.PersonaService.GetPublicPersonaAsync(string, System.Threading.CancellationToken)"
+    );
+    const testCase = findEntity(
+      "GetPublicPersona_returns_record",
+      "test_case",
+      "FeatureFlow.Tests.PersonaServiceTests.GetPublicPersona_returns_record()"
+    );
     assert.equal(endpoint.signature, "GET /Persona | anonymous");
     assert.match(registration.signature ?? "", /^scoped /);
     assert.equal(databaseObject.firstLocation?.relativePath, "DataAccess/PersonaData.cs");
+    assert.match(testCase.signature ?? "", /^xunit test /);
 
     const endpointRelations = invoke<RelationQueryResult>(
       "relations",
@@ -150,6 +162,31 @@ test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, an
     );
     assert.equal(bounded.found, false);
     assert.deepEqual(bounded.steps, []);
+
+    const surface = invoke<ChangeSurfaceResult>(
+      "surface",
+      "--stable-key",
+      logicMethod.stableKey,
+      "--max-depth",
+      "2",
+      "--max-entities",
+      "100"
+    );
+    assert.equal(surface.atlasState, "current");
+    assert.equal(surface.seedProject?.relativePath, "Logic/Logic.csproj");
+    assert.equal(surface.truncated, false);
+    assert.equal(surface.graphTruncated, false);
+    assert.ok(surface.direct.some(item =>
+      item.pathDirection === "dependent"
+      && item.entity.qualifiedName === "FeatureFlow.Tests.PersonaServiceTests.GetPublicPersona_returns_record()"));
+    assert.ok(surface.direct.some(item =>
+      item.pathDirection === "dependency"
+      && item.entity.qualifiedName.startsWith("FeatureFlow.DataAccess.IPersonaData.GetPublicPersonaAsync")));
+    assert.deepEqual(surface.relatedTests.map(item => item.entity.stableKey), [testCase.stableKey]);
+    assert.ok(surface.affectedProjects.some(project =>
+      project.relativePath === "Tests/Tests.csproj" && project.isTest));
+    assert.ok(surface.verificationCommands.some(command =>
+      command.kind === "test" && command.commandText === "dotnet test \"Tests/Tests.csproj\""));
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }

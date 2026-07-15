@@ -63,6 +63,15 @@ internal static class CliApplication
                         options.MaxDepth,
                         options.MaxVisited),
                     cancellationToken),
+                "surface" => await session.GetChangeSurfaceAsync(
+                    new GetChangeSurfaceParams(
+                        options.StableKey,
+                        options.Id,
+                        options.Domains,
+                        options.Kinds,
+                        options.MaxDepth,
+                        options.MaxEntities),
+                    cancellationToken),
                 _ => throw new InvalidOperationException($"Unknown command: {options.Command}")
             };
 
@@ -81,10 +90,10 @@ internal static class CliApplication
     {
         if (arguments.Count == 0 || arguments[0] is not (
             "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
-            or "usages" or "relations" or "route"))
+            or "usages" or "relations" or "route" or "surface"))
         {
             throw new ArgumentException(
-                "A build, summary, orientation, entity, symbols, search, usages, relations, or route command is required.");
+                "A build, summary, orientation, entity, symbols, search, usages, relations, route, or surface command is required.");
         }
 
         var roots = new List<string>();
@@ -103,6 +112,7 @@ internal static class CliApplication
         var viaStableKeys = new List<string>();
         int? maxDepth = null;
         int? maxVisited = null;
+        int? maxEntities = null;
         for (var index = 1; index < arguments.Count; index++)
         {
             var option = arguments[index];
@@ -161,6 +171,9 @@ internal static class CliApplication
                 case "--max-visited" when int.TryParse(value, out var parsedMaxVisited):
                     maxVisited = parsedMaxVisited;
                     break;
+                case "--max-entities" when int.TryParse(value, out var parsedMaxEntities):
+                    maxEntities = parsedMaxEntities;
+                    break;
                 default:
                     throw new ArgumentException($"Unknown option or invalid value: {option} {value}");
             }
@@ -193,6 +206,10 @@ internal static class CliApplication
         {
             throw new ArgumentException("relations requires --stable-key or --id.");
         }
+        if (arguments[0] == "surface" && string.IsNullOrWhiteSpace(stableKey) && id is null)
+        {
+            throw new ArgumentException("surface requires --stable-key or --id.");
+        }
         if (arguments[0] == "route"
             && (string.IsNullOrWhiteSpace(sourceStableKey) && sourceId is null
                 || string.IsNullOrWhiteSpace(targetStableKey) && targetId is null))
@@ -204,17 +221,17 @@ internal static class CliApplication
         return new CliOptions(
             arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit,
             kinds, domains, direction, sourceStableKey, sourceId, targetStableKey, targetId,
-            viaStableKeys, maxDepth, maxVisited);
+            viaStableKeys, maxDepth, maxVisited, maxEntities);
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>] [--query <text>] "
         + "[--direction <incoming|outgoing|both>] [--domain <domain>] [--kind <relation-kind>] "
         + "[--source-key <key> | --source-id <number>] [--target-key <key> | --target-id <number>] "
         + "[--via-key <stable-key>] "
-        + "[--max-depth <1-16>] [--max-visited <10-20000>] [--limit <number>]";
+        + "[--max-depth <number>] [--max-visited <10-20000>] [--max-entities <10-1000>] [--limit <number>]";
 
     private sealed record CliOptions(
         string Command,
@@ -233,5 +250,6 @@ internal static class CliApplication
         long? TargetId,
         IReadOnlyList<string> ViaStableKeys,
         int? MaxDepth,
-        int? MaxVisited);
+        int? MaxVisited,
+        int? MaxEntities);
 }

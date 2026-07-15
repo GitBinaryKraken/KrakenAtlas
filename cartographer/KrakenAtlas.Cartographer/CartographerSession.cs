@@ -207,6 +207,28 @@ internal sealed class CartographerSession
             cancellationToken);
     }
 
+    public Task<ChangeSurfaceResult> GetChangeSurfaceAsync(
+        GetChangeSurfaceParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(ChangeSurfaceResult.NotCreated(
+                parameters.MaxDepth ?? 3,
+                parameters.MaxEntities ?? 200));
+        }
+        return activeRepository.GetChangeSurfaceAsync(
+            workspaceKey,
+            parameters.StableKey,
+            parameters.Id,
+            parameters.Domains,
+            parameters.Kinds,
+            parameters.MaxDepth ?? 3,
+            parameters.MaxEntities ?? 200,
+            cancellationToken);
+    }
+
     private AtlasRepository RequireRepository() => repository
         ?? throw new InvalidOperationException("Cartographer has not been initialized.");
 }

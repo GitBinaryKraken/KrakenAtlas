@@ -1,6 +1,8 @@
 import {
   AtlasEntitySearchResult,
   AtlasSummary,
+  ChangeSurfaceItem,
+  ChangeSurfaceResult,
   CodeUsageResult,
   EntityDetail,
   RelationQueryResult,
@@ -198,6 +200,56 @@ export function renderRoute(result: RouteQueryResult): string {
     lines.push(`   ${relation.evidence.relativePath}:${relation.evidence.startLine}:${relation.evidence.startColumn}`);
   }
   return lines.join("\n");
+}
+
+export function renderChangeSurface(result: ChangeSurfaceResult): string {
+  if (result.atlasState === "not_created") {
+    return "Change surface: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before querying change surfaces.";
+  }
+  if (result.atlasState === "entity_not_found" || !result.seed) {
+    return `Change surface: entity_not_found\nGeneration: ${result.generation ?? "unknown"}`;
+  }
+
+  const lines = [
+    `Change surface: ${result.seed.qualifiedName}`,
+    `Stable key: ${result.seed.stableKey}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Bounds: depth ${result.maxDepth}, entities ${result.maxEntities}`,
+    `Truncated: ${result.truncated || result.graphTruncated}`
+  ];
+  appendSurfaceItems(lines, "Direct", result.direct);
+  appendSurfaceItems(lines, "Transitive", result.transitive);
+  appendSurfaceItems(lines, "Related Tests", result.relatedTests);
+
+  if (result.affectedProjects.length > 0) {
+    lines.push("", "Affected Projects");
+    for (const project of result.affectedProjects) {
+      const test = project.isTest ? " | test" : "";
+      lines.push(`- ${project.relativePath} | ${project.projectKind}${test}`);
+    }
+  }
+  if (result.verificationCommands.length > 0) {
+    lines.push("", "Verification Commands");
+    for (const command of result.verificationCommands) {
+      lines.push(`- ${command.kind} | ${command.commandText}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function appendSurfaceItems(lines: string[], heading: string, items: ChangeSurfaceItem[]): void {
+  if (items.length === 0) {
+    return;
+  }
+  lines.push("", heading);
+  for (const item of items) {
+    const relation = item.viaRelation;
+    const project = item.project ? ` | ${item.project.relativePath}` : "";
+    lines.push(
+      `- depth ${item.depth} | ${item.pathDirection} | ${relation.domain}/${relation.kind} | ${item.entity.qualifiedName}${project}`
+    );
+    lines.push(`  ${relation.evidence.relativePath}:${relation.evidence.startLine}:${relation.evidence.startColumn}`);
+  }
 }
 
 export function renderWorkspaceOrientation(

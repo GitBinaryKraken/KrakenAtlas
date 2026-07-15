@@ -357,6 +357,46 @@ public sealed record RouteQueryResult(
         new("entity_not_found", generation, source, target, [], false, false, maxDepth, 0, []);
 }
 
+public sealed record ChangeSurfaceProject(
+    string StableKey,
+    string Name,
+    string RelativePath,
+    string ProjectKind,
+    bool IsTest);
+
+public sealed record ChangeSurfaceItem(
+    RelationEntity Entity,
+    int Depth,
+    string PathDirection,
+    AtlasRelationMatch ViaRelation,
+    ChangeSurfaceProject? Project);
+
+public sealed record ChangeSurfaceResult(
+    string AtlasState,
+    long? Generation,
+    RelationEntity? Seed,
+    ChangeSurfaceProject? SeedProject,
+    bool Truncated,
+    bool GraphTruncated,
+    int MaxDepth,
+    int MaxEntities,
+    IReadOnlyList<ChangeSurfaceItem> Direct,
+    IReadOnlyList<ChangeSurfaceItem> Transitive,
+    IReadOnlyList<ChangeSurfaceItem> RelatedTests,
+    IReadOnlyList<ChangeSurfaceProject> AffectedProjects,
+    IReadOnlyList<WorkspaceCommandDetail> VerificationCommands)
+{
+    public static ChangeSurfaceResult NotCreated(int maxDepth, int maxEntities) => new(
+        "not_created", null, null, null, false, false, maxDepth, maxEntities, [], [], [], [], []);
+
+    public static ChangeSurfaceResult EntityNotFound(
+        long generation,
+        int maxDepth,
+        int maxEntities) => new(
+            "entity_not_found", generation, null, null, false, false, maxDepth, maxEntities,
+            [], [], [], [], []);
+}
+
 public sealed record OrientationEvidence(
     string RelativePath,
     int Line,

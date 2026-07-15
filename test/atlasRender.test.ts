@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
   renderAtlasSummary,
+  renderChangeSurface,
   renderCodeUsages,
   renderEntityDetail,
   renderEntitySearch,
@@ -230,6 +231,61 @@ test("renders cross-domain entity, relation, and route queries", () => {
   });
   assert.match(route, /Found: true/);
   assert.match(route, /1\. framework\/handled_by\/direct/);
+
+  const surface = renderChangeSurface({
+    atlasState: "current",
+    generation: 7,
+    seed: endpoint,
+    seedProject: {
+      stableKey: "project:api",
+      name: "Api",
+      relativePath: "Api/Api.csproj",
+      projectKind: "web",
+      isTest: false
+    },
+    truncated: false,
+    graphTruncated: false,
+    maxDepth: 3,
+    maxEntities: 200,
+    direct: [{
+      entity: handler,
+      depth: 1,
+      pathDirection: "dependency",
+      viaRelation: relation,
+      project: {
+        stableKey: "project:api",
+        name: "Api",
+        relativePath: "Api/Api.csproj",
+        projectKind: "web",
+        isTest: false
+      }
+    }],
+    transitive: [],
+    relatedTests: [],
+    affectedProjects: [{
+      stableKey: "project:api",
+      name: "Api",
+      relativePath: "Api/Api.csproj",
+      projectKind: "web",
+      isTest: false
+    }],
+    verificationCommands: [{
+      stableKey: "command:api-build",
+      targetKey: "project:api",
+      kind: "build",
+      name: "Build Api",
+      commandText: "dotnet build \"Api/Api.csproj\"",
+      workingDirectory: "E:\\Projects\\FeatureFlow",
+      evidence: {
+        relativePath: "Api/Api.csproj",
+        line: 1,
+        provenance: "derived_from_msbuild"
+      }
+    }]
+  });
+  assert.match(surface, /Change surface: GET \/Persona/);
+  assert.match(surface, /dependency \| framework\/handled_by/);
+  assert.match(surface, /dotnet build "Api\/Api\.csproj"/);
 });
 
 test("renders workspace orientation with facets, commands, and rule evidence", () => {

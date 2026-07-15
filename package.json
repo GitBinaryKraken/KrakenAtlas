@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Builds a local SQLite Atlas of .NET code, DI, HTTP routes, and database relationships for compact AI-agent queries.",
-  "version": "0.5.0",
+  "description": "Builds a local SQLite Atlas of .NET code, routes, databases, tests, and change surfaces for compact AI-agent queries.",
+  "version": "0.6.0",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -55,6 +55,7 @@
     "onCommand:krakenAtlas.findUsages",
     "onCommand:krakenAtlas.showRelations",
     "onCommand:krakenAtlas.traceRoute",
+    "onCommand:krakenAtlas.showChangeSurface",
     "onCommand:krakenAtlas.restartCartographer",
     "onCommand:krakenAtlas.exportDiagnostics",
     "onCommand:krakenAtlas.openPlanning"
@@ -123,6 +124,11 @@
         "command": "krakenAtlas.traceRoute",
         "title": "Kraken Atlas: Trace Route",
         "icon": "$(git-compare)"
+      },
+      {
+        "command": "krakenAtlas.showChangeSurface",
+        "title": "Kraken Atlas: Show Change Surface",
+        "icon": "$(references)"
       },
       {
         "command": "krakenAtlas.restartCartographer",

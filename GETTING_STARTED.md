@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.5.0` is the Persona Route Alpha of the complete rewrite. It
+Kraken Atlas `0.6.0` is the Change Surface Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -10,6 +10,9 @@ internal calls, construction, member access, type use, inheritance,
 implementations, and overrides. It also maps common DI registrations,
 attribute-routed controller endpoints, outbound HTTP requests, Dapper database
 operations, and PostgreSQL objects into bounded cross-domain Routes.
+It can project a bounded change surface from any exact entity, including direct
+and transitive dependencies, affected projects, related attributed tests, and
+focused build/test commands.
 
 ## Requirements
 
@@ -57,9 +60,12 @@ npm run check:vsix
 11. Run `Kraken Atlas: Trace Route` with source and target stable keys. Supply
     comma-separated waypoint stable keys when several valid feature branches
     reach the same target.
-12. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
-13. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
-14. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+12. Run `Kraken Atlas: Show Change Surface` with a method, endpoint, contract,
+    or database-object stable key. Inspect dependency direction, related tests,
+    affected projects, and verification commands.
+13. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
+14. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
+15. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
 
 The Atlas database is stored under the VS Code workspace storage directory and

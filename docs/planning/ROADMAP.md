@@ -69,7 +69,9 @@ construction, member reads/writes, type use, inheritance, implementations,
 overrides, durable persistence, bounded symbol search, and code-only usage queries
 are implemented. Bounded cross-domain entity search, directional relation
 queries, and forward Routes with ordered waypoints are also implemented. Impact,
-Context Packs, unresolved targets, and agent-facing tools remain.
+The first bounded change-surface and related-test query is implemented with
+project ownership and focused verification commands. General semantic diff
+impact, Context Packs, unresolved targets, and agent-facing tools remain.
 
 Deliverables:
 
