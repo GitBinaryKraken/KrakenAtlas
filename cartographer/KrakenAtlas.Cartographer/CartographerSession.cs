@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using KrakenAtlas.Analyzers.Roslyn;
 using KrakenAtlas.Core;
 using KrakenAtlas.Protocol;
 using KrakenAtlas.Storage.Sqlite;
@@ -8,6 +10,7 @@ namespace KrakenAtlas.Cartographer;
 internal sealed class CartographerSession
 {
     private readonly WorkspaceDiscovery discovery = new();
+    private readonly CSharpDeclarationAnalyzer csharpDeclarationAnalyzer = new();
     private AtlasRepository? repository;
     private IReadOnlyList<string> workspaceRoots = [];
     private string? workspaceKey;
@@ -40,6 +43,7 @@ internal sealed class CartographerSession
 
     public async Task<BuildAtlasResult> BuildAtlasAsync(CancellationToken cancellationToken)
     {
+        var stopwatch = Stopwatch.StartNew();
         var activeRepository = RequireRepository();
         if (workspaceRoots.Count == 0)
         {
@@ -47,8 +51,34 @@ internal sealed class CartographerSession
         }
 
         var snapshot = await discovery.DiscoverAsync(workspaceRoots, cancellationToken);
+        CSharpSemanticSnapshot semanticSnapshot;
+        var semanticStopwatch = Stopwatch.StartNew();
+        try
+        {
+            semanticSnapshot = await csharpDeclarationAnalyzer.AnalyzeAsync(snapshot, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            semanticStopwatch.Stop();
+            semanticSnapshot = new CSharpSemanticSnapshot(
+                [],
+                [],
+                new AnalyzerExecution(
+                    CSharpDeclarationAnalyzer.AnalyzerName,
+                    CSharpDeclarationAnalyzer.AnalyzerVersion,
+                    CSharpDeclarationAnalyzer.Capability,
+                    "failed",
+                    semanticStopwatch.ElapsedMilliseconds,
+                    $"{exception.GetType().Name}: {exception.Message}"));
+        }
         workspaceKey = snapshot.StableKey;
-        return await activeRepository.BuildAsync(snapshot, cancellationToken);
+        var result = await activeRepository.BuildAsync(snapshot, semanticSnapshot, cancellationToken);
+        stopwatch.Stop();
+        return result with { DurationMs = stopwatch.ElapsedMilliseconds };
     }
 
     public Task<AtlasSummary> GetAtlasSummaryAsync(CancellationToken cancellationToken)
@@ -80,6 +110,40 @@ internal sealed class CartographerSession
             workspaceKey,
             parameters.StableKey,
             parameters.Id,
+            cancellationToken);
+    }
+
+    public Task<SymbolSearchResult> SearchSymbolsAsync(
+        SearchSymbolsParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(SymbolSearchResult.NotCreated(parameters.Query));
+        }
+        return activeRepository.SearchSymbolsAsync(
+            workspaceKey,
+            parameters.Query,
+            parameters.Limit ?? 25,
+            cancellationToken);
+    }
+
+    public Task<CodeUsageResult> FindUsagesAsync(
+        FindUsagesParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(CodeUsageResult.NotCreated());
+        }
+        return activeRepository.FindCodeUsagesAsync(
+            workspaceKey,
+            parameters.StableKey,
+            parameters.Id,
+            parameters.Kinds,
+            parameters.Limit ?? 50,
             cancellationToken);
     }
 

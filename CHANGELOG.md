@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-15
+
+- Add the first Roslyn semantic Atlas with compiler-bound C# declaration
+  identities, overload signatures, partial definition locations, visibility,
+  generated/manual evidence, analyzer diagnostics, and semantic containment.
+- Add exact internal calls, construction, field/property/event reads and writes,
+  type use, inheritance, interface and member implementations, and overrides,
+  with dispatch classification and exact compiler evidence.
+- Add bounded C# symbol search through CLI, JSON-RPC, and VS Code, with stable
+  results across Atlas generations and exact entity lookup from search results.
+- Add bounded, filterable, code-only C# usage queries through CLI, JSON-RPC, and
+  VS Code while keeping future documentation queries on a separate surface.
+- Add semantic regression fixtures for duplicate names, overloads, partial types,
+  generated source, inheritance, implementations, calls, construction, member
+  access, dispatch, and documentation exclusion.
+- Validate the Kelp field benchmark at 6,067 entities and 14,216 relations,
+  including exact WebUI-to-connector, API-to-logic, and logic-to-data Persona
+  calls across project boundaries.
 - Await Cartographer process exit during restart and extension deactivation,
   with bounded shutdown and forced-termination fallbacks to prevent stale .NET
   processes from locking development and package output assemblies.

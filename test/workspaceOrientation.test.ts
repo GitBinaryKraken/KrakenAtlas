@@ -39,12 +39,16 @@ test("workspace orientation maps mixed project roles, commands, dimensions, and 
     assert.equal(orientation.atlasState, "current");
     assert.equal(orientation.coverage.status, "partial");
     assert.ok(orientation.coverage.includedSources.includes("package_scripts"));
+    assert.ok(orientation.coverage.includedSources.includes("hosted_service_registrations"));
     assert.ok(orientation.coverage.pendingSources.includes("ci_workflows"));
     assert.equal(orientation.projects.length, 5);
 
     const web = orientation.projects.find(project => project.name === "Web");
     assert.ok(web);
-    assert.deepEqual(web.facets.map(facet => facet.facet), ["application", "aspnet_core_host"]);
+    assert.deepEqual(web.facets.map(facet => facet.facet), ["application", "aspnet_core_host", "worker"]);
+    const hostedWorker = web.facets.find(facet => facet.facet === "worker");
+    assert.equal(hostedWorker?.evidence.relativePath, "apps/Web/Program.cs");
+    assert.equal(hostedWorker?.evidence.provenance, "source_marker");
     assert.deepEqual(
       web.buildDimensions
         .filter(dimension => dimension.kind === "target_framework")
@@ -59,6 +63,9 @@ test("workspace orientation maps mixed project roles, commands, dimensions, and 
     assert.ok(migrations?.facets.some(facet => facet.facet === "migration"));
     assert.ok(orientation.commands.some(command =>
       command.kind === "migrate" && command.commandText.includes("dotnet ef database update")));
+
+    const worker = orientation.projects.find(project => project.name === "Worker");
+    assert.ok(worker?.facets.some(facet => facet.facet === "database"));
 
     const frontend = orientation.projects.find(project => project.name === "atlas-fixture-ui");
     assert.equal(frontend?.language, "typescript");

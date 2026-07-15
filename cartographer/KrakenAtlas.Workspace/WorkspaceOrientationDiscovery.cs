@@ -126,11 +126,18 @@ internal static class WorkspaceOrientationDiscovery
         var properties = root.Descendants()
             .Where(element => element.Parent?.Name.LocalName == "PropertyGroup")
             .ToArray();
-        var packageNames = root.Descendants()
+        var packageReferences = root.Descendants()
             .Where(element => element.Name.LocalName is "PackageReference" or "FrameworkReference")
-            .Select(element => element.Attribute("Include")?.Value)
-            .Where(value => !string.IsNullOrWhiteSpace(value))
-            .Cast<string>()
+            .Select(element => new
+            {
+                Name = element.Attribute("Include")?.Value,
+                Element = element
+            })
+            .Where(reference => !string.IsNullOrWhiteSpace(reference.Name))
+            .Select(reference => (Name: reference.Name!, reference.Element))
+            .ToArray();
+        var packageNames = packageReferences
+            .Select(reference => reference.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var projectLine = 1;
@@ -160,6 +167,22 @@ internal static class WorkspaceOrientationDiscovery
             AddFacet(workspaceKey, facets, project, "application", projectLine, "msbuild");
             AddFacet(workspaceKey, facets, project, "worker", projectLine, "msbuild");
         }
+        var hostedServiceRegistration = FindSourceMarker(
+            files,
+            project.StableKey,
+            line => line.Contains(".AddHostedService<", StringComparison.Ordinal)
+                || line.Contains(".AddHostedService(", StringComparison.Ordinal));
+        if (hostedServiceRegistration is { } registration)
+        {
+            AddFacet(
+                workspaceKey,
+                facets,
+                project,
+                "worker",
+                registration.Line,
+                "source_marker",
+                sourceFile: registration.File);
+        }
         if (packageNames.Contains("Microsoft.NET.Test.Sdk")
             || string.Equals(ElementValue(root, "IsTestProject"), "true", StringComparison.OrdinalIgnoreCase))
         {
@@ -167,10 +190,21 @@ internal static class WorkspaceOrientationDiscovery
                 element => element.Name.LocalName == "IsTestProject")), "msbuild");
         }
 
-        var hasEfCore = packageNames.Any(name => name.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.OrdinalIgnoreCase));
+        var databasePackage = packageReferences.FirstOrDefault(reference => IsDatabasePackage(reference.Name));
+        if (!string.IsNullOrWhiteSpace(databasePackage.Name))
+        {
+            AddFacet(
+                workspaceKey,
+                facets,
+                project,
+                "database",
+                LineOf(databasePackage.Element),
+                "package_reference");
+        }
+
+        var hasEfCore = packageReferences.Any(reference => IsEfCorePackage(reference.Name));
         if (hasEfCore)
         {
-            AddFacet(workspaceKey, facets, project, "database", projectLine, "package_reference");
             var projectDirectory = Path.GetDirectoryName(fullPath)!;
             var hasMigrations = files.Any(file => file.ProjectKey == project.StableKey
                 && IsWithin(Path.Combine(file.RootPath, file.RelativePath), Path.Combine(projectDirectory, "Migrations")));
@@ -487,15 +521,54 @@ internal static class WorkspaceOrientationDiscovery
         string facet,
         int line,
         string provenance,
-        string? condition = null) => facets.Add(new DiscoveredProjectFacet(
+        string? condition = null,
+        DiscoveredFile? sourceFile = null) => facets.Add(new DiscoveredProjectFacet(
             FactKey(workspaceKey, "project_facet", project.StableKey, facet),
             project.StableKey,
             facet,
-            project.RootPath,
-            project.RelativePath,
+            sourceFile?.RootPath ?? project.RootPath,
+            sourceFile?.RelativePath ?? project.RelativePath,
             line,
             provenance,
             condition));
+
+    private static bool IsDatabasePackage(string name) =>
+        IsEfCorePackage(name)
+        || name.Equals("Dapper", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("Dapper.", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Npgsql", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("Npgsql.", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Microsoft.Data.SqlClient", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("System.Data.SqlClient", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("Microsoft.Data.Sqlite", StringComparison.OrdinalIgnoreCase)
+        || name.Equals("MySqlConnector", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("Oracle.ManagedDataAccess", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsEfCorePackage(string name) =>
+        name.Contains("EntityFrameworkCore", StringComparison.OrdinalIgnoreCase);
+
+    private static (DiscoveredFile File, int Line)? FindSourceMarker(
+        IReadOnlyList<DiscoveredFile> files,
+        string projectKey,
+        Func<string, bool> isMatch)
+    {
+        foreach (var file in files.Where(candidate => candidate.ProjectKey == projectKey
+            && candidate.Language == "csharp"
+            && !candidate.IsGenerated))
+        {
+            var lineNumber = 0;
+            foreach (var line in File.ReadLines(Path.Combine(file.RootPath, file.RelativePath)))
+            {
+                lineNumber++;
+                if (isMatch(line))
+                {
+                    return (file, lineNumber);
+                }
+            }
+        }
+
+        return null;
+    }
 
     private static void AddDimension(
         string workspaceKey,

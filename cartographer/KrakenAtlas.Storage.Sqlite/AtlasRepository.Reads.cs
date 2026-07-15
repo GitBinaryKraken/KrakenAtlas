@@ -128,7 +128,8 @@ public sealed partial class AtlasRepository
         command.CommandText =
             """
             SELECT f.stable_key, f.relative_path, l.location_kind,
-                   l.start_line, l.start_column, l.end_line, l.end_column
+                   l.start_line, l.start_column, l.end_line, l.end_column,
+                   f.is_generated
             FROM entity_locations l
             JOIN files f ON f.id = l.file_id
             WHERE l.entity_id = $entityId AND l.generation_id = $generation
@@ -147,7 +148,8 @@ public sealed partial class AtlasRepository
                 reader.GetInt32(3),
                 reader.GetInt32(4),
                 reader.GetInt32(5),
-                reader.GetInt32(6)));
+                reader.GetInt32(6),
+                reader.GetInt32(7) != 0));
         }
         return locations;
     }

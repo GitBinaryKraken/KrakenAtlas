@@ -1,6 +1,12 @@
 import * as os from "node:os";
 import * as vscode from "vscode";
-import { renderAtlasSummary, renderEntityDetail, renderWorkspaceOrientation } from "./atlas/render";
+import {
+  renderAtlasSummary,
+  renderCodeUsages,
+  renderEntityDetail,
+  renderSymbolSearch,
+  renderWorkspaceOrientation
+} from "./atlas/render";
 import { CartographerClient } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
@@ -36,7 +42,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const result = await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
-            title: "Kraken Atlas: discovering workspace",
+            title: "Kraken Atlas: indexing workspace",
             cancellable: false
           },
           () => client.buildAtlas()
@@ -76,6 +82,40 @@ export function activate(context: vscode.ExtensionContext): void {
         }
         output.clear();
         output.appendLine(renderEntityDetail(entity));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.searchSymbols", async () => {
+      await runCommand(async () => {
+        const query = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Search C# Symbols",
+          prompt: "Enter a symbol name or qualified-name fragment",
+          ignoreFocusOut: true
+        });
+        if (!query?.trim()) {
+          return;
+        }
+        const result = await client.searchSymbols(query.trim());
+        output.clear();
+        output.appendLine(renderSymbolSearch(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.findUsages", async () => {
+      await runCommand(async () => {
+        const value = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Find C# Usages",
+          prompt: "Enter an exact C# symbol stable key or numeric entity ID",
+          ignoreFocusOut: true
+        });
+        if (!value?.trim()) {
+          return;
+        }
+        const identity = value.trim();
+        const numericId = /^\d+$/.test(identity) ? Number(identity) : undefined;
+        const result = await client.findUsages(numericId === undefined ? identity : undefined, numericId);
+        output.clear();
+        output.appendLine(renderCodeUsages(result));
         output.show(true);
       });
     }),

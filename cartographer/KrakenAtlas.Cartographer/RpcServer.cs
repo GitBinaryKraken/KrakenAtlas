@@ -77,7 +77,15 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                     JsonRpcResponse.Success(request.Id, new InitializeResult(
                         ProtocolVersion,
                         GetServiceVersion(),
-                        ["foundation.status", "atlas.build", "atlas.summary", "workspace.orientation", "entity.get"])),
+                        [
+                            "foundation.status",
+                            "atlas.build",
+                            "atlas.summary",
+                            "workspace.orientation",
+                            "entity.get",
+                            "symbol.search",
+                            "symbol.usages"
+                        ])),
                     false);
             }
 
@@ -118,6 +126,20 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                         request.Id,
                         await session.GetEntityAsync(
                             DeserializeParams<GetEntityParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "search_symbols" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.SearchSymbolsAsync(
+                            DeserializeParams<SearchSymbolsParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "find_usages" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.FindUsagesAsync(
+                            DeserializeParams<FindUsagesParams>(request.Params),
                             cancellationToken)),
                     false),
                 _ => (

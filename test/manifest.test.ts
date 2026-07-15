@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import test from "node:test";
 
-test("preserves the published identity and exposes only Phase 1 commands", () => {
+test("preserves the published identity and exposes the bounded semantic command set", () => {
   const manifest = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8")) as {
     name: string;
     publisher: string;
@@ -25,6 +25,8 @@ test("preserves the published identity and exposes only Phase 1 commands", () =>
     "krakenAtlas.showAtlasSummary",
     "krakenAtlas.showWorkspaceOrientation",
     "krakenAtlas.lookupEntity",
+    "krakenAtlas.searchSymbols",
+    "krakenAtlas.findUsages",
     "krakenAtlas.restartCartographer",
     "krakenAtlas.exportDiagnostics",
     "krakenAtlas.openPlanning"

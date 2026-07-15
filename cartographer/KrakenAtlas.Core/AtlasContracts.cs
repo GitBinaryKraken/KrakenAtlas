@@ -95,6 +95,46 @@ public sealed record DiscoveredRepositoryRule(
     int Line,
     string Provenance);
 
+public sealed record CSharpSemanticSnapshot(
+    IReadOnlyList<DiscoveredCodeSymbol> Symbols,
+    IReadOnlyList<DiscoveredCodeRelation> Relations,
+    AnalyzerExecution AnalyzerRun);
+
+public sealed record AnalyzerExecution(
+    string Analyzer,
+    string AnalyzerVersion,
+    string Capability,
+    string Status,
+    long DurationMs,
+    string? Diagnostic);
+
+public sealed record DiscoveredCodeSymbol(
+    string StableKey,
+    string ProjectKey,
+    string Kind,
+    string Name,
+    string QualifiedName,
+    string Signature,
+    string Visibility,
+    string? ContainingSymbolKey,
+    IReadOnlyList<DiscoveredCodeLocation> Locations);
+
+public sealed record DiscoveredCodeLocation(
+    string SourceRootPath,
+    string SourceRelativePath,
+    int StartLine,
+    int StartColumn,
+    int EndLine,
+    int EndColumn,
+    bool IsGenerated);
+
+public sealed record DiscoveredCodeRelation(
+    string SourceEntityKey,
+    string TargetSymbolKey,
+    string Kind,
+    string? DispatchKind,
+    DiscoveredCodeLocation Evidence);
+
 public sealed record AtlasCounts(
     int Solutions,
     int Projects,
@@ -154,7 +194,8 @@ public sealed record EntityLocationDetail(
     int StartLine,
     int StartColumn,
     int EndLine,
-    int EndColumn);
+    int EndColumn,
+    bool IsGenerated);
 
 public sealed record EntityDetail(
     long Id,
@@ -168,6 +209,67 @@ public sealed record EntityDetail(
     int IncomingRelations,
     int OutgoingRelations,
     IReadOnlyList<EntityLocationDetail> Locations);
+
+public sealed record SymbolSearchMatch(
+    long Id,
+    string StableKey,
+    string Kind,
+    string Name,
+    string QualifiedName,
+    string Signature,
+    string? ProjectName,
+    string? ProjectRelativePath,
+    int DefinitionCount,
+    EntityLocationDetail? FirstDefinition);
+
+public sealed record SymbolSearchResult(
+    string AtlasState,
+    long? Generation,
+    string Query,
+    bool Truncated,
+    IReadOnlyList<SymbolSearchMatch> Matches)
+{
+    public static SymbolSearchResult NotCreated(string query) => new(
+        "not_created",
+        null,
+        query,
+        false,
+        []);
+}
+
+public sealed record CodeUsageTarget(
+    long Id,
+    string StableKey,
+    string Kind,
+    string Name,
+    string QualifiedName,
+    string? Signature);
+
+public sealed record CodeUsageMatch(
+    long SourceId,
+    string SourceStableKey,
+    string SourceKind,
+    string SourceName,
+    string SourceQualifiedName,
+    string? SourceSignature,
+    string RelationKind,
+    string? DispatchKind,
+    string? ProjectName,
+    string? ProjectRelativePath,
+    EntityLocationDetail Evidence);
+
+public sealed record CodeUsageResult(
+    string AtlasState,
+    long? Generation,
+    CodeUsageTarget? Target,
+    bool Truncated,
+    IReadOnlyList<CodeUsageMatch> Usages)
+{
+    public static CodeUsageResult NotCreated() => new("not_created", null, null, false, []);
+
+    public static CodeUsageResult TargetNotFound(long generation) =>
+        new("target_not_found", generation, null, false, []);
+}
 
 public sealed record OrientationEvidence(
     string RelativePath,
@@ -269,6 +371,7 @@ public sealed record WorkspaceOrientation(
             "msbuild_dimensions",
             "derived_dotnet_commands",
             "package_scripts",
+            "hosted_service_registrations",
             "global_json",
             "editorconfig",
             "directory_build",

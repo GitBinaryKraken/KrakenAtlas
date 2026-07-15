@@ -14,6 +14,7 @@ published Kraken Atlas identity.
 - [Atlas data and query model](ATLAS_MODEL.md)
 - [Delivery roadmap](ROADMAP.md)
 - [Benchmark plan](BENCHMARKS.md)
+- [Kelp field benchmark](KELP_FIELD_BENCHMARK.md)
 - [Decision log](DECISIONS.md)
 
 Where the imported history referred to CodeMap, Kraken Atlas is now the delivery

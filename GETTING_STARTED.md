@@ -1,10 +1,13 @@
 # Getting Started
 
-Kraken Atlas `0.3.1` established the first durable slice of the complete
-rewrite. The current development line discovers .NET solutions, C# and
+Kraken Atlas `0.4.0` is the C# Semantic Alpha of the complete rewrite. It
+discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
-structural map from a versioned SQLite Atlas.
+structural map from a versioned SQLite Atlas. The first semantic slice also
+indexes compiler-bound C# declarations, signatures, exact source locations,
+internal calls, construction, member access, type use, inheritance,
+implementations, and overrides.
 
 ## Requirements
 
@@ -41,9 +44,13 @@ npm run check:vsix
    build dimensions, commands, and governing rules.
 6. Run `Kraken Atlas: Lookup Entity` with a project, facet, command, rule, or
    build-dimension stable key or numeric ID.
-7. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
-8. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
-9. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+7. Run `Kraken Atlas: Search C# Symbols` with a type or member name and inspect
+   the exact qualified names, signatures, projects, and definition locations.
+8. Copy a returned C# symbol stable key and run `Kraken Atlas: Find C# Usages`
+   to inspect exact incoming code relations and evidence spans.
+9. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
+10. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
+11. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
 
 The Atlas database is stored under the VS Code workspace storage directory and

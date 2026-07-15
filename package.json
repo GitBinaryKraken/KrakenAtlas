@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Builds a local SQLite Atlas of workspace structure as the foundation for semantic code mapping and compact AI-agent queries.",
-  "version": "0.3.1",
+  "description": "Builds a local SQLite Atlas of workspace structure and compiler-bound C# symbols and relationships for compact AI-agent queries.",
+  "version": "0.4.0",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -50,6 +50,8 @@
     "onCommand:krakenAtlas.showAtlasSummary",
     "onCommand:krakenAtlas.showWorkspaceOrientation",
     "onCommand:krakenAtlas.lookupEntity",
+    "onCommand:krakenAtlas.searchSymbols",
+    "onCommand:krakenAtlas.findUsages",
     "onCommand:krakenAtlas.restartCartographer",
     "onCommand:krakenAtlas.exportDiagnostics",
     "onCommand:krakenAtlas.openPlanning"
@@ -93,6 +95,16 @@
         "command": "krakenAtlas.lookupEntity",
         "title": "Kraken Atlas: Lookup Entity",
         "icon": "$(symbol-key)"
+      },
+      {
+        "command": "krakenAtlas.searchSymbols",
+        "title": "Kraken Atlas: Search C# Symbols",
+        "icon": "$(search)"
+      },
+      {
+        "command": "krakenAtlas.findUsages",
+        "title": "Kraken Atlas: Find C# Usages",
+        "icon": "$(references)"
       },
       {
         "command": "krakenAtlas.restartCartographer",

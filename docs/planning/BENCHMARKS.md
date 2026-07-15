@@ -5,6 +5,11 @@ agent work without hiding required evidence.
 
 ## Fixture Matrix
 
+The deterministic fixture matrix is supplemented by the opt-in
+[Kelp field benchmark](KELP_FIELD_BENCHMARK.md). Kelp is the representative
+large-workspace and cross-project release gate; confirmed defects are reduced to
+small owned fixtures before entering CI.
+
 ### C# Language Fixture
 
 Must include overloaded methods, extension methods, generics, nested types,

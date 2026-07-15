@@ -1,5 +1,7 @@
 # Kraken Atlas
 
+Version `0.4.0`
+
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
 `BinaryKraken.kraken-atlas`; the implementation that existed through version
@@ -15,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The current development line builds on the `0.3.1` Walking Cartographer. It
+The `0.4.0` C# Semantic Alpha builds on the Walking Cartographer foundation. It
 contains:
 
 - A thin VS Code workspace extension and matching command-line surface.
@@ -28,13 +30,21 @@ contains:
   included/pending source coverage.
 - A versioned SQLite Atlas with WAL, atomic generations, stable entity IDs,
   canonical containment and project-reference relations, and source evidence.
-- Atlas summary and exact entity queries through VS Code, JSON-RPC, and CLI.
+- Compiler-bound Roslyn declarations for namespaces, types, methods, properties,
+  fields, events, overloads, partial types, visibility, generated/manual source,
+  exact definition spans, and stable symbol identities.
+- Exact internal C# calls, construction, field/property/event reads and writes,
+  type use, inheritance, interface implementation, member implementation, and
+  override relations with dispatch classification and source evidence.
+- Atlas summary, exact entity, bounded C# symbol search, and code-only usage
+  queries through VS Code, JSON-RPC, and CLI.
 - Cross-process tests proving persistence, stable identity, and rollback to the
   previous generation after failed discovery.
 
-This is a structural Atlas, not a semantic C# index. Roslyn symbols, code usages,
-database objects, TypeScript/React semantics, agent tools, and Context Packs are
-still planned work.
+The first C# semantic relationship slice covers compiler-resolved symbols inside
+the indexed workspace. Framework-aware ASP.NET routes, dependency-injection
+lifetimes, database objects, TypeScript/React semantics, agent tools, Context
+Packs, dynamic dispatch expansion, and external package symbols remain planned.
 
 ## Commands
 
@@ -43,6 +53,8 @@ still planned work.
 - `Kraken Atlas: Show Atlas Summary`
 - `Kraken Atlas: Show Workspace Orientation`
 - `Kraken Atlas: Lookup Entity`
+- `Kraken Atlas: Search C# Symbols`
+- `Kraken Atlas: Find C# Usages`
 - `Kraken Atlas: Restart Cartographer`
 - `Kraken Atlas: Export Diagnostics`
 - `Kraken Atlas: Open Architecture Plan`
@@ -74,6 +86,8 @@ dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Car
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll summary --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll orientation --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll entity --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key project:<hash>
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll symbols --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --query PersonaService --limit 25
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll usages --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --kind calls --limit 50
 ```
 
 ## Planning

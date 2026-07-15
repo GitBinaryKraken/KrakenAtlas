@@ -1,6 +1,12 @@
 import { strict as assert } from "node:assert";
 import test from "node:test";
-import { renderAtlasSummary, renderEntityDetail, renderWorkspaceOrientation } from "../src/atlas/render";
+import {
+  renderAtlasSummary,
+  renderCodeUsages,
+  renderEntityDetail,
+  renderSymbolSearch,
+  renderWorkspaceOrientation
+} from "../src/atlas/render";
 
 test("renders a bounded project map from an Atlas summary", () => {
   const output = renderAtlasSummary({
@@ -55,12 +61,89 @@ test("renders exact entity identity and locations", () => {
       startLine: 1,
       startColumn: 1,
       endLine: 1,
-      endColumn: 1
+      endColumn: 1,
+      isGenerated: false
     }]
   });
 
   assert.match(output, /Stable key: project:app/);
   assert.match(output, /src\/App\/App\.csproj:1:1/);
+});
+
+test("renders bounded C# symbol search results with exact identity", () => {
+  const output = renderSymbolSearch({
+    atlasState: "current",
+    generation: 5,
+    query: "PersonaService",
+    truncated: false,
+    matches: [{
+      id: 42,
+      stableKey: "csharp_symbol:persona",
+      kind: "class",
+      name: "PersonaService",
+      qualifiedName: "KelpApiLogicLayer.Services.PersonaService",
+      signature: "public class KelpApiLogicLayer.Services.PersonaService",
+      projectName: "KelpApiLogicLayer",
+      projectRelativePath: "KelpApiLogicLayer/KelpApiLogicLayer.csproj",
+      definitionCount: 1,
+      firstDefinition: {
+        fileStableKey: "file:persona",
+        relativePath: "KelpApiLogicLayer/Services/PersonaService.cs",
+        locationKind: "definition",
+        startLine: 12,
+        startColumn: 18,
+        endLine: 12,
+        endColumn: 32,
+        isGenerated: false
+      }
+    }]
+  });
+
+  assert.match(output, /KelpApiLogicLayer\.Services\.PersonaService/);
+  assert.match(output, /csharp_symbol:persona/);
+  assert.match(output, /Services\/PersonaService\.cs:12:18/);
+});
+
+test("renders compiler-derived C# usages with relation and dispatch", () => {
+  const output = renderCodeUsages({
+    atlasState: "current",
+    generation: 6,
+    target: {
+      id: 42,
+      stableKey: "csharp_symbol:contract",
+      kind: "method",
+      name: "GetPublicPersona",
+      qualifiedName: "KelpApiLogicLayer.Interfaces.IPersonaService.GetPublicPersona(string)",
+      signature: "public abstract Task<Persona> GetPublicPersona(string url)"
+    },
+    truncated: false,
+    usages: [{
+      sourceId: 84,
+      sourceStableKey: "csharp_symbol:controller",
+      sourceKind: "method",
+      sourceName: "Get",
+      sourceQualifiedName: "KelpApi.Controllers.PersonaController.Get(string)",
+      relationKind: "calls",
+      dispatchKind: "interface",
+      projectName: "KelpApi",
+      projectRelativePath: "KelpApi/KelpApi.csproj",
+      evidence: {
+        fileStableKey: "file:controller",
+        relativePath: "KelpApi/Controllers/PersonaController.cs",
+        locationKind: "usage",
+        startLine: 31,
+        startColumn: 24,
+        endLine: 31,
+        endColumn: 58,
+        isGenerated: false
+      }
+    }]
+  });
+
+  assert.match(output, /GetPublicPersona/);
+  assert.match(output, /calls \| interface/);
+  assert.match(output, /PersonaController\.cs:31:24/);
+  assert.match(output, /csharp_symbol:controller/);
 });
 
 test("renders workspace orientation with facets, commands, and rule evidence", () => {

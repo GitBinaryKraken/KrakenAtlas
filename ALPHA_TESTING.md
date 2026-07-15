@@ -1,20 +1,26 @@
-# Kraken Atlas Foundation Preview Testing
+# Kraken Atlas C# Semantic Alpha Testing
 
 ## Purpose
 
-This preview validates the Walking Cartographer foundation in real VS Code
-environments. It is intentionally narrower than the planned product.
+This alpha validates the durable Cartographer foundation and first C# semantic
+relationship map in real VS Code environments. It is intentionally narrower than
+the planned product.
 
 The preview currently discovers solutions, .NET and package.json projects,
 project references, relevant workspace files, project roles, build dimensions,
 supported commands, structured conventions, and governing instruction files. It
 persists that structural map in SQLite and offers status, summary, orientation,
-exact-entity, restart, and diagnostic commands.
+exact-entity, restart, and diagnostic commands. It also uses Roslyn to index C#
+declarations, overload signatures, visibility, partial locations, and
+generated/manual definition evidence, with a bounded symbol-search command.
+It also records exact internal calls, construction, member reads and writes, type
+use, inheritance, implementations, and overrides, and exposes a bounded,
+code-only usage query.
 
-It does not yet provide Roslyn symbols, code usages, call graphs, ASP.NET/EF Core
-semantics, TypeScript/React semantics, MCP tools, Context Packs, or AI-authored
-node decorations. Please evaluate the capabilities that exist rather than the
-planned semantic surface.
+It does not yet provide framework-aware ASP.NET/EF Core or SQL semantics,
+TypeScript/React semantics, complete execution Routes, MCP tools, Context Packs,
+or AI-authored node decorations. Please evaluate the capabilities that exist
+rather than the planned semantic surface.
 
 ## Distribution and License Status
 
@@ -53,12 +59,20 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
    scripts, and governing rules with the repository.
 5. Copy a project or orientation stable key and run
    `Kraken Atlas: Lookup Entity`.
-6. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
+6. Run `Kraken Atlas: Search C# Symbols` for an overloaded method, a partial
+   type, and a duplicate short name. Verify qualified names, signatures,
+   projects, generated/manual status, and definition locations.
+7. Copy a method or type stable key from symbol search and run
+   `Kraken Atlas: Find C# Usages`. Check calls, implementation/override links,
+   dispatch classification, source symbol, project, and evidence location.
+8. Repeat with an interface method and verify both callers and concrete member
+   implementations are returned without README or documentation mentions.
+9. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
    existing Atlas generation should reopen successfully.
-7. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
+10. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
    lock errors or stale Cartographer processes.
-8. Close and reopen VS Code, then show the summary again to verify persistence.
-9. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
+11. Close and reopen VS Code, then show the summary again to verify persistence.
+12. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
 
 Kraken Atlas performs static discovery and does not execute the application,
@@ -74,6 +88,8 @@ Please include:
   whether it is a multi-root workspace.
 - Missing or incorrect project roles, commands, build dimensions, and governing
   repository rules.
+- Missing, duplicated, or incorrectly qualified C# declarations and signatures.
+- Missing or incorrect C# relation targets, dispatch kinds, or evidence spans.
 - Atlas counts and build duration.
 - Expected projects that were missing or unexpected projects that appeared.
 - The exact command that failed and the visible error.
@@ -86,10 +102,16 @@ diagnostic export does not contain source bodies.
 ## Known Limitations
 
 - Project kinds and language coverage are based on structural discovery.
-- Exact entity lookup requires a stable key or numeric ID; fuzzy symbol search is
-  not implemented.
+- C# relations include only compiler-resolved targets declared inside the indexed
+  workspace. External package symbols and unresolved/dynamic targets are omitted.
+- Usage queries are incoming, code-only relation queries; general graph traversal,
+  impact analysis, and framework-aware Routes remain planned.
+- ASP.NET routes, middleware, DI lifetimes, EF Core models, and embedded SQL are
+  not yet interpreted as framework or database objects.
+- Symbol search matches name and qualified-name fragments and returns at most 100
+  results.
 - The VSIX is framework-dependent and requires an installed .NET 10 runtime.
-- Semantic analyzers and AI-facing query tools remain planned work.
+- Additional semantic analyzers and AI-facing query tools remain planned work.
 - Workspace storage is local to the VS Code profile and workspace identity.
 
 ## Uninstall and Local Data

@@ -1,7 +1,14 @@
 import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { AtlasSummary, BuildAtlasResult, EntityDetail, WorkspaceOrientation } from "../atlas/contracts";
+import {
+  AtlasSummary,
+  BuildAtlasResult,
+  CodeUsageResult,
+  EntityDetail,
+  SymbolSearchResult,
+  WorkspaceOrientation
+} from "../atlas/contracts";
 import { FoundationStatus } from "../foundation/status";
 import { createDotnetRuntimeRequirementError, inspectDotnetRuntime } from "../runtime/dotnetRuntime";
 import { encodeJsonRpcMessage, JsonRpcFramer } from "./jsonRpcFraming";
@@ -101,6 +108,16 @@ export class CartographerClient {
   async getEntity(stableKey?: string, id?: number): Promise<EntityDetail | undefined> {
     await this.ensureStarted();
     return this.request<EntityDetail | undefined>("get_entity", { stableKey, id });
+  }
+
+  async searchSymbols(query: string, limit = 25): Promise<SymbolSearchResult> {
+    await this.ensureStarted();
+    return this.request<SymbolSearchResult>("search_symbols", { query, limit });
+  }
+
+  async findUsages(stableKey?: string, id?: number, kinds?: string[], limit = 50): Promise<CodeUsageResult> {
+    await this.ensureStarted();
+    return this.request<CodeUsageResult>("find_usages", { stableKey, id, kinds, limit });
   }
 
   async restart(): Promise<void> {

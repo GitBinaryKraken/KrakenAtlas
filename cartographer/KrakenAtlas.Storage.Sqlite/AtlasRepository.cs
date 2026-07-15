@@ -16,6 +16,7 @@ public sealed partial class AtlasRepository(string databasePath)
 
     public async Task<BuildAtlasResult> BuildAsync(
         WorkspaceSnapshot snapshot,
+        CSharpSemanticSnapshot semanticSnapshot,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -236,6 +237,17 @@ public sealed partial class AtlasRepository(string databasePath)
             entityIds,
             filesByPath,
             cancellationToken);
+        await PersistCSharpSymbolsAsync(
+            connection,
+            transaction,
+            workspaceId,
+            generation,
+            semanticSnapshot,
+            projectIds,
+            fileIds,
+            entityIds,
+            filesByPath,
+            cancellationToken);
 
         stopwatch.Stop();
         await InsertAnalyzerRunAsync(
@@ -244,6 +256,13 @@ public sealed partial class AtlasRepository(string databasePath)
             workspaceId,
             generation,
             stopwatch.ElapsedMilliseconds,
+            cancellationToken);
+        await InsertSemanticAnalyzerRunAsync(
+            connection,
+            transaction,
+            workspaceId,
+            generation,
+            semanticSnapshot.AnalyzerRun,
             cancellationToken);
         await CompleteGenerationAsync(connection, transaction, workspaceId, generation, cancellationToken);
         await transaction.CommitAsync(cancellationToken);

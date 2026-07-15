@@ -91,14 +91,15 @@ function resolveWindowsVsCodeInvocation() {
   return { command, cliScript };
 }
 
-function cartographer(assembly, command) {
+function cartographer(assembly, command, ...extra) {
   const output = run("dotnet", [
     assembly,
     command,
     "--workspace",
     workspaceRoot,
     "--atlas",
-    atlasPath
+    atlasPath,
+    ...extra
   ]);
   return JSON.parse(output);
 }
@@ -206,6 +207,39 @@ try {
     throw new Error(`Packaged workspace orientation was incomplete: ${JSON.stringify(orientation)}`);
   }
 
+  const symbols = cartographer(assembly, "symbols", "--query", "Greeter", "--limit", "10");
+  const greeter = symbols.matches?.find(match => match.kind === "class" && match.name === "Greeter");
+  if (
+    symbols.atlasState !== "current" ||
+    !greeter ||
+    greeter.qualifiedName !== "Sample.Lib.Greeter" ||
+    greeter.firstDefinition?.relativePath !== "src/Lib/Greeter.cs"
+  ) {
+    throw new Error(`Packaged C# symbol search was incomplete: ${JSON.stringify(symbols)}`);
+  }
+
+  const methods = cartographer(assembly, "symbols", "--query", "GetMessage", "--limit", "10");
+  const getMessage = methods.matches?.find(match => match.qualifiedName === "Sample.Lib.Greeter.GetMessage()");
+  if (!getMessage) {
+    throw new Error(`Packaged C# method search was incomplete: ${JSON.stringify(methods)}`);
+  }
+  const usages = cartographer(
+    assembly,
+    "usages",
+    "--stable-key",
+    getMessage.stableKey,
+    "--kind",
+    "calls",
+    "--limit",
+    "10"
+  );
+  if (
+    usages.atlasState !== "current" ||
+    !usages.usages?.some(usage => usage.relationKind === "calls")
+  ) {
+    throw new Error(`Packaged C# usage query was incomplete: ${JSON.stringify(usages)}`);
+  }
+
   const secondBuild = cartographer(assembly, "build");
   if (secondBuild.generation !== 2) {
     throw new Error(`Cartographer restart build did not advance the generation: ${JSON.stringify(secondBuild)}`);
@@ -220,7 +254,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, queried workspace orientation, built and reopened two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, queried orientation, C# symbols, and exact usages, built and reopened two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {

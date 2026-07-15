@@ -62,6 +62,14 @@ Exit gate:
 
 ## Phase 2: C# Semantic Atlas and Agent Loop
 
+Status: in progress. Roslyn project loading, compiler-bound declaration identity,
+exact definition locations, overload signatures, partial declarations,
+generated/manual evidence, analyzer diagnostics, exact internal calls,
+construction, member reads/writes, type use, inheritance, implementations,
+overrides, durable persistence, bounded symbol search, and code-only usage queries
+are implemented. General neighbors, Routes, impact, Context Packs, unresolved
+targets, and agent-facing tools remain.
+
 Deliverables:
 
 - Roslyn project loading, declarations, locations, references, calls, type use,

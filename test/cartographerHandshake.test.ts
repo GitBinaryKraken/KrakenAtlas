@@ -6,7 +6,14 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
-import { AtlasSummary, BuildAtlasResult, EntityDetail, WorkspaceOrientation } from "../src/atlas/contracts";
+import {
+  AtlasSummary,
+  BuildAtlasResult,
+  CodeUsageResult,
+  EntityDetail,
+  SymbolSearchResult,
+  WorkspaceOrientation
+} from "../src/atlas/contracts";
 import { encodeJsonRpcMessage, JsonRpcFramer } from "../src/cartographer/jsonRpcFraming";
 
 interface RpcResponse<T> {
@@ -130,7 +137,9 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       "atlas.build",
       "atlas.summary",
       "workspace.orientation",
-      "entity.get"
+      "entity.get",
+      "symbol.search",
+      "symbol.usages"
     ]);
     return cartographer;
   };
@@ -148,8 +157,8 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       solutions: 1,
       projects: 2,
       files: 7,
-      entities: 34,
-      relations: 34,
+      entities: 38,
+      relations: 40,
       projectDependencies: 1
     });
     assert.equal(fs.existsSync(atlasPath), true);
@@ -179,8 +188,32 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     assert.equal(firstEntity.kind, "project");
     assert.equal(firstEntity.qualifiedName, "src/App/App.csproj");
     assert.equal(firstEntity.incomingRelations, 5);
-    assert.equal(firstEntity.outgoingRelations, 7);
+    assert.equal(firstEntity.outgoingRelations, 9);
     assert.equal(firstEntity.locations[0]?.relativePath, "src/App/App.csproj");
+
+    const greeterSearch = await cartographer.request<SymbolSearchResult>("search_symbols", {
+      query: "Greeter",
+      limit: 10
+    });
+    assert.equal(greeterSearch.atlasState, "current");
+    const greeter = greeterSearch.matches.find(match => match.kind === "class" && match.name === "Greeter");
+    assert.ok(greeter);
+    assert.equal(greeter.qualifiedName, "Sample.Lib.Greeter");
+    assert.equal(greeter.firstDefinition?.relativePath, "src/Lib/Greeter.cs");
+    assert.equal(greeter.firstDefinition?.isGenerated, false);
+
+    const getMessageSearch = await cartographer.request<SymbolSearchResult>("search_symbols", {
+      query: "GetMessage",
+      limit: 10
+    });
+    const getMessage = getMessageSearch.matches.find(match =>
+      match.qualifiedName === "Sample.Lib.Greeter.GetMessage()");
+    assert.ok(getMessage);
+    const getMessageUsages = await cartographer.request<CodeUsageResult>("find_usages", {
+      stableKey: getMessage.stableKey,
+      limit: 10
+    });
+    assert.ok(getMessageUsages.usages.some(usage => usage.relationKind === "calls"));
 
     const secondBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
     assert.equal(secondBuild.generation, 2);
@@ -188,6 +221,13 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     assert.equal(secondEntity.id, firstEntity.id);
     assert.equal(secondEntity.stableKey, firstEntity.stableKey);
     assert.equal(secondEntity.generation, 2);
+    const secondGreeterSearch = await cartographer.request<SymbolSearchResult>("search_symbols", {
+      query: "Greeter",
+      limit: 10
+    });
+    const secondGreeter = secondGreeterSearch.matches.find(match => match.kind === "class" && match.name === "Greeter");
+    assert.equal(secondGreeter?.stableKey, greeter.stableKey);
+    assert.equal(secondGreeter?.id, greeter.id);
 
     fs.renameSync(workspaceRoot, unavailableRoot);
     await assert.rejects(() => cartographer.request("atlas/build"), /Workspace root does not exist/);
@@ -234,6 +274,36 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       app.stableKey
     ], { encoding: "utf8" })) as EntityDetail;
     assert.equal(cliEntity.id, firstEntity.id);
+
+    const cliSymbols = JSON.parse(execFileSync("dotnet", [
+      assembly,
+      "symbols",
+      "--workspace",
+      workspaceRoot,
+      "--atlas",
+      atlasPath,
+      "--query",
+      "GetMessage",
+      "--limit",
+      "5"
+    ], { encoding: "utf8" })) as SymbolSearchResult;
+    assert.ok(cliSymbols.matches.some(match => match.qualifiedName === "Sample.Lib.Greeter.GetMessage()"));
+
+    const cliUsages = JSON.parse(execFileSync("dotnet", [
+      assembly,
+      "usages",
+      "--workspace",
+      workspaceRoot,
+      "--atlas",
+      atlasPath,
+      "--stable-key",
+      getMessage.stableKey,
+      "--kind",
+      "calls",
+      "--limit",
+      "5"
+    ], { encoding: "utf8" })) as CodeUsageResult;
+    assert.ok(cliUsages.usages.some(usage => usage.relationKind === "calls"));
 
     const nestedRootBuild = JSON.parse(execFileSync("dotnet", [
       assembly,

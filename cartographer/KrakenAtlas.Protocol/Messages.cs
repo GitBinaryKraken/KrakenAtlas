@@ -27,3 +27,11 @@ public sealed record InitializeParams(
     string AtlasPath);
 
 public sealed record GetEntityParams(string? StableKey, long? Id);
+
+public sealed record SearchSymbolsParams(string Query, int? Limit);
+
+public sealed record FindUsagesParams(
+    string? StableKey,
+    long? Id,
+    IReadOnlyList<string>? Kinds,
+    int? Limit);

@@ -33,6 +33,12 @@ internal static class CliApplication
                 "entity" => await session.GetEntityAsync(
                     new GetEntityParams(options.StableKey, options.Id),
                     cancellationToken),
+                "symbols" => await session.SearchSymbolsAsync(
+                    new SearchSymbolsParams(options.Query!, options.Limit),
+                    cancellationToken),
+                "usages" => await session.FindUsagesAsync(
+                    new FindUsagesParams(options.StableKey, options.Id, options.Kinds, options.Limit),
+                    cancellationToken),
                 _ => throw new InvalidOperationException($"Unknown command: {options.Command}")
             };
 
@@ -49,15 +55,18 @@ internal static class CliApplication
 
     private static CliOptions Parse(IReadOnlyList<string> arguments)
     {
-        if (arguments.Count == 0 || arguments[0] is not ("build" or "summary" or "orientation" or "entity"))
+        if (arguments.Count == 0 || arguments[0] is not ("build" or "summary" or "orientation" or "entity" or "symbols" or "usages"))
         {
-            throw new ArgumentException("A build, summary, orientation, or entity command is required.");
+            throw new ArgumentException("A build, summary, orientation, entity, symbols, or usages command is required.");
         }
 
         var roots = new List<string>();
         string? atlasPath = null;
         string? stableKey = null;
         long? id = null;
+        string? query = null;
+        int? limit = null;
+        var kinds = new List<string>();
         for (var index = 1; index < arguments.Count; index++)
         {
             var option = arguments[index];
@@ -80,6 +89,15 @@ internal static class CliApplication
                 case "--id" when long.TryParse(value, out var parsedId):
                     id = parsedId;
                     break;
+                case "--query":
+                    query = value;
+                    break;
+                case "--limit" when int.TryParse(value, out var parsedLimit):
+                    limit = parsedLimit;
+                    break;
+                case "--kind":
+                    kinds.Add(value);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown option or invalid value: {option} {value}");
             }
@@ -98,18 +116,32 @@ internal static class CliApplication
             throw new ArgumentException("entity requires --stable-key or --id.");
         }
 
-        return new CliOptions(arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id);
+        if (arguments[0] == "symbols" && string.IsNullOrWhiteSpace(query))
+        {
+            throw new ArgumentException("symbols requires --query.");
+        }
+
+        if (arguments[0] == "usages" && string.IsNullOrWhiteSpace(stableKey) && id is null)
+        {
+            throw new ArgumentException("usages requires --stable-key or --id.");
+        }
+
+        return new CliOptions(arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit, kinds);
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|usages> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
-        + "[--stable-key <key> | --id <number>]";
+        + "[--stable-key <key> | --id <number>] [--query <text>] "
+        + "[--kind <relation-kind>] [--limit <1-100>]";
 
     private sealed record CliOptions(
         string Command,
         IReadOnlyList<string> WorkspaceRoots,
         string AtlasPath,
         string? StableKey,
-        long? Id);
+        long? Id,
+        string? Query,
+        int? Limit,
+        IReadOnlyList<string> Kinds);
 }

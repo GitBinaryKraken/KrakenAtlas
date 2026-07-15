@@ -193,16 +193,17 @@ public sealed partial class AtlasRepository
         string language,
         long? containingEntityId,
         string? signature,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? visibility = null)
     {
         await using var command = CreateCommand(connection, transaction,
             """
             INSERT INTO entities(
                 stable_key, workspace_id, generation_id, kind, name, qualified_name,
-                language, containing_entity_id, signature)
+                language, containing_entity_id, signature, visibility)
             VALUES (
                 $stableKey, $workspaceId, $generation, $kind, $name, $qualifiedName,
-                $language, $containingEntityId, $signature)
+                $language, $containingEntityId, $signature, $visibility)
             ON CONFLICT(stable_key) DO UPDATE SET
                 generation_id = excluded.generation_id,
                 kind = excluded.kind,
@@ -210,7 +211,8 @@ public sealed partial class AtlasRepository
                 qualified_name = excluded.qualified_name,
                 language = excluded.language,
                 containing_entity_id = excluded.containing_entity_id,
-                signature = excluded.signature
+                signature = excluded.signature,
+                visibility = excluded.visibility
             RETURNING id;
             """);
         command.Parameters.AddWithValue("$stableKey", stableKey);
@@ -222,6 +224,7 @@ public sealed partial class AtlasRepository
         command.Parameters.AddWithValue("$language", language);
         command.Parameters.AddWithValue("$containingEntityId", DbValue(containingEntityId));
         command.Parameters.AddWithValue("$signature", DbValue(signature));
+        command.Parameters.AddWithValue("$visibility", DbValue(visibility));
         return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
     }
 
@@ -233,6 +236,30 @@ public sealed partial class AtlasRepository
         long fileId,
         string locationKind,
         int line,
+        CancellationToken cancellationToken) => await UpsertLocationSpanAsync(
+            connection,
+            transaction,
+            generation,
+            entityId,
+            fileId,
+            locationKind,
+            line,
+            1,
+            line,
+            1,
+            cancellationToken);
+
+    private static async Task UpsertLocationSpanAsync(
+        SqliteConnection connection,
+        SqliteTransaction transaction,
+        long generation,
+        long entityId,
+        long fileId,
+        string locationKind,
+        int startLine,
+        int startColumn,
+        int endLine,
+        int endColumn,
         CancellationToken cancellationToken)
     {
         await using var command = CreateCommand(connection, transaction,
@@ -240,7 +267,9 @@ public sealed partial class AtlasRepository
             INSERT INTO entity_locations(
                 entity_id, file_id, generation_id, location_kind,
                 start_line, start_column, end_line, end_column)
-            VALUES ($entityId, $fileId, $generation, $locationKind, $line, 1, $line, 1)
+            VALUES (
+                $entityId, $fileId, $generation, $locationKind,
+                $startLine, $startColumn, $endLine, $endColumn)
             ON CONFLICT(entity_id, file_id, location_kind, start_line, start_column) DO UPDATE SET
                 generation_id = excluded.generation_id,
                 end_line = excluded.end_line,
@@ -250,7 +279,10 @@ public sealed partial class AtlasRepository
         command.Parameters.AddWithValue("$fileId", fileId);
         command.Parameters.AddWithValue("$generation", generation);
         command.Parameters.AddWithValue("$locationKind", locationKind);
-        command.Parameters.AddWithValue("$line", line);
+        command.Parameters.AddWithValue("$startLine", startLine);
+        command.Parameters.AddWithValue("$startColumn", startColumn);
+        command.Parameters.AddWithValue("$endLine", endLine);
+        command.Parameters.AddWithValue("$endColumn", endColumn);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -266,16 +298,24 @@ public sealed partial class AtlasRepository
         int evidenceLine,
         CancellationToken cancellationToken,
         string relationDomain = "code",
-        string provenance = "syntax")
+        string provenance = "syntax",
+        string analyzer = DiscoveryAnalyzer,
+        int startColumn = 1,
+        int? endLine = null,
+        int? endColumn = null,
+        string? dispatchKind = null)
     {
         await using var relation = CreateCommand(connection, transaction,
             """
             INSERT INTO relations(
                 workspace_id, generation_id, source_entity_id, target_entity_id,
-                relation_domain, relation_kind)
-            VALUES ($workspaceId, $generation, $sourceEntityId, $targetEntityId, $relationDomain, $relationKind)
+                relation_domain, relation_kind, dispatch_kind)
+            VALUES (
+                $workspaceId, $generation, $sourceEntityId, $targetEntityId,
+                $relationDomain, $relationKind, $dispatchKind)
             ON CONFLICT(source_entity_id, target_entity_id, relation_domain, relation_kind) DO UPDATE SET
-                generation_id = excluded.generation_id
+                generation_id = excluded.generation_id,
+                dispatch_kind = excluded.dispatch_kind
             RETURNING id;
             """);
         relation.Parameters.AddWithValue("$workspaceId", workspaceId);
@@ -284,6 +324,7 @@ public sealed partial class AtlasRepository
         relation.Parameters.AddWithValue("$targetEntityId", targetEntityId);
         relation.Parameters.AddWithValue("$relationDomain", relationDomain);
         relation.Parameters.AddWithValue("$relationKind", relationKind);
+        relation.Parameters.AddWithValue("$dispatchKind", DbValue(dispatchKind));
         var relationId = Convert.ToInt64(await relation.ExecuteScalarAsync(cancellationToken));
 
         await using var evidence = CreateCommand(connection, transaction,
@@ -293,7 +334,7 @@ public sealed partial class AtlasRepository
                 start_line, start_column, end_line, end_column)
             VALUES (
                 $relationId, $fileId, $generation, $analyzer, $provenance, 'exact',
-                $line, 1, $line, 1)
+                $startLine, $startColumn, $endLine, $endColumn)
             ON CONFLICT(relation_id, file_id, analyzer, start_line, start_column) DO UPDATE SET
                 generation_id = excluded.generation_id,
                 resolution = excluded.resolution;
@@ -301,9 +342,12 @@ public sealed partial class AtlasRepository
         evidence.Parameters.AddWithValue("$relationId", relationId);
         evidence.Parameters.AddWithValue("$fileId", evidenceFileId);
         evidence.Parameters.AddWithValue("$generation", generation);
-        evidence.Parameters.AddWithValue("$analyzer", DiscoveryAnalyzer);
+        evidence.Parameters.AddWithValue("$analyzer", analyzer);
         evidence.Parameters.AddWithValue("$provenance", provenance);
-        evidence.Parameters.AddWithValue("$line", evidenceLine);
+        evidence.Parameters.AddWithValue("$startLine", evidenceLine);
+        evidence.Parameters.AddWithValue("$startColumn", startColumn);
+        evidence.Parameters.AddWithValue("$endLine", endLine ?? evidenceLine);
+        evidence.Parameters.AddWithValue("$endColumn", endColumn ?? startColumn);
         await evidence.ExecuteNonQueryAsync(cancellationToken);
     }
 

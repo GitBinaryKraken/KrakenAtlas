@@ -2,16 +2,17 @@
 
 ## Summary
 
-The Kraken Atlas foundation preview processes codebase structure locally. Kraken
-Atlas does not include telemetry, analytics, crash reporting, account services,
-or a Kraken Atlas network backend.
+The Kraken Atlas preview processes codebase structure, C# declarations, and
+compiler-resolved C# relationships locally. Kraken Atlas does not include
+telemetry, analytics, crash reporting, account services, or a Kraken Atlas
+network backend.
 
 The extension launches a local Cartographer child process and stores its Atlas in
 a local SQLite database owned by VS Code workspace storage.
 
 ## Current Data Collected Locally
 
-The Phase 1 structural Atlas may contain:
+The local Atlas may contain:
 
 - Absolute workspace root and Atlas storage paths.
 - Relative solution, project, and relevant file paths.
@@ -22,12 +23,19 @@ The Phase 1 structural Atlas may contain:
 - Structured build and EditorConfig values plus references to governing
   repository instruction files, with scope and precedence.
 - Deterministic stable identifiers and file content hashes.
+- C# namespace, type, and member names; qualified names; signatures; visibility;
+  containing-symbol relationships; exact definition spans; and generated/manual
+  source status.
+- Compiler-resolved internal calls, construction, member reads and writes, type
+  use, inheritance, implementations, and overrides, including dispatch kind and
+  exact source evidence spans.
 - Atlas generations, analyzer names, status, timings, and diagnostics.
 - SQLite operational metadata required for persistence and migrations.
 
-The current structural Atlas does not store source file bodies. Later semantic
-phases may require bounded source locations or slices; those phases must update
-this document before external testing.
+The current Atlas does not store source file bodies. It stores source locations,
+declaration metadata, and relation metadata. Later Context Pack phases may store
+or emit bounded source slices; those phases must update this document before
+external testing.
 
 ## Network and Telemetry
 
@@ -57,8 +65,9 @@ analyzer error text may still be sensitive. Review the file before sharing it.
 
 Default indexing does not execute application code, run migrations, instantiate
 EF Core contexts, invoke project design-time factories, or connect to live
-databases. Kraken Atlas does invoke the installed `dotnet` host to run its own
-Cartographer assembly.
+databases. It evaluates C# projects through Roslyn `MSBuildWorkspace` but does not
+request package restore. Kraken Atlas invokes the installed `dotnet` host to run
+its own Cartographer assembly.
 
 ## Storage and Deletion
 

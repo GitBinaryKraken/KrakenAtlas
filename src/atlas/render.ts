@@ -1,4 +1,10 @@
-import { AtlasSummary, EntityDetail, WorkspaceOrientation } from "./contracts";
+import {
+  AtlasSummary,
+  CodeUsageResult,
+  EntityDetail,
+  SymbolSearchResult,
+  WorkspaceOrientation
+} from "./contracts";
 
 export function renderAtlasSummary(summary: AtlasSummary, extensionVersion: string): string {
   if (summary.atlasState === "not_created") {
@@ -49,8 +55,61 @@ export function renderEntityDetail(entity: EntityDetail): string {
   if (entity.locations.length > 0) {
     lines.push("", "Locations");
     for (const location of entity.locations) {
-      lines.push(`- ${location.relativePath}:${location.startLine}:${location.startColumn} (${location.locationKind})`);
+      const generated = location.isGenerated ? ", generated" : "";
+      lines.push(`- ${location.relativePath}:${location.startLine}:${location.startColumn} (${location.locationKind}${generated})`);
     }
+  }
+  return lines.join("\n");
+}
+
+export function renderSymbolSearch(result: SymbolSearchResult): string {
+  if (result.atlasState === "not_created") {
+    return "Symbol search: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before searching symbols.";
+  }
+
+  const suffix = result.truncated ? "+" : "";
+  const lines = [
+    `Symbol search: ${result.query}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Matches: ${result.matches.length}${suffix}`
+  ];
+  for (const match of result.matches) {
+    const project = match.projectRelativePath ? ` | ${match.projectRelativePath}` : "";
+    const location = match.firstDefinition
+      ? ` | ${match.firstDefinition.relativePath}:${match.firstDefinition.startLine}:${match.firstDefinition.startColumn}`
+      : "";
+    const generated = match.firstDefinition?.isGenerated ? " | generated" : "";
+    lines.push(`- ${match.kind} | ${match.qualifiedName}${project}${location}${generated}`);
+    lines.push(`  ${match.signature}`);
+    lines.push(`  ${match.stableKey}`);
+  }
+  return lines.join("\n");
+}
+
+export function renderCodeUsages(result: CodeUsageResult): string {
+  if (result.atlasState === "not_created") {
+    return "C# usages: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before finding usages.";
+  }
+  if (result.atlasState === "target_not_found" || !result.target) {
+    return `C# usages: target_not_found\nGeneration: ${result.generation ?? "unknown"}`;
+  }
+
+  const suffix = result.truncated ? "+" : "";
+  const lines = [
+    `C# usages: ${result.target.qualifiedName}`,
+    `Stable key: ${result.target.stableKey}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Matches: ${result.usages.length}${suffix}`
+  ];
+  for (const usage of result.usages) {
+    const dispatch = usage.dispatchKind ? ` | ${usage.dispatchKind}` : "";
+    const project = usage.projectRelativePath ? ` | ${usage.projectRelativePath}` : "";
+    const generated = usage.evidence.isGenerated ? " | generated" : "";
+    lines.push(
+      `- ${usage.relationKind}${dispatch} | ${usage.sourceQualifiedName}${project} `
+      + `| ${usage.evidence.relativePath}:${usage.evidence.startLine}:${usage.evidence.startColumn}${generated}`
+    );
+    lines.push(`  ${usage.sourceStableKey}`);
   }
   return lines.join("\n");
 }

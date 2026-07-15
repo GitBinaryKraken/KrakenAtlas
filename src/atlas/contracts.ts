@@ -52,6 +52,7 @@ export interface EntityLocationDetail {
   startColumn: number;
   endLine: number;
   endColumn: number;
+  isGenerated: boolean;
 }
 
 export interface EntityDetail {
@@ -66,6 +67,58 @@ export interface EntityDetail {
   incomingRelations: number;
   outgoingRelations: number;
   locations: EntityLocationDetail[];
+}
+
+export interface SymbolSearchMatch {
+  id: number;
+  stableKey: string;
+  kind: string;
+  name: string;
+  qualifiedName: string;
+  signature: string;
+  projectName?: string;
+  projectRelativePath?: string;
+  definitionCount: number;
+  firstDefinition?: EntityLocationDetail;
+}
+
+export interface SymbolSearchResult {
+  atlasState: "not_created" | "current";
+  generation?: number;
+  query: string;
+  truncated: boolean;
+  matches: SymbolSearchMatch[];
+}
+
+export interface CodeUsageTarget {
+  id: number;
+  stableKey: string;
+  kind: string;
+  name: string;
+  qualifiedName: string;
+  signature?: string;
+}
+
+export interface CodeUsageMatch {
+  sourceId: number;
+  sourceStableKey: string;
+  sourceKind: string;
+  sourceName: string;
+  sourceQualifiedName: string;
+  sourceSignature?: string;
+  relationKind: string;
+  dispatchKind?: string;
+  projectName?: string;
+  projectRelativePath?: string;
+  evidence: EntityLocationDetail;
+}
+
+export interface CodeUsageResult {
+  atlasState: "not_created" | "target_not_found" | "current";
+  generation?: number;
+  target?: CodeUsageTarget;
+  truncated: boolean;
+  usages: CodeUsageMatch[];
 }
 
 export interface OrientationEvidence {
