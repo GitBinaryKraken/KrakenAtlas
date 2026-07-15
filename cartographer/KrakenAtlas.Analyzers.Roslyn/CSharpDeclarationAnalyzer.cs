@@ -13,8 +13,8 @@ namespace KrakenAtlas.Analyzers.Roslyn;
 public sealed class CSharpDeclarationAnalyzer
 {
     public const string AnalyzerName = "roslyn";
-    public const string AnalyzerVersion = "0.2.0";
-    public const string Capability = "csharp.semantic";
+    public const string AnalyzerVersion = "0.5.0";
+    public const string Capability = "csharp.routes";
 
     private static readonly object RegistrationLock = new();
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
@@ -60,7 +60,7 @@ public sealed class CSharpDeclarationAnalyzer
         var diagnostics = new List<string>();
         var symbols = new Dictionary<string, DiscoveredCodeSymbol>(StringComparer.Ordinal);
         var symbolHandles = new Dictionary<string, ISymbol>(StringComparer.Ordinal);
-        var projectAnalyses = new List<ProjectAnalysis>();
+        var projectAnalyses = new List<RoslynProjectAnalysis>();
         var projectKeysByAssembly = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var csharpProjects = snapshot.Projects
             .Where(project => project.Language == "csharp"
@@ -102,7 +102,7 @@ public sealed class CSharpDeclarationAnalyzer
                 }
 
                 analyzedProjects++;
-                projectAnalyses.Add(new ProjectAnalysis(discoveredProject, compilation));
+                projectAnalyses.Add(new RoslynProjectAnalysis(discoveredProject, compilation));
                 if (!string.IsNullOrWhiteSpace(compilation.AssemblyName))
                 {
                     projectKeysByAssembly[compilation.AssemblyName] = discoveredProject.StableKey;
@@ -132,13 +132,22 @@ public sealed class CSharpDeclarationAnalyzer
             }
         }
 
-        var relations = await CollectRelationsAsync(
+        var relations = (await CollectRelationsAsync(
             snapshot.StableKey,
             projectAnalyses,
             filesByPath,
             symbols,
             symbolHandles,
             projectKeysByAssembly,
+            cancellationToken)).ToList();
+        await CSharpFrameworkAnalyzer.CollectAsync(
+            snapshot.StableKey,
+            projectAnalyses,
+            filesByPath,
+            symbols,
+            symbolHandles,
+            projectKeysByAssembly,
+            relations,
             cancellationToken);
         return Complete(symbols, relations, diagnostics, analyzedProjects, csharpProjects.Length, stopwatch);
     }
@@ -218,7 +227,7 @@ public sealed class CSharpDeclarationAnalyzer
 
     private static async Task<IReadOnlyList<DiscoveredCodeRelation>> CollectRelationsAsync(
         string workspaceKey,
-        IReadOnlyList<ProjectAnalysis> projectAnalyses,
+        IReadOnlyList<RoslynProjectAnalysis> projectAnalyses,
         IReadOnlyDictionary<string, DiscoveredFile> filesByPath,
         IReadOnlyDictionary<string, DiscoveredCodeSymbol> symbols,
         IReadOnlyDictionary<string, ISymbol> symbolHandles,
@@ -462,7 +471,7 @@ public sealed class CSharpDeclarationAnalyzer
         }
     }
 
-    private static string ResolveSourceKey(
+    internal static string ResolveSourceKey(
         string workspaceKey,
         string projectKey,
         ISymbol? symbol,
@@ -484,7 +493,7 @@ public sealed class CSharpDeclarationAnalyzer
         return projectKey;
     }
 
-    private static string? ResolveKnownKey(
+    internal static string? ResolveKnownKey(
         string workspaceKey,
         string sourceProjectKey,
         ISymbol symbol,
@@ -601,7 +610,7 @@ public sealed class CSharpDeclarationAnalyzer
         _ => null
     };
 
-    private static ISymbol Canonicalize(ISymbol symbol) => symbol switch
+    internal static ISymbol Canonicalize(ISymbol symbol) => symbol switch
     {
         IMethodSymbol method => (method.ReducedFrom ?? method).OriginalDefinition.PartialDefinitionPart
             ?? (method.ReducedFrom ?? method).OriginalDefinition,
@@ -644,7 +653,7 @@ public sealed class CSharpDeclarationAnalyzer
             file.IsGenerated);
     }
 
-    private static string CreateStableKey(string workspaceKey, string projectKey, ISymbol symbol)
+    internal static string CreateStableKey(string workspaceKey, string projectKey, ISymbol symbol)
     {
         var value = $"{workspaceKey}\n{projectKey}\n{GetSymbolIdentity(symbol)}";
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant();
@@ -810,5 +819,6 @@ public sealed class CSharpDeclarationAnalyzer
         }
     }
 
-    private sealed record ProjectAnalysis(DiscoveredProject Project, Compilation Compilation);
 }
+
+internal sealed record RoslynProjectAnalysis(DiscoveredProject Project, Compilation Compilation);

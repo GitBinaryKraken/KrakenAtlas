@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Contracts/Contracts.csproj" />
+  <Project Path="Connector/Connector.csproj" />
+  <Project Path="DataAccess/DataAccess.csproj" />
+  <Project Path="Logic/Logic.csproj" />
+  <Project Path="Api/Api.csproj" />
+  <Project Path="WebUI/WebUI.csproj" />
+</Solution>

@@ -34,7 +34,7 @@ public sealed partial class AtlasRepository
                 symbol.Kind,
                 symbol.Name,
                 symbol.QualifiedName,
-                "csharp",
+                symbol.Language,
                 projectEntityId,
                 symbol.Signature,
                 cancellationToken,
@@ -62,7 +62,7 @@ public sealed partial class AtlasRepository
                 symbol.Kind,
                 symbol.Name,
                 symbol.QualifiedName,
-                "csharp",
+                symbol.Language,
                 containingEntityId,
                 symbol.Signature,
                 cancellationToken,
@@ -143,7 +143,9 @@ public sealed partial class AtlasRepository
                 startColumn: relation.Evidence.StartColumn,
                 endLine: relation.Evidence.EndLine,
                 endColumn: relation.Evidence.EndColumn,
-                dispatchKind: relation.DispatchKind);
+                dispatchKind: relation.DispatchKind,
+                relationDomain: relation.Domain,
+                logicalScope: relation.LogicalScope);
         }
     }
 

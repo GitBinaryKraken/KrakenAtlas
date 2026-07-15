@@ -148,9 +148,11 @@ try {
     throw new Error(`Expected VSIX does not exist. Run npm run check:vsix first: ${artifact}`);
   }
 
-  fs.cpSync(path.join(root, "test-fixtures", "workspace-discovery"), workspaceRoot, {
-    recursive: true
+  fs.cpSync(path.join(root, "test-fixtures", "dotnet-feature-flow"), workspaceRoot, {
+    recursive: true,
+    filter: source => !source.split(path.sep).some(part => part === "bin" || part === "obj")
   });
+  run("dotnet", ["restore", path.join(workspaceRoot, "FeatureFlow.slnx")]);
 
   code(["--install-extension", artifact, "--force"]);
   installed = true;
@@ -188,56 +190,106 @@ try {
   }
 
   const firstBuild = cartographer(assembly, "build");
-  if (firstBuild.generation !== 1 || firstBuild.counts?.projects !== 2 || firstBuild.counts?.files !== 7) {
+  if (firstBuild.generation !== 1 || firstBuild.counts?.projects !== 6 || firstBuild.counts?.files !== 16) {
     throw new Error(`Unexpected first Atlas build result: ${JSON.stringify(firstBuild)}`);
   }
 
   const reopened = cartographer(assembly, "summary");
-  if (reopened.generation !== 1 || reopened.counts?.projects !== 2 || reopened.counts?.files !== 7) {
+  if (reopened.generation !== 1 || reopened.counts?.projects !== 6 || reopened.counts?.files !== 16) {
     throw new Error(`Atlas did not reopen correctly: ${JSON.stringify(reopened)}`);
   }
 
   const orientation = cartographer(assembly, "orientation");
   if (
     orientation.atlasState !== "current" ||
-    orientation.projects?.length !== 2 ||
-    orientation.commands?.length !== 7 ||
+    orientation.projects?.length !== 6 ||
+    orientation.commands?.length < 6 ||
     !orientation.coverage?.includedSources?.includes("dotnet_projects")
   ) {
     throw new Error(`Packaged workspace orientation was incomplete: ${JSON.stringify(orientation)}`);
   }
 
-  const symbols = cartographer(assembly, "symbols", "--query", "Greeter", "--limit", "10");
-  const greeter = symbols.matches?.find(match => match.kind === "class" && match.name === "Greeter");
-  if (
-    symbols.atlasState !== "current" ||
-    !greeter ||
-    greeter.qualifiedName !== "Sample.Lib.Greeter" ||
-    greeter.firstDefinition?.relativePath !== "src/Lib/Greeter.cs"
-  ) {
-    throw new Error(`Packaged C# symbol search was incomplete: ${JSON.stringify(symbols)}`);
-  }
-
-  const methods = cartographer(assembly, "symbols", "--query", "GetMessage", "--limit", "10");
-  const getMessage = methods.matches?.find(match => match.qualifiedName === "Sample.Lib.Greeter.GetMessage()");
-  if (!getMessage) {
-    throw new Error(`Packaged C# method search was incomplete: ${JSON.stringify(methods)}`);
-  }
-  const usages = cartographer(
+  const searchEntity = (query, kind, qualifiedName) => {
+    const result = cartographer(
+      assembly,
+      "search",
+      "--query",
+      query,
+      "--kind",
+      kind,
+      "--limit",
+      "50"
+    );
+    const entity = result.matches?.find(match => match.qualifiedName === qualifiedName);
+    if (!entity) {
+      throw new Error(`Packaged entity search did not find ${qualifiedName}: ${JSON.stringify(result)}`);
+    }
+    return entity;
+  };
+  const source = searchEntity(
+    "PersonaController.Index",
+    "method",
+    "FeatureFlow.WebUI.PersonaController.Index(string, System.Threading.CancellationToken)"
+  );
+  const waypoint = searchEntity(
+    "IPersonaConnector.GetPublicPersonaAsync",
+    "method",
+    "FeatureFlow.Connector.IPersonaConnector.GetPublicPersonaAsync(string, System.Threading.CancellationToken)"
+  );
+  const endpoint = searchEntity("GET /Persona", "http_endpoint", "GET /Persona");
+  const target = searchEntity("public.personas", "database_object", "public.personas");
+  const relations = cartographer(
     assembly,
-    "usages",
+    "relations",
     "--stable-key",
-    getMessage.stableKey,
-    "--kind",
-    "calls",
+    endpoint.stableKey,
+    "--direction",
+    "both",
     "--limit",
-    "10"
+    "20"
   );
   if (
-    usages.atlasState !== "current" ||
-    !usages.usages?.some(usage => usage.relationKind === "calls")
+    relations.atlasState !== "current" ||
+    !relations.relations?.some(relation => relation.kind === "handled_by") ||
+    !relations.relations?.some(relation => relation.kind === "matches_endpoint")
   ) {
-    throw new Error(`Packaged C# usage query was incomplete: ${JSON.stringify(usages)}`);
+    throw new Error(`Packaged relation query was incomplete: ${JSON.stringify(relations)}`);
+  }
+
+  const route = cartographer(
+    assembly,
+    "route",
+    "--source-key",
+    source.stableKey,
+    "--via-key",
+    waypoint.stableKey,
+    "--target-key",
+    target.stableKey,
+    "--max-depth",
+    "16",
+    "--max-visited",
+    "5000"
+  );
+  const expectedKinds = [
+    "calls",
+    "dispatches_to",
+    "sends_http",
+    "matches_endpoint",
+    "handled_by",
+    "calls",
+    "dispatches_to",
+    "calls",
+    "dispatches_to",
+    "executes_sql",
+    "reads"
+  ];
+  if (
+    route.atlasState !== "current" ||
+    route.found !== true ||
+    route.graphTruncated !== false ||
+    JSON.stringify(route.steps?.map(step => step.relation.kind)) !== JSON.stringify(expectedKinds)
+  ) {
+    throw new Error(`Packaged Persona Route was incomplete: ${JSON.stringify(route)}`);
   }
 
   const secondBuild = cartographer(assembly, "build");
@@ -254,7 +306,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, queried orientation, C# symbols, and exact usages, built and reopened two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route, built and reopened two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {

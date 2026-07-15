@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-15
+
+- Add cross-domain entity search for code symbols, service registrations, HTTP
+  endpoints and requests, database operations, and database objects.
+- Extract attribute-routed ASP.NET Core controller endpoints with effective
+  method/route templates, authorization classification, handlers, and evidence.
+- Extract common scoped, transient, and singleton DI registrations, including
+  service-to-implementation and exact interface-member dispatch relations.
+- Extract statically recoverable outbound HTTP request templates and match them
+  to compatible controller endpoints.
+- Extract Dapper SQL operations and normalized PostgreSQL objects with operation,
+  materialization, ownership, and source-evidence relations.
+- Add bounded incoming/outgoing/bidirectional relation queries and forward Route
+  tracing across code, framework, and database domains. Routes exclude
+  structural containment by default and support ordered stable-key waypoints.
+- Expose entity search, relation queries, and Routes through CLI, JSON-RPC, and
+  VS Code commands with compact text renderers.
+- Add a deterministic six-project feature-flow fixture that proves an 11-hop
+  WebUI-to-PostgreSQL Persona Route through DI, HTTP, API, logic, and Dapper.
+- Validate the same 11-hop public Persona Route against the local Kelp field
+  benchmark at 6,594 entities and 16,190 relations.
+
 ## 0.4.0 - 2026-07-15
 
 - Add the first Roslyn semantic Atlas with compiler-bound C# declaration

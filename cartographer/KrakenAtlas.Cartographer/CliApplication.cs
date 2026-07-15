@@ -36,8 +36,32 @@ internal static class CliApplication
                 "symbols" => await session.SearchSymbolsAsync(
                     new SearchSymbolsParams(options.Query!, options.Limit),
                     cancellationToken),
+                "search" => await session.SearchEntitiesAsync(
+                    new SearchEntitiesParams(options.Query!, options.Kinds, options.Limit),
+                    cancellationToken),
                 "usages" => await session.FindUsagesAsync(
                     new FindUsagesParams(options.StableKey, options.Id, options.Kinds, options.Limit),
+                    cancellationToken),
+                "relations" => await session.GetRelationsAsync(
+                    new GetRelationsParams(
+                        options.StableKey,
+                        options.Id,
+                        options.Direction,
+                        options.Domains,
+                        options.Kinds,
+                        options.Limit),
+                    cancellationToken),
+                "route" => await session.TraceRouteAsync(
+                    new TraceRouteParams(
+                        options.SourceStableKey,
+                        options.SourceId,
+                        options.TargetStableKey,
+                        options.TargetId,
+                        options.ViaStableKeys,
+                        options.Domains,
+                        options.Kinds,
+                        options.MaxDepth,
+                        options.MaxVisited),
                     cancellationToken),
                 _ => throw new InvalidOperationException($"Unknown command: {options.Command}")
             };
@@ -55,9 +79,12 @@ internal static class CliApplication
 
     private static CliOptions Parse(IReadOnlyList<string> arguments)
     {
-        if (arguments.Count == 0 || arguments[0] is not ("build" or "summary" or "orientation" or "entity" or "symbols" or "usages"))
+        if (arguments.Count == 0 || arguments[0] is not (
+            "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
+            or "usages" or "relations" or "route"))
         {
-            throw new ArgumentException("A build, summary, orientation, entity, symbols, or usages command is required.");
+            throw new ArgumentException(
+                "A build, summary, orientation, entity, symbols, search, usages, relations, or route command is required.");
         }
 
         var roots = new List<string>();
@@ -67,6 +94,15 @@ internal static class CliApplication
         string? query = null;
         int? limit = null;
         var kinds = new List<string>();
+        var domains = new List<string>();
+        string? direction = null;
+        string? sourceStableKey = null;
+        long? sourceId = null;
+        string? targetStableKey = null;
+        long? targetId = null;
+        var viaStableKeys = new List<string>();
+        int? maxDepth = null;
+        int? maxVisited = null;
         for (var index = 1; index < arguments.Count; index++)
         {
             var option = arguments[index];
@@ -98,6 +134,33 @@ internal static class CliApplication
                 case "--kind":
                     kinds.Add(value);
                     break;
+                case "--domain":
+                    domains.Add(value);
+                    break;
+                case "--direction":
+                    direction = value;
+                    break;
+                case "--source-key":
+                    sourceStableKey = value;
+                    break;
+                case "--source-id" when long.TryParse(value, out var parsedSourceId):
+                    sourceId = parsedSourceId;
+                    break;
+                case "--target-key":
+                    targetStableKey = value;
+                    break;
+                case "--target-id" when long.TryParse(value, out var parsedTargetId):
+                    targetId = parsedTargetId;
+                    break;
+                case "--via-key":
+                    viaStableKeys.Add(value);
+                    break;
+                case "--max-depth" when int.TryParse(value, out var parsedMaxDepth):
+                    maxDepth = parsedMaxDepth;
+                    break;
+                case "--max-visited" when int.TryParse(value, out var parsedMaxVisited):
+                    maxVisited = parsedMaxVisited;
+                    break;
                 default:
                     throw new ArgumentException($"Unknown option or invalid value: {option} {value}");
             }
@@ -116,9 +179,9 @@ internal static class CliApplication
             throw new ArgumentException("entity requires --stable-key or --id.");
         }
 
-        if (arguments[0] == "symbols" && string.IsNullOrWhiteSpace(query))
+        if (arguments[0] is "symbols" or "search" && string.IsNullOrWhiteSpace(query))
         {
-            throw new ArgumentException("symbols requires --query.");
+            throw new ArgumentException($"{arguments[0]} requires --query.");
         }
 
         if (arguments[0] == "usages" && string.IsNullOrWhiteSpace(stableKey) && id is null)
@@ -126,14 +189,32 @@ internal static class CliApplication
             throw new ArgumentException("usages requires --stable-key or --id.");
         }
 
-        return new CliOptions(arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit, kinds);
+        if (arguments[0] == "relations" && string.IsNullOrWhiteSpace(stableKey) && id is null)
+        {
+            throw new ArgumentException("relations requires --stable-key or --id.");
+        }
+        if (arguments[0] == "route"
+            && (string.IsNullOrWhiteSpace(sourceStableKey) && sourceId is null
+                || string.IsNullOrWhiteSpace(targetStableKey) && targetId is null))
+        {
+            throw new ArgumentException(
+                "route requires --source-key or --source-id and --target-key or --target-id.");
+        }
+
+        return new CliOptions(
+            arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit,
+            kinds, domains, direction, sourceStableKey, sourceId, targetStableKey, targetId,
+            viaStableKeys, maxDepth, maxVisited);
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|usages> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>] [--query <text>] "
-        + "[--kind <relation-kind>] [--limit <1-100>]";
+        + "[--direction <incoming|outgoing|both>] [--domain <domain>] [--kind <relation-kind>] "
+        + "[--source-key <key> | --source-id <number>] [--target-key <key> | --target-id <number>] "
+        + "[--via-key <stable-key>] "
+        + "[--max-depth <1-16>] [--max-visited <10-20000>] [--limit <number>]";
 
     private sealed record CliOptions(
         string Command,
@@ -143,5 +224,14 @@ internal static class CliApplication
         long? Id,
         string? Query,
         int? Limit,
-        IReadOnlyList<string> Kinds);
+        IReadOnlyList<string> Kinds,
+        IReadOnlyList<string> Domains,
+        string? Direction,
+        string? SourceStableKey,
+        long? SourceId,
+        string? TargetStableKey,
+        long? TargetId,
+        IReadOnlyList<string> ViaStableKeys,
+        int? MaxDepth,
+        int? MaxVisited);
 }

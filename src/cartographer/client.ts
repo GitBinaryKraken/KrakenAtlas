@@ -3,9 +3,12 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   AtlasSummary,
+  AtlasEntitySearchResult,
   BuildAtlasResult,
   CodeUsageResult,
   EntityDetail,
+  RelationQueryResult,
+  RouteQueryResult,
   SymbolSearchResult,
   WorkspaceOrientation
 } from "../atlas/contracts";
@@ -115,9 +118,57 @@ export class CartographerClient {
     return this.request<SymbolSearchResult>("search_symbols", { query, limit });
   }
 
+  async searchEntities(query: string, kinds?: string[], limit = 25): Promise<AtlasEntitySearchResult> {
+    await this.ensureStarted();
+    return this.request<AtlasEntitySearchResult>("search_entities", { query, kinds, limit });
+  }
+
   async findUsages(stableKey?: string, id?: number, kinds?: string[], limit = 50): Promise<CodeUsageResult> {
     await this.ensureStarted();
     return this.request<CodeUsageResult>("find_usages", { stableKey, id, kinds, limit });
+  }
+
+  async getRelations(
+    stableKey?: string,
+    id?: number,
+    direction: "incoming" | "outgoing" | "both" = "both",
+    domains?: string[],
+    kinds?: string[],
+    limit = 50
+  ): Promise<RelationQueryResult> {
+    await this.ensureStarted();
+    return this.request<RelationQueryResult>(
+      "get_relations",
+      { stableKey, id, direction, domains, kinds, limit }
+    );
+  }
+
+  async traceRoute(
+    sourceStableKey?: string,
+    sourceId?: number,
+    targetStableKey?: string,
+    targetId?: number,
+    viaStableKeys?: string[],
+    domains?: string[],
+    kinds?: string[],
+    maxDepth = 12,
+    maxVisited = 5000
+  ): Promise<RouteQueryResult> {
+    await this.ensureStarted();
+    return this.request<RouteQueryResult>(
+      "trace_route",
+      {
+        sourceStableKey,
+        sourceId,
+        targetStableKey,
+        targetId,
+        viaStableKeys,
+        domains,
+        kinds,
+        maxDepth,
+        maxVisited
+      }
+    );
   }
 
   async restart(): Promise<void> {

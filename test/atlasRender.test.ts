@@ -4,6 +4,9 @@ import {
   renderAtlasSummary,
   renderCodeUsages,
   renderEntityDetail,
+  renderEntitySearch,
+  renderRelations,
+  renderRoute,
   renderSymbolSearch,
   renderWorkspaceOrientation
 } from "../src/atlas/render";
@@ -144,6 +147,89 @@ test("renders compiler-derived C# usages with relation and dispatch", () => {
   assert.match(output, /calls \| interface/);
   assert.match(output, /PersonaController\.cs:31:24/);
   assert.match(output, /csharp_symbol:controller/);
+});
+
+test("renders cross-domain entity, relation, and route queries", () => {
+  const endpoint = {
+    id: 20,
+    stableKey: "http_endpoint:persona",
+    kind: "http_endpoint",
+    name: "GET /Persona",
+    qualifiedName: "GET /Persona",
+    signature: "GET /Persona | anonymous"
+  };
+  const handler = {
+    id: 21,
+    stableKey: "csharp_symbol:handler",
+    kind: "method",
+    name: "Get",
+    qualifiedName: "Api.PersonaController.Get(string)",
+    signature: "public Task<IActionResult> Get(string url)"
+  };
+  const evidence = {
+    fileStableKey: "file:controller",
+    relativePath: "Api/PersonaController.cs",
+    locationKind: "evidence",
+    startLine: 14,
+    startColumn: 5,
+    endLine: 14,
+    endColumn: 8,
+    isGenerated: false
+  };
+  const relation = {
+    relationId: 31,
+    source: endpoint,
+    target: handler,
+    domain: "framework",
+    kind: "handled_by",
+    dispatchKind: "direct",
+    logicalScope: "anonymous",
+    projectName: "Api",
+    projectRelativePath: "Api/Api.csproj",
+    evidence
+  };
+
+  const search = renderEntitySearch({
+    atlasState: "current",
+    generation: 7,
+    query: "Persona",
+    truncated: false,
+    matches: [{
+      ...endpoint,
+      language: "http",
+      projectName: "Api",
+      projectRelativePath: "Api/Api.csproj",
+      firstLocation: evidence
+    }]
+  });
+  assert.match(search, /http_endpoint \| GET \/Persona/);
+  assert.match(search, /http_endpoint:persona/);
+
+  const relations = renderRelations({
+    atlasState: "current",
+    generation: 7,
+    focus: endpoint,
+    direction: "outgoing",
+    truncated: false,
+    relations: [relation]
+  });
+  assert.match(relations, /framework\/handled_by\/direct/);
+  assert.match(relations, /PersonaController\.cs:14:5/);
+
+  const route = renderRoute({
+    atlasState: "current",
+    generation: 7,
+    source: endpoint,
+    target: handler,
+    waypoints: [],
+    found: true,
+    graphTruncated: false,
+    maxDepth: 12,
+    visitedEntities: 2,
+    steps: [{ ordinal: 1, relation }]
+  });
+  assert.match(route, /Found: true/);
+  assert.match(route, /1\. framework\/handled_by\/direct/);
 });
 
 test("renders workspace orientation with facets, commands, and rule evidence", () => {

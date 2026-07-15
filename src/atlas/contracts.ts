@@ -90,6 +90,27 @@ export interface SymbolSearchResult {
   matches: SymbolSearchMatch[];
 }
 
+export interface AtlasEntitySearchMatch {
+  id: number;
+  stableKey: string;
+  kind: string;
+  name: string;
+  qualifiedName: string;
+  language: string;
+  signature?: string;
+  projectName?: string;
+  projectRelativePath?: string;
+  firstLocation?: EntityLocationDetail;
+}
+
+export interface AtlasEntitySearchResult {
+  atlasState: "not_created" | "current";
+  generation?: number;
+  query: string;
+  truncated: boolean;
+  matches: AtlasEntitySearchMatch[];
+}
+
 export interface CodeUsageTarget {
   id: number;
   stableKey: string;
@@ -119,6 +140,55 @@ export interface CodeUsageResult {
   target?: CodeUsageTarget;
   truncated: boolean;
   usages: CodeUsageMatch[];
+}
+
+export interface RelationEntity {
+  id: number;
+  stableKey: string;
+  kind: string;
+  name: string;
+  qualifiedName: string;
+  signature?: string;
+}
+
+export interface AtlasRelationMatch {
+  relationId: number;
+  source: RelationEntity;
+  target: RelationEntity;
+  domain: string;
+  kind: string;
+  dispatchKind?: string;
+  logicalScope?: string;
+  projectName?: string;
+  projectRelativePath?: string;
+  evidence: EntityLocationDetail;
+}
+
+export interface RelationQueryResult {
+  atlasState: "not_created" | "entity_not_found" | "current";
+  generation?: number;
+  focus?: RelationEntity;
+  direction: "incoming" | "outgoing" | "both";
+  truncated: boolean;
+  relations: AtlasRelationMatch[];
+}
+
+export interface RouteStep {
+  ordinal: number;
+  relation: AtlasRelationMatch;
+}
+
+export interface RouteQueryResult {
+  atlasState: "not_created" | "entity_not_found" | "current";
+  generation?: number;
+  source?: RelationEntity;
+  target?: RelationEntity;
+  waypoints: RelationEntity[];
+  found: boolean;
+  graphTruncated: boolean;
+  maxDepth: number;
+  visitedEntities: number;
+  steps: RouteStep[];
 }
 
 export interface OrientationEvidence {

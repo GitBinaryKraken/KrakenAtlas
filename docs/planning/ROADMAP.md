@@ -67,8 +67,9 @@ exact definition locations, overload signatures, partial declarations,
 generated/manual evidence, analyzer diagnostics, exact internal calls,
 construction, member reads/writes, type use, inheritance, implementations,
 overrides, durable persistence, bounded symbol search, and code-only usage queries
-are implemented. General neighbors, Routes, impact, Context Packs, unresolved
-targets, and agent-facing tools remain.
+are implemented. Bounded cross-domain entity search, directional relation
+queries, and forward Routes with ordered waypoints are also implemented. Impact,
+Context Packs, unresolved targets, and agent-facing tools remain.
 
 Deliverables:
 
@@ -107,6 +108,12 @@ Exit gate:
   idempotently, and queried back without modifying canonical analyzer facts.
 
 ## Phase 3: ASP.NET Core and Database Atlas
+
+Status: in progress. The first Persona Route slice covers attribute-routed
+controller actions, common DI registrations and lifetimes, statically recoverable
+HTTP request templates, Dapper operations, PostgreSQL objects, and complete
+endpoint-to-database traversal. Minimal APIs, middleware, EF Core, migration,
+broader SQL-provider, and runtime-resolution work remain.
 
 Deliverables:
 

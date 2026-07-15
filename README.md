@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.4.0`
+Version `0.5.0`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.4.0` C# Semantic Alpha builds on the Walking Cartographer foundation. It
+The `0.5.0` Persona Route Alpha builds on the Walking Cartographer foundation. It
 contains:
 
 - A thin VS Code workspace extension and matching command-line surface.
@@ -38,13 +38,26 @@ contains:
   override relations with dispatch classification and source evidence.
 - Atlas summary, exact entity, bounded C# symbol search, and code-only usage
   queries through VS Code, JSON-RPC, and CLI.
+- Cross-domain entity search for symbols, service registrations, HTTP endpoints,
+  outbound requests, database operations, and database objects.
+- Attribute-routed ASP.NET Core controller endpoints with HTTP method, effective
+  route template, authorization classification, handler, and source evidence.
+- Common .NET dependency-injection registrations with lifetime, service,
+  implementation, and exact interface-member dispatch edges.
+- Statically recoverable `HttpClient` requests matched to compatible controller
+  endpoints, including request and response-contract relations.
+- Dapper SQL operations mapped to normalized PostgreSQL objects without storing
+  SQL bodies as query results.
+- Bounded directional relation queries and forward Routes across code,
+  framework, and database domains, with ordered waypoints and evidence on every
+  hop.
 - Cross-process tests proving persistence, stable identity, and rollback to the
   previous generation after failed discovery.
 
-The first C# semantic relationship slice covers compiler-resolved symbols inside
-the indexed workspace. Framework-aware ASP.NET routes, dependency-injection
-lifetimes, database objects, TypeScript/React semantics, agent tools, Context
-Packs, dynamic dispatch expansion, and external package symbols remain planned.
+The Persona Route Alpha covers a deliberately bounded static subset. Minimal
+APIs, middleware ordering, EF Core models and migrations, dynamic URLs, runtime
+dispatch, TypeScript/React semantics, agent tools, Context Packs, and external
+package symbols remain planned.
 
 ## Commands
 
@@ -54,7 +67,10 @@ Packs, dynamic dispatch expansion, and external package symbols remain planned.
 - `Kraken Atlas: Show Workspace Orientation`
 - `Kraken Atlas: Lookup Entity`
 - `Kraken Atlas: Search C# Symbols`
+- `Kraken Atlas: Search Entities`
 - `Kraken Atlas: Find C# Usages`
+- `Kraken Atlas: Show Relations`
+- `Kraken Atlas: Trace Route`
 - `Kraken Atlas: Restart Cartographer`
 - `Kraken Atlas: Export Diagnostics`
 - `Kraken Atlas: Open Architecture Plan`
@@ -87,8 +103,14 @@ dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Car
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll orientation --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll entity --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key project:<hash>
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll symbols --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --query PersonaService --limit 25
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll search --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --query "GET /Persona" --kind http_endpoint --limit 25
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll usages --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --kind calls --limit 50
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll relations --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key http_endpoint:<hash> --direction both --limit 50
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll route --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --source-key csharp_symbol:<hash> --via-key csharp_symbol:<hash> --target-key database_object:<hash> --max-depth 16
 ```
+
+AI agents should follow [the bounded query guide](docs/planning/AGENT_QUERY_GUIDE.md)
+instead of opening or reverse-engineering the SQLite schema directly.
 
 ## Planning
 

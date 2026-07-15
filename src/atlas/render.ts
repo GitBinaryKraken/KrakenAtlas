@@ -1,7 +1,10 @@
 import {
+  AtlasEntitySearchResult,
   AtlasSummary,
   CodeUsageResult,
   EntityDetail,
+  RelationQueryResult,
+  RouteQueryResult,
   SymbolSearchResult,
   WorkspaceOrientation
 } from "./contracts";
@@ -86,6 +89,31 @@ export function renderSymbolSearch(result: SymbolSearchResult): string {
   return lines.join("\n");
 }
 
+export function renderEntitySearch(result: AtlasEntitySearchResult): string {
+  if (result.atlasState === "not_created") {
+    return "Entity search: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before searching entities.";
+  }
+
+  const suffix = result.truncated ? "+" : "";
+  const lines = [
+    `Entity search: ${result.query}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Matches: ${result.matches.length}${suffix}`
+  ];
+  for (const match of result.matches) {
+    const project = match.projectRelativePath ? ` | ${match.projectRelativePath}` : "";
+    const location = match.firstLocation
+      ? ` | ${match.firstLocation.relativePath}:${match.firstLocation.startLine}:${match.firstLocation.startColumn}`
+      : "";
+    lines.push(`- ${match.kind} | ${match.qualifiedName}${project}${location}`);
+    if (match.signature) {
+      lines.push(`  ${match.signature}`);
+    }
+    lines.push(`  ${match.stableKey}`);
+  }
+  return lines.join("\n");
+}
+
 export function renderCodeUsages(result: CodeUsageResult): string {
   if (result.atlasState === "not_created") {
     return "C# usages: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before finding usages.";
@@ -110,6 +138,64 @@ export function renderCodeUsages(result: CodeUsageResult): string {
       + `| ${usage.evidence.relativePath}:${usage.evidence.startLine}:${usage.evidence.startColumn}${generated}`
     );
     lines.push(`  ${usage.sourceStableKey}`);
+  }
+  return lines.join("\n");
+}
+
+export function renderRelations(result: RelationQueryResult): string {
+  if (result.atlasState === "not_created") {
+    return "Relations: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before querying relations.";
+  }
+  if (result.atlasState === "entity_not_found" || !result.focus) {
+    return `Relations: entity_not_found\nGeneration: ${result.generation ?? "unknown"}`;
+  }
+
+  const suffix = result.truncated ? "+" : "";
+  const lines = [
+    `Relations (${result.direction}): ${result.focus.qualifiedName}`,
+    `Stable key: ${result.focus.stableKey}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Matches: ${result.relations.length}${suffix}`
+  ];
+  for (const relation of result.relations) {
+    const dispatch = relation.dispatchKind ? `/${relation.dispatchKind}` : "";
+    const scope = relation.logicalScope ? ` | ${relation.logicalScope}` : "";
+    lines.push(
+      `- ${relation.domain}/${relation.kind}${dispatch} | ${relation.source.qualifiedName} -> ${relation.target.qualifiedName}${scope}`
+    );
+    lines.push(
+      `  ${relation.evidence.relativePath}:${relation.evidence.startLine}:${relation.evidence.startColumn}`
+    );
+  }
+  return lines.join("\n");
+}
+
+export function renderRoute(result: RouteQueryResult): string {
+  if (result.atlasState === "not_created") {
+    return "Route: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before tracing routes.";
+  }
+  if (result.atlasState === "entity_not_found" || !result.source || !result.target) {
+    return `Route: entity_not_found\nGeneration: ${result.generation ?? "unknown"}`;
+  }
+
+  const lines = [
+    `Route: ${result.source.qualifiedName} -> ${result.target.qualifiedName}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Found: ${result.found}`,
+    `Steps: ${result.steps.length} | Visited entities: ${result.visitedEntities} | Max depth: ${result.maxDepth}`,
+    `Graph truncated: ${result.graphTruncated}`
+  ];
+  if (result.waypoints.length > 0) {
+    lines.push(`Via: ${result.waypoints.map(waypoint => waypoint.qualifiedName).join(" -> ")}`);
+  }
+  for (const step of result.steps) {
+    const relation = step.relation;
+    const dispatch = relation.dispatchKind ? `/${relation.dispatchKind}` : "";
+    const scope = relation.logicalScope ? ` | ${relation.logicalScope}` : "";
+    lines.push(
+      `${step.ordinal}. ${relation.domain}/${relation.kind}${dispatch} | ${relation.source.qualifiedName} -> ${relation.target.qualifiedName}${scope}`
+    );
+    lines.push(`   ${relation.evidence.relativePath}:${relation.evidence.startLine}:${relation.evidence.startColumn}`);
   }
   return lines.join("\n");
 }

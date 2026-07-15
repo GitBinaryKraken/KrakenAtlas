@@ -84,7 +84,10 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             "workspace.orientation",
                             "entity.get",
                             "symbol.search",
-                            "symbol.usages"
+                            "entity.search",
+                            "symbol.usages",
+                            "relation.query",
+                            "route.trace"
                         ])),
                     false);
             }
@@ -135,11 +138,32 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             DeserializeParams<SearchSymbolsParams>(request.Params),
                             cancellationToken)),
                     false),
+                "search_entities" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.SearchEntitiesAsync(
+                            DeserializeParams<SearchEntitiesParams>(request.Params),
+                            cancellationToken)),
+                    false),
                 "find_usages" => (
                     JsonRpcResponse.Success(
                         request.Id,
                         await session.FindUsagesAsync(
                             DeserializeParams<FindUsagesParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "get_relations" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.GetRelationsAsync(
+                            DeserializeParams<GetRelationsParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "trace_route" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.TraceRouteAsync(
+                            DeserializeParams<TraceRouteParams>(request.Params),
                             cancellationToken)),
                     false),
                 _ => (

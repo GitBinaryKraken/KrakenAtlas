@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Builds a local SQLite Atlas of workspace structure and compiler-bound C# symbols and relationships for compact AI-agent queries.",
-  "version": "0.4.0",
+  "description": "Builds a local SQLite Atlas of .NET code, DI, HTTP routes, and database relationships for compact AI-agent queries.",
+  "version": "0.5.0",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -51,7 +51,10 @@
     "onCommand:krakenAtlas.showWorkspaceOrientation",
     "onCommand:krakenAtlas.lookupEntity",
     "onCommand:krakenAtlas.searchSymbols",
+    "onCommand:krakenAtlas.searchEntities",
     "onCommand:krakenAtlas.findUsages",
+    "onCommand:krakenAtlas.showRelations",
+    "onCommand:krakenAtlas.traceRoute",
     "onCommand:krakenAtlas.restartCartographer",
     "onCommand:krakenAtlas.exportDiagnostics",
     "onCommand:krakenAtlas.openPlanning"
@@ -102,9 +105,24 @@
         "icon": "$(search)"
       },
       {
+        "command": "krakenAtlas.searchEntities",
+        "title": "Kraken Atlas: Search Entities",
+        "icon": "$(search-fuzzy)"
+      },
+      {
         "command": "krakenAtlas.findUsages",
         "title": "Kraken Atlas: Find C# Usages",
         "icon": "$(references)"
+      },
+      {
+        "command": "krakenAtlas.showRelations",
+        "title": "Kraken Atlas: Show Relations",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "krakenAtlas.traceRoute",
+        "title": "Kraken Atlas: Trace Route",
+        "icon": "$(git-compare)"
       },
       {
         "command": "krakenAtlas.restartCartographer",

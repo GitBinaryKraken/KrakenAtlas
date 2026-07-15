@@ -26,7 +26,10 @@ test("preserves the published identity and exposes the bounded semantic command 
     "krakenAtlas.showWorkspaceOrientation",
     "krakenAtlas.lookupEntity",
     "krakenAtlas.searchSymbols",
+    "krakenAtlas.searchEntities",
     "krakenAtlas.findUsages",
+    "krakenAtlas.showRelations",
+    "krakenAtlas.traceRoute",
     "krakenAtlas.restartCartographer",
     "krakenAtlas.exportDiagnostics",
     "krakenAtlas.openPlanning"

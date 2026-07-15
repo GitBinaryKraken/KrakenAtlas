@@ -1,13 +1,15 @@
 # Getting Started
 
-Kraken Atlas `0.4.0` is the C# Semantic Alpha of the complete rewrite. It
+Kraken Atlas `0.5.0` is the Persona Route Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
 structural map from a versioned SQLite Atlas. The first semantic slice also
 indexes compiler-bound C# declarations, signatures, exact source locations,
 internal calls, construction, member access, type use, inheritance,
-implementations, and overrides.
+implementations, and overrides. It also maps common DI registrations,
+attribute-routed controller endpoints, outbound HTTP requests, Dapper database
+operations, and PostgreSQL objects into bounded cross-domain Routes.
 
 ## Requirements
 
@@ -48,9 +50,16 @@ npm run check:vsix
    the exact qualified names, signatures, projects, and definition locations.
 8. Copy a returned C# symbol stable key and run `Kraken Atlas: Find C# Usages`
    to inspect exact incoming code relations and evidence spans.
-9. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
-10. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
-11. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+9. Run `Kraken Atlas: Search Entities` for an endpoint route, service
+   registration, or database table and keep the returned stable keys.
+10. Run `Kraken Atlas: Show Relations` for one result and choose an incoming,
+    outgoing, or bidirectional view.
+11. Run `Kraken Atlas: Trace Route` with source and target stable keys. Supply
+    comma-separated waypoint stable keys when several valid feature branches
+    reach the same target.
+12. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
+13. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
+14. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
 
 The Atlas database is stored under the VS Code workspace storage directory and

@@ -72,9 +72,32 @@ workspace in 43.6 seconds with analyzer status `succeeded`:
   the concrete data-service implementation. All three interface calls carry
   `interface` dispatch and exact source spans.
 
-The relationship baseline does not yet interpret effective HTTP routes, DI
-registrations, SQL text, or database objects. Those remain separate framework and
-database analyzer gates rather than inferred code-usage claims.
+That relationship baseline did not interpret effective HTTP routes, DI
+registrations, SQL text, or database objects. The Persona Route baseline below
+adds those facts as separate framework and database claims.
+
+## Persona Route Baseline
+
+On 2026-07-15, the Persona Route Alpha indexed the same workspace in 33.4
+seconds:
+
+- 6,594 total Atlas entities and 16,190 relations.
+- Exact scoped DI dispatch for the WebUI connector, API logic service, and API
+  data service registrations.
+- Effective anonymous endpoint `GET /Persona` and outbound request template
+  `GET /Persona?url={sid}`, connected by `matches_endpoint`.
+- Canonical PostgreSQL object `public.personas` and the Dapper read operation
+  that reaches it.
+- An evidence-backed 11-hop Route from
+  `Kelp2025_WebUI.Controllers.PersonaController.Index` through the public
+  connector interface, HTTP boundary, API, logic, and data layers to
+  `public.personas`.
+- The public connector interface method is supplied as an ordered waypoint so
+  the query does not select the equally valid owned-Persona authorization branch
+  that reaches the same table.
+
+The Route returned 11 steps, visited 99 entities, did not truncate the loaded
+graph, and carried exact source evidence on every relation.
 
 ## Gold Persona Route
 

@@ -30,8 +30,32 @@ public sealed record GetEntityParams(string? StableKey, long? Id);
 
 public sealed record SearchSymbolsParams(string Query, int? Limit);
 
+public sealed record SearchEntitiesParams(
+    string Query,
+    IReadOnlyList<string>? Kinds,
+    int? Limit);
+
 public sealed record FindUsagesParams(
     string? StableKey,
     long? Id,
     IReadOnlyList<string>? Kinds,
     int? Limit);
+
+public sealed record GetRelationsParams(
+    string? StableKey,
+    long? Id,
+    string? Direction,
+    IReadOnlyList<string>? Domains,
+    IReadOnlyList<string>? Kinds,
+    int? Limit);
+
+public sealed record TraceRouteParams(
+    string? SourceStableKey,
+    long? SourceId,
+    string? TargetStableKey,
+    long? TargetId,
+    IReadOnlyList<string>? ViaStableKeys,
+    IReadOnlyList<string>? Domains,
+    IReadOnlyList<string>? Kinds,
+    int? MaxDepth,
+    int? MaxVisited);

@@ -117,7 +117,8 @@ public sealed record DiscoveredCodeSymbol(
     string Signature,
     string Visibility,
     string? ContainingSymbolKey,
-    IReadOnlyList<DiscoveredCodeLocation> Locations);
+    IReadOnlyList<DiscoveredCodeLocation> Locations,
+    string Language = "csharp");
 
 public sealed record DiscoveredCodeLocation(
     string SourceRootPath,
@@ -133,7 +134,9 @@ public sealed record DiscoveredCodeRelation(
     string TargetSymbolKey,
     string Kind,
     string? DispatchKind,
-    DiscoveredCodeLocation Evidence);
+    DiscoveredCodeLocation Evidence,
+    string Domain = "code",
+    string? LogicalScope = null);
 
 public sealed record AtlasCounts(
     int Solutions,
@@ -237,6 +240,29 @@ public sealed record SymbolSearchResult(
         []);
 }
 
+public sealed record AtlasEntitySearchMatch(
+    long Id,
+    string StableKey,
+    string Kind,
+    string Name,
+    string QualifiedName,
+    string Language,
+    string? Signature,
+    string? ProjectName,
+    string? ProjectRelativePath,
+    EntityLocationDetail? FirstLocation);
+
+public sealed record AtlasEntitySearchResult(
+    string AtlasState,
+    long? Generation,
+    string Query,
+    bool Truncated,
+    IReadOnlyList<AtlasEntitySearchMatch> Matches)
+{
+    public static AtlasEntitySearchResult NotCreated(string query) => new(
+        "not_created", null, query, false, []);
+}
+
 public sealed record CodeUsageTarget(
     long Id,
     string StableKey,
@@ -269,6 +295,66 @@ public sealed record CodeUsageResult(
 
     public static CodeUsageResult TargetNotFound(long generation) =>
         new("target_not_found", generation, null, false, []);
+}
+
+public sealed record RelationEntity(
+    long Id,
+    string StableKey,
+    string Kind,
+    string Name,
+    string QualifiedName,
+    string? Signature);
+
+public sealed record AtlasRelationMatch(
+    long RelationId,
+    RelationEntity Source,
+    RelationEntity Target,
+    string Domain,
+    string Kind,
+    string? DispatchKind,
+    string? LogicalScope,
+    string? ProjectName,
+    string? ProjectRelativePath,
+    EntityLocationDetail Evidence);
+
+public sealed record RelationQueryResult(
+    string AtlasState,
+    long? Generation,
+    RelationEntity? Focus,
+    string Direction,
+    bool Truncated,
+    IReadOnlyList<AtlasRelationMatch> Relations)
+{
+    public static RelationQueryResult NotCreated(string direction) =>
+        new("not_created", null, null, direction, false, []);
+
+    public static RelationQueryResult EntityNotFound(long generation, string direction) =>
+        new("entity_not_found", generation, null, direction, false, []);
+}
+
+public sealed record RouteStep(int Ordinal, AtlasRelationMatch Relation);
+
+public sealed record RouteQueryResult(
+    string AtlasState,
+    long? Generation,
+    RelationEntity? Source,
+    RelationEntity? Target,
+    IReadOnlyList<RelationEntity> Waypoints,
+    bool Found,
+    bool GraphTruncated,
+    int MaxDepth,
+    int VisitedEntities,
+    IReadOnlyList<RouteStep> Steps)
+{
+    public static RouteQueryResult NotCreated(int maxDepth) =>
+        new("not_created", null, null, null, [], false, false, maxDepth, 0, []);
+
+    public static RouteQueryResult EntityNotFound(
+        long generation,
+        RelationEntity? source,
+        RelationEntity? target,
+        int maxDepth) =>
+        new("entity_not_found", generation, source, target, [], false, false, maxDepth, 0, []);
 }
 
 public sealed record OrientationEvidence(

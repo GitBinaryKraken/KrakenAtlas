@@ -4,6 +4,9 @@ import {
   renderAtlasSummary,
   renderCodeUsages,
   renderEntityDetail,
+  renderEntitySearch,
+  renderRelations,
+  renderRoute,
   renderSymbolSearch,
   renderWorkspaceOrientation
 } from "./atlas/render";
@@ -101,6 +104,22 @@ export function activate(context: vscode.ExtensionContext): void {
         output.show(true);
       });
     }),
+    vscode.commands.registerCommand("krakenAtlas.searchEntities", async () => {
+      await runCommand(async () => {
+        const query = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Search Entities",
+          prompt: "Search symbols, endpoints, requests, registrations, database operations, and database objects",
+          ignoreFocusOut: true
+        });
+        if (!query?.trim()) {
+          return;
+        }
+        const result = await client.searchEntities(query.trim());
+        output.clear();
+        output.appendLine(renderEntitySearch(result));
+        output.show(true);
+      });
+    }),
     vscode.commands.registerCommand("krakenAtlas.findUsages", async () => {
       await runCommand(async () => {
         const value = await vscode.window.showInputBox({
@@ -116,6 +135,69 @@ export function activate(context: vscode.ExtensionContext): void {
         const result = await client.findUsages(numericId === undefined ? identity : undefined, numericId);
         output.clear();
         output.appendLine(renderCodeUsages(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.showRelations", async () => {
+      await runCommand(async () => {
+        const value = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Show Relations",
+          prompt: "Enter an exact stable key or numeric entity ID",
+          ignoreFocusOut: true
+        });
+        if (!value?.trim()) {
+          return;
+        }
+        const direction = await vscode.window.showQuickPick(
+          ["both", "outgoing", "incoming"] as const,
+          { title: "Kraken Atlas: Relation Direction", ignoreFocusOut: true }
+        );
+        if (!direction) {
+          return;
+        }
+        const identity = value.trim();
+        const numericId = /^\d+$/.test(identity) ? Number(identity) : undefined;
+        const result = await client.getRelations(
+          numericId === undefined ? identity : undefined,
+          numericId,
+          direction as "incoming" | "outgoing" | "both"
+        );
+        output.clear();
+        output.appendLine(renderRelations(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.traceRoute", async () => {
+      await runCommand(async () => {
+        const source = await promptIdentity("Kraken Atlas: Trace Route", "Enter the source stable key or numeric entity ID");
+        if (!source) {
+          return;
+        }
+        const target = await promptIdentity("Kraken Atlas: Trace Route", "Enter the target stable key or numeric entity ID");
+        if (!target) {
+          return;
+        }
+        const via = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Route Waypoints",
+          prompt: "Optional ordered stable keys, separated by commas",
+          ignoreFocusOut: true
+        });
+        if (via === undefined) {
+          return;
+        }
+        const viaStableKeys = via.split(",").map(value => value.trim()).filter(Boolean);
+        const result = await client.traceRoute(
+          source.stableKey,
+          source.id,
+          target.stableKey,
+          target.id,
+          viaStableKeys,
+          undefined,
+          undefined,
+          16
+        );
+        output.clear();
+        output.appendLine(renderRoute(result));
         output.show(true);
       });
     }),
@@ -255,4 +337,16 @@ async function runCommand(action: () => Promise<void>): Promise<void> {
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(`Kraken Atlas: ${message}`);
   }
+}
+
+async function promptIdentity(
+  title: string,
+  prompt: string
+): Promise<{ stableKey?: string; id?: number } | undefined> {
+  const value = await vscode.window.showInputBox({ title, prompt, ignoreFocusOut: true });
+  if (!value?.trim()) {
+    return undefined;
+  }
+  const identity = value.trim();
+  return /^\d+$/.test(identity) ? { id: Number(identity) } : { stableKey: identity };
 }

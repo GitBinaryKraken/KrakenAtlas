@@ -129,6 +129,23 @@ internal sealed class CartographerSession
             cancellationToken);
     }
 
+    public Task<AtlasEntitySearchResult> SearchEntitiesAsync(
+        SearchEntitiesParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(AtlasEntitySearchResult.NotCreated(parameters.Query));
+        }
+        return activeRepository.SearchEntitiesAsync(
+            workspaceKey,
+            parameters.Query,
+            parameters.Kinds,
+            parameters.Limit ?? 25,
+            cancellationToken);
+    }
+
     public Task<CodeUsageResult> FindUsagesAsync(
         FindUsagesParams parameters,
         CancellationToken cancellationToken)
@@ -144,6 +161,49 @@ internal sealed class CartographerSession
             parameters.Id,
             parameters.Kinds,
             parameters.Limit ?? 50,
+            cancellationToken);
+    }
+
+    public Task<RelationQueryResult> GetRelationsAsync(
+        GetRelationsParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(RelationQueryResult.NotCreated(parameters.Direction ?? "both"));
+        }
+        return activeRepository.GetRelationsAsync(
+            workspaceKey,
+            parameters.StableKey,
+            parameters.Id,
+            parameters.Direction ?? "both",
+            parameters.Domains,
+            parameters.Kinds,
+            parameters.Limit ?? 50,
+            cancellationToken);
+    }
+
+    public Task<RouteQueryResult> TraceRouteAsync(
+        TraceRouteParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(RouteQueryResult.NotCreated(parameters.MaxDepth ?? 8));
+        }
+        return activeRepository.TraceRouteAsync(
+            workspaceKey,
+            parameters.SourceStableKey,
+            parameters.SourceId,
+            parameters.TargetStableKey,
+            parameters.TargetId,
+            parameters.ViaStableKeys,
+            parameters.Domains,
+            parameters.Kinds,
+            parameters.MaxDepth ?? 8,
+            parameters.MaxVisited ?? 5000,
             cancellationToken);
     }
 
