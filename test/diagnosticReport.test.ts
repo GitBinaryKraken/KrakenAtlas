@@ -1,0 +1,75 @@
+import { strict as assert } from "node:assert";
+import test from "node:test";
+import { createDiagnosticReport } from "../src/diagnostics/report";
+
+test("diagnostic reports include operational metadata without project or source contents", () => {
+  const report = createDiagnosticReport({
+    generatedUtc: "2026-07-15T20:00:00.000Z",
+    extensionVersion: "0.3.2",
+    vscodeVersion: "1.128.1",
+    vscodeAppName: "Visual Studio Code",
+    platform: "win32",
+    architecture: "x64",
+    osRelease: "test-release",
+    workspaceRoots: ["E:\\Projects\\SecretWorkspace"],
+    atlasPath: "C:\\Storage\\atlas.sqlite3",
+    runtime: {
+      command: "dotnet --list-runtimes",
+      requiredRuntime: "Microsoft.NETCore.App 10.x",
+      available: true,
+      installedCoreRuntimeVersions: ["10.0.4"]
+    },
+    session: {
+      protocolVersion: "1.0",
+      serviceVersion: "0.3.2",
+      capabilities: ["atlas.build"]
+    },
+    foundation: {
+      phase: "walking_cartographer",
+      cartographerState: "available",
+      atlasState: "current",
+      indexingState: "current",
+      message: "Atlas is current."
+    },
+    summary: {
+      atlasState: "current",
+      generation: 3,
+      workspaceKey: "workspace:test",
+      workspaceName: "SecretWorkspace",
+      roots: ["E:\\Projects\\SecretWorkspace"],
+      counts: {
+        solutions: 2,
+        projects: 8,
+        files: 672,
+        entities: 683,
+        relations: 692,
+        projectDependencies: 10
+      },
+      projects: [{
+        id: 1,
+        stableKey: "project:secret",
+        name: "DoNotIncludeProjectName",
+        relativePath: "src/DoNotInclude.csproj",
+        language: "csharp",
+        projectKind: "application",
+        dependencyCount: 0
+      }],
+      analyzerRuns: [{
+        analyzer: "workspace-discovery",
+        capability: "workspace.structure",
+        status: "complete",
+        durationMs: 139
+      }]
+    }
+  });
+
+  const json = JSON.stringify(report);
+  assert.equal(report.atlas.counts.projects, 8);
+  assert.equal(report.atlas.analyzerRuns[0].durationMs, 139);
+  assert.equal(report.privacy.containsSourceBodies, false);
+  assert.equal(report.privacy.telemetrySentByKrakenAtlas, false);
+  assert.match(json, /SecretWorkspace/);
+  assert.doesNotMatch(json, /DoNotIncludeProjectName/);
+  assert.doesNotMatch(json, /DoNotInclude\.csproj/);
+  assert.doesNotMatch(json, /projects":\[/);
+});

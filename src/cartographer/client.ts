@@ -1,8 +1,9 @@
-import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { ChildProcess, ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { AtlasSummary, BuildAtlasResult, EntityDetail } from "../atlas/contracts";
 import { FoundationStatus } from "../foundation/status";
+import { createDotnetRuntimeRequirementError, inspectDotnetRuntime } from "../runtime/dotnetRuntime";
 import { encodeJsonRpcMessage, JsonRpcFramer } from "./jsonRpcFraming";
 
 interface JsonRpcResponse {
@@ -20,9 +21,52 @@ interface PendingRequest {
   reject(error: Error): void;
 }
 
+export interface CartographerSessionInfo {
+  protocolVersion: string;
+  serviceVersion: string;
+  capabilities: string[];
+}
+
+const shutdownResponseTimeoutMs = 2_000;
+const shutdownExitTimeoutMs = 2_000;
+const forcedExitTimeoutMs = 2_000;
+
+export function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (hasExited(child)) {
+    return Promise.resolve(true);
+  }
+
+  return new Promise((resolve) => {
+    let timeout: NodeJS.Timeout | undefined;
+    let settled = false;
+    const finish = (exited: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      child.off("exit", onExit);
+      resolve(exited);
+    };
+    const onExit = () => finish(true);
+
+    child.once("exit", onExit);
+    if (hasExited(child)) {
+      finish(true);
+      return;
+    }
+
+    timeout = setTimeout(() => finish(false), Math.max(0, timeoutMs));
+  });
+}
+
 export class CartographerClient {
   private process: ChildProcessWithoutNullStreams | undefined;
   private starting: Promise<void> | undefined;
+  private stopping: Promise<void> | undefined;
+  private sessionInfo: CartographerSessionInfo | undefined;
   private readonly framer = new JsonRpcFramer();
   private readonly pending = new Map<number, PendingRequest>();
   private nextRequestId = 1;
@@ -55,15 +99,43 @@ export class CartographerClient {
   }
 
   async restart(): Promise<void> {
-    await this.stop();
+    await this.shutdown();
     await this.ensureStarted();
   }
 
+  async getSessionInfo(): Promise<CartographerSessionInfo> {
+    await this.ensureStarted();
+    if (!this.sessionInfo) {
+      throw new Error("Cartographer did not provide initialization metadata.");
+    }
+    return {
+      ...this.sessionInfo,
+      capabilities: [...this.sessionInfo.capabilities]
+    };
+  }
+
   dispose(): void {
-    void this.stop();
+    void this.shutdown().catch((error) => {
+      this.log(`Cartographer disposal warning: ${error instanceof Error ? error.message : String(error)}`);
+    });
+  }
+
+  shutdown(): Promise<void> {
+    if (!this.stopping) {
+      const stopping = this.stop().finally(() => {
+        if (this.stopping === stopping) {
+          this.stopping = undefined;
+        }
+      });
+      this.stopping = stopping;
+    }
+    return this.stopping;
   }
 
   private async ensureStarted(): Promise<void> {
+    if (this.stopping) {
+      await this.stopping;
+    }
     if (this.process) {
       return;
     }
@@ -76,6 +148,11 @@ export class CartographerClient {
   }
 
   private async startProcess(): Promise<void> {
+    const runtime = await inspectDotnetRuntime();
+    if (!runtime.available) {
+      throw createDotnetRuntimeRequirementError(runtime);
+    }
+
     const assemblyPath = this.resolveAssemblyPath();
     fs.mkdirSync(path.dirname(this.atlasPath), { recursive: true });
     this.log(`Starting Cartographer: dotnet ${assemblyPath}`);
@@ -89,23 +166,32 @@ export class CartographerClient {
 
     child.stdout.on("data", (chunk: Buffer) => this.handleOutput(chunk));
     child.stderr.on("data", (chunk: Buffer) => this.log(`Cartographer: ${chunk.toString("utf8").trimEnd()}`));
-    child.on("error", (error) => this.failPending(error));
-    child.on("close", (code) => {
+    child.on("error", (error) => {
       if (this.process === child) {
-        this.process = undefined;
+        this.failPending(error);
       }
-      this.failPending(new Error(`Cartographer exited with code ${String(code)}.`));
+    });
+    child.on("close", (code) => {
+      this.releaseProcess(child, new Error(`Cartographer exited with code ${String(code)}.`));
     });
 
     try {
-      await this.request("initialize", {
+      this.sessionInfo = await this.request<CartographerSessionInfo>("initialize", {
         client: "vscode",
         protocolVersion: "1.0",
         workspaceRoots: this.workspaceRoots,
         atlasPath: this.atlasPath
       });
     } catch (error) {
-      child.kill();
+      if (!hasExited(child)) {
+        child.kill("SIGKILL");
+        if (!await waitForProcessExit(child, forcedExitTimeoutMs)) {
+          throw new Error("Cartographer initialization failed and the process could not be terminated.", {
+            cause: error
+          });
+        }
+      }
+      this.releaseProcess(child, new Error("Cartographer initialization failed."));
       throw error;
     }
   }
@@ -170,23 +256,71 @@ export class CartographerClient {
     this.pending.clear();
   }
 
+  private releaseProcess(child: ChildProcessWithoutNullStreams, error: Error): void {
+    if (this.process !== child) {
+      return;
+    }
+    this.process = undefined;
+    this.sessionInfo = undefined;
+    this.failPending(error);
+  }
+
   private async stop(): Promise<void> {
+    if (this.starting) {
+      try {
+        await this.starting;
+      } catch {
+        return;
+      }
+    }
+
     const child = this.process;
     if (!child) {
       return;
     }
 
     try {
-      await this.request("shutdown");
+      await withTimeout(
+        this.request("shutdown"),
+        shutdownResponseTimeoutMs,
+        "Timed out waiting for the Cartographer shutdown response."
+      );
     } catch (error) {
       this.log(`Cartographer shutdown warning: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
-      if (!child.killed) {
+      if (!child.stdin.destroyed && !child.stdin.writableEnded) {
         child.stdin.end();
       }
-      if (this.process === child) {
-        this.process = undefined;
+    }
+
+    if (!await waitForProcessExit(child, shutdownExitTimeoutMs)) {
+      this.log("Cartographer did not exit after shutdown; terminating the process.");
+      child.kill("SIGKILL");
+      if (!await waitForProcessExit(child, forcedExitTimeoutMs)) {
+        throw new Error("Cartographer did not exit after forced termination.");
       }
     }
+
+    this.releaseProcess(child, new Error("Cartographer stopped."));
   }
+}
+
+function hasExited(child: ChildProcess): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
 }

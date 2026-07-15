@@ -20,9 +20,12 @@ Kraken Atlas keeps the existing Marketplace identity:
 npm run release:check-version
 npm test
 npm run check:vsix
+npm run smoke:vsix
 ```
 
 The VSIX is written to `..\pack-artifacts\kraken-atlas-<version>.vsix`.
+The smoke test uses isolated VS Code user-data and extension directories, then
+installs, exercises, and uninstalls that exact artifact.
 
 ## Publish
 

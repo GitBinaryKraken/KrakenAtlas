@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Await Cartographer process exit during restart and extension deactivation,
+  with bounded shutdown and forced-termination fallbacks to prevent stale .NET
+  processes from locking development and package output assemblies.
+- Add a .NET 10 runtime preflight, source-free diagnostic export, invited-alpha
+  testing instructions, and explicit privacy, storage, telemetry, and license
+  status documentation.
+
 ## 0.3.1 - 2026-07-15
 
 - Replaced the legacy Kraken Atlas implementation with a clean architecture

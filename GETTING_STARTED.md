@@ -13,7 +13,8 @@ store and query that structural map from a versioned SQLite Atlas.
 
 Self-contained, platform-specific VSIX packaging is scheduled for product
 hardening; the current development package launches the installed `dotnet`
-runtime.
+runtime. Kraken Atlas checks for `Microsoft.NETCore.App` 10 before launching
+Cartographer and provides an installation link when the runtime is unavailable.
 
 ## Build and Test
 
@@ -35,8 +36,14 @@ npm run check:vsix
 3. Run `Kraken Atlas: Build Atlas`.
 4. Run `Kraken Atlas: Show Atlas Summary` and inspect the discovered projects.
 5. Run `Kraken Atlas: Lookup Entity` with a project stable key or numeric ID.
-6. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+6. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
+7. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
+8. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
 
 The Atlas database is stored under the VS Code workspace storage directory and
 is not written into the source repository.
+
+See [the invited-alpha test pass](ALPHA_TESTING.md) and
+[privacy, storage, and telemetry behavior](PRIVACY.md). This build is
+`UNLICENSED` and provided only for invited evaluation.

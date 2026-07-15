@@ -38,7 +38,13 @@ still planned work.
 - `Kraken Atlas: Show Atlas Summary`
 - `Kraken Atlas: Lookup Entity`
 - `Kraken Atlas: Restart Cartographer`
+- `Kraken Atlas: Export Diagnostics`
 - `Kraken Atlas: Open Architecture Plan`
+
+The diagnostic export contains environment and Atlas metadata such as local
+paths, versions, counts, timings, capabilities, and errors. It does not include
+source file bodies or project and entity inventories. Review the JSON before
+sharing it because local paths can still be sensitive.
 
 ## Development
 
@@ -49,6 +55,11 @@ npm run check:vsix
 ```
 
 The VSIX is written to the parent `pack-artifacts` directory.
+
+Invited testers should follow [the alpha testing guide](ALPHA_TESTING.md). See
+[privacy and local-data behavior](PRIVACY.md) before sharing diagnostics. The
+project is currently `UNLICENSED`; invited evaluation does not grant
+redistribution rights.
 
 ## Cartographer CLI
 

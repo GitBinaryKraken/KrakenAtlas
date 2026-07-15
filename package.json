@@ -1,7 +1,7 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Builds a local semantic Atlas of .NET, database, TypeScript, and React code for precise AI-agent queries and compact context packs.",
+  "description": "Builds a local SQLite Atlas of workspace structure as the foundation for semantic code mapping and compact AI-agent queries.",
   "version": "0.3.1",
   "icon": "images/icon.png",
   "galleryBanner": {
@@ -50,6 +50,7 @@
     "onCommand:krakenAtlas.showAtlasSummary",
     "onCommand:krakenAtlas.lookupEntity",
     "onCommand:krakenAtlas.restartCartographer",
+    "onCommand:krakenAtlas.exportDiagnostics",
     "onCommand:krakenAtlas.openPlanning"
   ],
   "main": "./dist/extension.js",
@@ -61,6 +62,8 @@
     "README.md",
     "CHANGELOG.md",
     "GETTING_STARTED.md",
+    "ALPHA_TESTING.md",
+    "PRIVACY.md",
     "package.json"
   ],
   "contributes": {
@@ -91,6 +94,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "krakenAtlas.exportDiagnostics",
+        "title": "Kraken Atlas: Export Diagnostics",
+        "icon": "$(export)"
+      },
+      {
         "command": "krakenAtlas.openPlanning",
         "title": "Kraken Atlas: Open Architecture Plan",
         "icon": "$(book)"
@@ -109,6 +117,7 @@
     "test": "npm run compile && npm run build:cartographer && npm run compile:test && npm run test:node",
     "package:vsix": "node scripts/vsce-package.cjs package --no-rewrite-relative-links --allow-missing-repository --skip-license",
     "check:vsix": "npm test && npm run publish:cartographer && npm run package:vsix",
+    "smoke:vsix": "node scripts/smoke-test-vsix.cjs",
     "release:bump": "node scripts/release-bump.cjs",
     "release:check-version": "node scripts/release-check-version.cjs",
     "release:vsix": "node scripts/release-vsix.cjs",

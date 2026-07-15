@@ -12,7 +12,8 @@ for (const args of [
   ["run", "release:check-version"],
   ["test"],
   ["run", "publish:cartographer"],
-  ["run", "package:vsix"]
+  ["run", "package:vsix"],
+  ["run", "smoke:vsix"]
 ]) {
   const result = spawnSync("npm", args, {
     cwd: root,

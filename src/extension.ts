@@ -1,7 +1,12 @@
+import * as os from "node:os";
 import * as vscode from "vscode";
 import { renderAtlasSummary, renderEntityDetail } from "./atlas/render";
 import { CartographerClient } from "./cartographer/client";
+import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
+import { createDotnetRuntimeRequirementError, inspectDotnetRuntime } from "./runtime/dotnetRuntime";
+
+let activeClient: CartographerClient | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
   const output = vscode.window.createOutputChannel("Kraken Atlas");
@@ -14,6 +19,7 @@ export function activate(context: vscode.ExtensionContext): void {
     atlasPath,
     (message) => output.appendLine(message)
   );
+  activeClient = client;
   const version = String(context.extension.packageJSON.version ?? "unknown");
 
   context.subscriptions.push(
@@ -80,6 +86,9 @@ export function activate(context: vscode.ExtensionContext): void {
         await showStatus(client, output, version);
       });
     }),
+    vscode.commands.registerCommand("krakenAtlas.exportDiagnostics", async () => {
+      await runCommand(() => exportDiagnostics(context, client, output, workspaceRoots, atlasPath, version));
+    }),
     vscode.commands.registerCommand("krakenAtlas.openPlanning", async () => {
       await runCommand(async () => {
         const uri = vscode.Uri.joinPath(context.extensionUri, "docs", "planning", "README.md");
@@ -90,8 +99,74 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 }
 
-export function deactivate(): void {
-  // Disposables registered during activation own process shutdown.
+export async function deactivate(): Promise<void> {
+  const client = activeClient;
+  activeClient = undefined;
+  await client?.shutdown();
+}
+
+async function exportDiagnostics(
+  context: vscode.ExtensionContext,
+  client: CartographerClient,
+  output: vscode.OutputChannel,
+  workspaceRoots: string[],
+  atlasPath: string,
+  extensionVersion: string
+): Promise<void> {
+  const runtime = await inspectDotnetRuntime();
+  let session;
+  let foundation;
+  let summary;
+  let cartographerError: string | undefined;
+
+  if (runtime.available) {
+    try {
+      session = await client.getSessionInfo();
+      [foundation, summary] = await Promise.all([
+        client.getFoundationStatus(),
+        client.getAtlasSummary()
+      ]);
+    } catch (error) {
+      cartographerError = error instanceof Error ? error.message : String(error);
+    }
+  } else {
+    cartographerError = createDotnetRuntimeRequirementError(runtime).message;
+  }
+
+  const report = createDiagnosticReport({
+    extensionVersion,
+    vscodeVersion: vscode.version,
+    vscodeAppName: vscode.env.appName,
+    remoteName: vscode.env.remoteName,
+    platform: process.platform,
+    architecture: process.arch,
+    osRelease: os.release(),
+    workspaceRoots,
+    atlasPath,
+    runtime,
+    session,
+    foundation,
+    summary,
+    cartographerError
+  });
+  const fileName = `kraken-atlas-diagnostics-${report.generatedUtc.replace(/[:.]/g, "-")}.json`;
+  await vscode.workspace.fs.createDirectory(context.globalStorageUri);
+  const target = await vscode.window.showSaveDialog({
+    title: "Export Kraken Atlas Diagnostics (contains local paths)",
+    defaultUri: vscode.Uri.joinPath(context.globalStorageUri, fileName),
+    saveLabel: "Export Diagnostics",
+    filters: { JSON: ["json"] }
+  });
+  if (!target) {
+    return;
+  }
+
+  await vscode.workspace.fs.writeFile(
+    target,
+    Buffer.from(`${JSON.stringify(report, null, 2)}\n`, "utf8")
+  );
+  output.appendLine(`Diagnostics exported to ${target.fsPath}`);
+  vscode.window.showInformationMessage(`Kraken Atlas diagnostics exported to ${target.fsPath}`);
 }
 
 async function showStatus(

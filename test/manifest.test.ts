@@ -8,6 +8,8 @@ test("preserves the published identity and exposes only Phase 1 commands", () =>
     name: string;
     publisher: string;
     version: string;
+    activationEvents: string[];
+    files: string[];
     contributes: {
       commands: Array<{ command: string }>;
       languageModelTools?: unknown[];
@@ -23,7 +25,11 @@ test("preserves the published identity and exposes only Phase 1 commands", () =>
     "krakenAtlas.showAtlasSummary",
     "krakenAtlas.lookupEntity",
     "krakenAtlas.restartCartographer",
+    "krakenAtlas.exportDiagnostics",
     "krakenAtlas.openPlanning"
   ]);
   assert.equal(manifest.contributes.languageModelTools, undefined);
+  assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.exportDiagnostics"));
+  assert.ok(manifest.files.includes("ALPHA_TESTING.md"));
+  assert.ok(manifest.files.includes("PRIVACY.md"));
 });
