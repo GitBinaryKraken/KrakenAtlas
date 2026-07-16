@@ -5,9 +5,12 @@ import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
 import {
+  AssessmentQueryResult,
   AtlasEntitySearchResult,
   BuildAtlasResult,
   ChangeSurfaceResult,
+  DecorateNodesResult,
+  PreparedChangeResult,
   RelationQueryResult,
   RouteQueryResult
 } from "../src/atlas/contracts";
@@ -187,6 +190,134 @@ test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, an
       project.relativePath === "Tests/Tests.csproj" && project.isTest));
     assert.ok(surface.verificationCommands.some(command =>
       command.kind === "test" && command.commandText === "dotnet test \"Tests/Tests.csproj\""));
+
+    const decorationPath = path.join(temporaryRoot, "persona-assessments.json");
+    fs.writeFileSync(decorationPath, JSON.stringify({
+      $schema: "https://raw.githubusercontent.com/GitBinaryKraken/KrakenAtlas/main/docs/planning/contracts/node-decoration-batch.schema.json",
+      schemaVersion: "1.0",
+      operationId: "feature-flow-persona-assessments",
+      workspace: {
+        workspaceKey: build.workspaceKey,
+        expectedAtlasGeneration: build.generation
+      },
+      session: {
+        agent: { name: "integration-test", model: "deterministic", client: "node-test" },
+        purpose: "Record reusable Persona feature knowledge."
+      },
+      options: {
+        atomic: true,
+        dryRun: false,
+        completeSession: true,
+        conflictPolicy: "record",
+        missingSubjectPolicy: "reject"
+      },
+      decorations: [{
+        clientUpdateId: "classify-persona-service",
+        subject: {
+          stableKey: logicMethod.stableKey,
+          expectedKind: "method",
+          expectedQualifiedName: logicMethod.qualifiedName
+        },
+        update: {
+          kind: "classify_role",
+          role: "application_service",
+          layer: "application",
+          responsibility: "Coordinates the public Persona read."
+        },
+        statement: "This method is the application-service boundary for the public Persona read.",
+        confidence: 0.96,
+        requestedStatus: "accepted",
+        dependencyPolicy: "capture_from_evidence",
+        evidence: [{
+          kind: "source_location",
+          path: "Logic/PersonaService.cs",
+          startLine: 13,
+          endLine: 14,
+          note: "The implementation delegates to the data boundary."
+        }],
+        tags: ["persona", "application-service"]
+      }, {
+        clientUpdateId: "join-persona-read-feature",
+        subject: { stableKey: logicMethod.stableKey, expectedKind: "method" },
+        update: {
+          kind: "add_membership",
+          group: {
+            kind: "feature",
+            key: "feature:persona-public-read",
+            name: "Persona Public Read",
+            definition: "The web-to-PostgreSQL public Persona read path."
+          },
+          participantRole: "application_service",
+          strength: "core",
+          ordinal: 6
+        },
+        statement: "This method is the application-service participant in the Persona public-read feature.",
+        confidence: 0.94,
+        requestedStatus: "accepted",
+        dependencyPolicy: "capture_from_evidence",
+        evidence: [{
+          kind: "source_location",
+          path: "Logic/PersonaService.cs",
+          startLine: 13,
+          endLine: 14
+        }],
+        tags: ["persona", "feature-membership"]
+      }]
+    }, null, 2));
+
+    const dryRun = invoke<DecorateNodesResult>("decorate-nodes", "--input", decorationPath, "--dry-run");
+    assert.equal(dryRun.status, "validated");
+    assert.equal(dryRun.results.length, 2);
+    const applied = invoke<DecorateNodesResult>("decorate-nodes", "--input", decorationPath);
+    assert.equal(applied.status, "applied");
+    assert.ok(applied.results.every(item => item.status === "accepted"));
+    assert.ok(applied.results.every(item => item.dependencyCount >= 2));
+    const replayed = invoke<DecorateNodesResult>("decorate-nodes", "--input", decorationPath);
+    assert.equal(replayed.status, "replayed");
+    assert.deepEqual(replayed.results.map(item => item.claimIds), applied.results.map(item => item.claimIds));
+
+    const assessments = invoke<AssessmentQueryResult>(
+      "assessments", "--stable-key", logicMethod.stableKey
+    );
+    assert.equal(assessments.assessments.length, 2);
+    assert.ok(assessments.assessments.every(item => item.freshness === "current"));
+    assert.deepEqual(
+      assessments.assessments.map(item => item.updateKind).sort(),
+      ["add_membership", "classify_role"]
+    );
+
+    const prepared = invoke<PreparedChangeResult>(
+      "prepare",
+      "--stable-key",
+      logicMethod.stableKey,
+      "--task",
+      "Add audit logging to the public Persona read",
+      "--token-budget",
+      "4000"
+    );
+    assert.equal(prepared.atlasState, "current");
+    assert.ok(prepared.estimatedTokens <= prepared.tokenBudget);
+    assert.equal(prepared.items[0].relevance, "seed");
+    assert.ok(prepared.items.some(item => item.relevance === "related_test"));
+    assert.deepEqual(
+      prepared.assessments.map(item => item.updateKind).sort(),
+      ["add_membership", "classify_role"]
+    );
+    assert.ok(prepared.verificationCommands.some(command => command.kind === "test"));
+
+    fs.appendFileSync(path.join(workspaceRoot, "Logic", "PersonaService.cs"), "\n// Staleness fixture change.\n");
+    const rebuilt = invoke<BuildAtlasResult>("build");
+    assert.equal(rebuilt.generation, 2);
+    const currentOnly = invoke<AssessmentQueryResult>(
+      "assessments", "--stable-key", logicMethod.stableKey
+    );
+    assert.deepEqual(currentOnly.assessments, []);
+    const stale = invoke<AssessmentQueryResult>(
+      "assessments", "--stable-key", logicMethod.stableKey, "--include-stale"
+    );
+    assert.equal(stale.assessments.length, 2);
+    assert.ok(stale.assessments.every(item => item.freshness === "stale"));
+    assert.ok(stale.assessments.every(item => item.staleReasons.length >= 1));
   } finally {
     fs.rmSync(temporaryRoot, { recursive: true, force: true });
   }

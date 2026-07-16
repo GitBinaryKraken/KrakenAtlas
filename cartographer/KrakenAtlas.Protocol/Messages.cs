@@ -67,3 +67,19 @@ public sealed record GetChangeSurfaceParams(
     IReadOnlyList<string>? Kinds,
     int? MaxDepth,
     int? MaxEntities);
+
+public sealed record GetAssessmentsParams(
+    string? StableKey,
+    long? Id,
+    bool? IncludeProposed,
+    bool? IncludeStale,
+    bool? IncludeHistory,
+    int? Limit);
+
+public sealed record PrepareChangeParams(
+    string Task,
+    string? StableKey,
+    long? Id,
+    int? TokenBudget,
+    int? MaxDepth,
+    bool? IncludeProposed);

@@ -2,15 +2,19 @@ import * as os from "node:os";
 import * as vscode from "vscode";
 import {
   renderAtlasSummary,
+  renderAssessments,
   renderCodeUsages,
   renderChangeSurface,
+  renderDecorationResult,
   renderEntityDetail,
   renderEntitySearch,
+  renderPreparedChange,
   renderRelations,
   renderRoute,
   renderSymbolSearch,
   renderWorkspaceOrientation
 } from "./atlas/render";
+import { NodeDecorationBatch } from "./atlas/contracts";
 import { CartographerClient } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
@@ -215,6 +219,111 @@ export function activate(context: vscode.ExtensionContext): void {
         output.clear();
         output.appendLine(renderChangeSurface(result));
         output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.prepareChange", async () => {
+      await runCommand(async () => {
+        const identity = await promptIdentity(
+          "Kraken Atlas: Prepare Change Context Pack",
+          "Enter the seed stable key or numeric entity ID"
+        );
+        if (!identity) {
+          return;
+        }
+        const task = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Change Task",
+          prompt: "Describe the change the coding agent is preparing to make",
+          ignoreFocusOut: true
+        });
+        if (!task?.trim()) {
+          return;
+        }
+        const budgetValue = await vscode.window.showInputBox({
+          title: "Kraken Atlas: Context Token Budget",
+          prompt: "Estimated maximum tokens for the prepared Context Pack",
+          value: "4000",
+          ignoreFocusOut: true,
+          validateInput: value => {
+            const budget = Number(value);
+            return Number.isInteger(budget) && budget >= 800 && budget <= 32000
+              ? undefined
+              : "Enter an integer from 800 through 32000.";
+          }
+        });
+        if (!budgetValue) {
+          return;
+        }
+        const result = await client.prepareChange(
+          task.trim(), identity.stableKey, identity.id, Number(budgetValue)
+        );
+        output.clear();
+        output.appendLine(renderPreparedChange(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.showAssessments", async () => {
+      await runCommand(async () => {
+        const identity = await promptIdentity(
+          "Kraken Atlas: Show Node Assessments",
+          "Enter the subject stable key or numeric entity ID"
+        );
+        if (!identity) {
+          return;
+        }
+        const result = await client.getEntityAssessments(
+          identity.stableKey, identity.id, true, true, true
+        );
+        output.clear();
+        output.appendLine(renderAssessments(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.applyDecorations", async () => {
+      await runCommand(async () => {
+        if (!vscode.workspace.isTrusted) {
+          throw new Error("Node decoration writes require a trusted workspace.");
+        }
+        const selected = await vscode.window.showOpenDialog({
+          title: "Kraken Atlas: Select Node Decoration JSON",
+          canSelectMany: false,
+          canSelectFiles: true,
+          canSelectFolders: false,
+          filters: { JSON: ["json"] }
+        });
+        if (!selected?.[0]) {
+          return;
+        }
+        const content = await vscode.workspace.fs.readFile(selected[0]);
+        const parsed = JSON.parse(Buffer.from(content).toString("utf8")) as NodeDecorationBatch;
+        if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.decorations)) {
+          throw new Error("The selected file is not a node-decoration batch.");
+        }
+        const dryRunPayload: NodeDecorationBatch = {
+          ...parsed,
+          options: { ...(parsed.options ?? {}), dryRun: true }
+        };
+        const validated = await client.decorateNodes(dryRunPayload);
+        output.clear();
+        output.appendLine(renderDecorationResult(validated));
+        output.show(true);
+        const choice = await vscode.window.showWarningMessage(
+          `Apply ${validated.results.length} validated node decoration updates to generation ${validated.atlasGeneration}?`,
+          { modal: true },
+          "Apply"
+        );
+        if (choice !== "Apply") {
+          return;
+        }
+        const applied = await client.decorateNodes({
+          ...parsed,
+          options: { ...(parsed.options ?? {}), dryRun: false }
+        });
+        output.clear();
+        output.appendLine(renderDecorationResult(applied));
+        output.show(true);
+        vscode.window.showInformationMessage(
+          `Kraken Atlas applied ${applied.results.length} node decoration updates.`
+        );
       });
     }),
     vscode.commands.registerCommand("krakenAtlas.restartCartographer", async () => {

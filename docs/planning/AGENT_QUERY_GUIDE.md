@@ -1,6 +1,6 @@
 # AI Agent Query Guide
 
-This guide describes the bounded query surface available in the Persona Route
+This guide describes the bounded query surface available in the Agent Memory
 Alpha. An agent should query Cartographer before recursively reading a workspace.
 Stable keys returned by one query are the exact identities used by later
 queries.
@@ -19,7 +19,11 @@ queries.
    requested feature must pass through a particular contract or boundary.
 7. Run `surface` before editing to retrieve direct/transitive neighbors, affected
    projects, attributed tests, and focused build/test commands.
-8. Read only the files and spans returned as evidence, then request broader
+8. Run `prepare` with a concrete task and token budget. Reuse current accepted
+   assessments and read the ranked evidence spans first.
+9. After learning a reusable noncanonical conclusion, submit a schema-valid
+   `decorate-nodes --dry-run` batch, then apply it with the same operation ID.
+10. Read only the files and spans returned as evidence, then request broader
    source context only when the map reports a gap or ambiguity.
 
 ## CLI Examples
@@ -43,6 +47,19 @@ cartographer route --source-key csharp_symbol:<hash> `
 # Inspect a bounded change surface and its verification targets.
 cartographer surface --stable-key csharp_symbol:<hash> `
   --max-depth 3 --max-entities 200
+
+# Build a compact agent Context Pack for a concrete change.
+cartographer prepare --stable-key csharp_symbol:<hash> `
+  --task "Add audit logging to the Persona read" --token-budget 4000
+
+# Audit current and stale assessment history; normal queries return accepted,
+# current claims only.
+cartographer assessments --stable-key csharp_symbol:<hash> `
+  --include-proposed --include-stale --include-history
+
+# Validate and then atomically apply the versioned decoration JSON envelope.
+cartographer decorate-nodes --input .\persona-assessments.json --dry-run
+cartographer decorate-nodes --input .\persona-assessments.json
 ```
 
 The examples abbreviate the executable. In a development checkout it is:
@@ -65,6 +82,9 @@ content-length framed JSON-RPC 2.0:
 - `get_relations`: `{ "stableKey": "...", "direction": "both", "domains": ["code", "framework", "database"], "kinds": [], "limit": 50 }`.
 - `trace_route`: `{ "sourceStableKey": "...", "targetStableKey": "...", "viaStableKeys": ["..."], "domains": ["code", "framework", "database"], "maxDepth": 16, "maxVisited": 5000 }`.
 - `get_change_surface`: `{ "stableKey": "...", "domains": ["code", "framework", "database"], "kinds": [], "maxDepth": 3, "maxEntities": 200 }`.
+- `prepare_change`: `{ "task": "Add audit logging", "stableKey": "...", "tokenBudget": 4000, "maxDepth": 3, "includeProposed": false }`.
+- `get_entity_assessments`: `{ "stableKey": "...", "includeProposed": false, "includeStale": false, "includeHistory": false, "limit": 50 }`.
+- `decorate_nodes`: the complete version 1.0 node-decoration batch object.
 
 Omitted relation domains default to `code`, `framework`, and `database`.
 Relation results are capped at 200. Routes are forward-only, capped at 16 hops
@@ -77,6 +97,16 @@ Change surfaces are bidirectional and capped at depth 8 and 1,000 entities.
 high-fanout code `reads`, `writes`, and `uses_type` relations are included only
 when directly attached to the seed and are not recursively expanded. Supplying
 explicit relation `kinds` opts into traversal through those kinds.
+
+Prepared changes accept budgets from 800 through 32,000 estimated tokens. The
+estimate is based on deterministic serialized JSON size and is not tied to one
+model tokenizer. The response never includes source bodies. `truncated` and
+omitted counts make budget loss explicit.
+
+Normal prepared packs include accepted current assessments only. Proposed claims
+require `includeProposed`; stale and historical claims are queried explicitly and
+are never silently used as canonical facts. Decoration batches are pinned to the
+active generation, use exact selectors, and should be dry-run before application.
 
 ## Interpreting Results
 

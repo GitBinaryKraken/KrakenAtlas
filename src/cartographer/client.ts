@@ -4,10 +4,14 @@ import * as path from "node:path";
 import {
   AtlasSummary,
   AtlasEntitySearchResult,
+  AssessmentQueryResult,
   BuildAtlasResult,
   ChangeSurfaceResult,
   CodeUsageResult,
+  DecorateNodesResult,
   EntityDetail,
+  NodeDecorationBatch,
+  PreparedChangeResult,
   RelationQueryResult,
   RouteQueryResult,
   SymbolSearchResult,
@@ -184,6 +188,41 @@ export class CartographerClient {
     return this.request<ChangeSurfaceResult>(
       "get_change_surface",
       { stableKey, id, domains, kinds, maxDepth, maxEntities }
+    );
+  }
+
+  async getEntityAssessments(
+    stableKey?: string,
+    id?: number,
+    includeProposed = false,
+    includeStale = false,
+    includeHistory = false,
+    limit = 50
+  ): Promise<AssessmentQueryResult> {
+    await this.ensureStarted();
+    return this.request<AssessmentQueryResult>(
+      "get_entity_assessments",
+      { stableKey, id, includeProposed, includeStale, includeHistory, limit }
+    );
+  }
+
+  async decorateNodes(payload: NodeDecorationBatch): Promise<DecorateNodesResult> {
+    await this.ensureStarted();
+    return this.request<DecorateNodesResult>("decorate_nodes", payload);
+  }
+
+  async prepareChange(
+    task: string,
+    stableKey?: string,
+    id?: number,
+    tokenBudget = 4000,
+    maxDepth = 3,
+    includeProposed = false
+  ): Promise<PreparedChangeResult> {
+    await this.ensureStarted();
+    return this.request<PreparedChangeResult>(
+      "prepare_change",
+      { task, stableKey, id, tokenBudget, maxDepth, includeProposed }
     );
   }
 

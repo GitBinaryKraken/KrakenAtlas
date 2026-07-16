@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-07-15
+
+- Add the token-budgeted `prepare_change` workflow, combining a ranked static
+  change surface, related tests, affected projects, verification commands, and
+  reusable current assessments without embedding source bodies.
+- Add SQLite schema v3 with a separate enrichment plane for analysis sessions,
+  typed assessment claims, evidence, and captured freshness dependencies.
+- Implement the version 1.0 `decorate_nodes` JSON contract with exact selectors,
+  generation pinning, controlled update intents, atomic transactions, dry-run,
+  accepted-to-proposed policy downgrades, and idempotent operation replay.
+- Compute assessment freshness against current entity, relation, file, claim,
+  and analyzer dependencies; stale claims are excluded from normal agent packs.
+- Add `get_entity_assessments` with explicit proposed, stale, and history policy
+  flags while keeping canonical fact queries free of AI-authored claims.
+- Expose prepare, assessment, and decoration operations through CLI, JSON-RPC,
+  the TypeScript client, and trusted-workspace VS Code commands.
+- Prove role and feature-membership reuse, token bounds, idempotency, persistence,
+  and source-change invalidation in the deterministic full-route fixture.
+
 ## 0.6.0 - 2026-07-15
 
 - Add bounded `get_change_surface` queries over code, framework, and database

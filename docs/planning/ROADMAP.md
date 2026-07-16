@@ -68,10 +68,12 @@ generated/manual evidence, analyzer diagnostics, exact internal calls,
 construction, member reads/writes, type use, inheritance, implementations,
 overrides, durable persistence, bounded symbol search, and code-only usage queries
 are implemented. Bounded cross-domain entity search, directional relation
-queries, and forward Routes with ordered waypoints are also implemented. Impact,
-The first bounded change-surface and related-test query is implemented with
-project ownership and focused verification commands. General semantic diff
-impact, Context Packs, unresolved targets, and agent-facing tools remain.
+queries, and forward Routes with ordered waypoints are also implemented. The
+first bounded change-surface and related-test query is implemented with project
+ownership and focused verification commands. A metadata-only, token-budgeted
+prepared-change Context Pack and the versioned assessment ledger are implemented
+through CLI, JSON-RPC, and VS Code. General semantic diff impact, source slicing,
+unresolved targets, MCP, and native language-model tools remain.
 
 Deliverables:
 
@@ -80,7 +82,8 @@ Deliverables:
 - Stable symbol keys and explicit ambiguous or unresolved targets.
 - Symbol search, code-only usage queries, neighbors, execution/dependency Routes,
   and impact queries.
-- First Context Pack builder with source slicing and token budgets.
+- First Context Pack builder with ranked metadata and token budgets; bounded
+  source slicing remains.
 - Native VS Code agent tools and MCP mode over the same query services.
 - Bounded `get_entity_context` responses spanning semantic, feature, behavior,
   contract, effect, failure, lifecycle, test, and assessment dimensions.
@@ -96,6 +99,11 @@ Deliverables:
   Blueprints, workflows, boundaries, capabilities, and concerns.
 - Evidence and dependency-based assessment invalidation after Atlas generation
   changes.
+
+Implemented in 0.7: analysis sessions, typed claims, evidence-derived
+dependencies, dry-run/apply/replay, current/stale queries, prepared-change reuse,
+and source-change invalidation. Assessment-owned group materialization, richer
+conflict selection, source slices, MCP, and native agent tools remain.
 
 Exit gate:
 

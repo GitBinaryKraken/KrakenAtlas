@@ -143,7 +143,10 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       "symbol.usages",
       "relation.query",
       "route.trace",
-      "change.surface"
+      "change.surface",
+      "assessment.read",
+      "assessment.write",
+      "agent.prepare_change"
     ]);
     return cartographer;
   };

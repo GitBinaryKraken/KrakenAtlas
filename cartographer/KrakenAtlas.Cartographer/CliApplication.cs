@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text;
+using KrakenAtlas.Core;
 using KrakenAtlas.Protocol;
 
 namespace KrakenAtlas.Cartographer;
@@ -8,6 +11,8 @@ internal static class CliApplication
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         WriteIndented = true
     };
 
@@ -72,6 +77,25 @@ internal static class CliApplication
                         options.MaxDepth,
                         options.MaxEntities),
                     cancellationToken),
+                "assessments" => await session.GetAssessmentsAsync(
+                    new GetAssessmentsParams(
+                        options.StableKey,
+                        options.Id,
+                        options.IncludeProposed,
+                        options.IncludeStale,
+                        options.IncludeHistory,
+                        options.Limit),
+                    cancellationToken),
+                "prepare" => await session.PrepareChangeAsync(
+                    new PrepareChangeParams(
+                        options.Task!,
+                        options.StableKey,
+                        options.Id,
+                        options.TokenBudget,
+                        options.MaxDepth,
+                        options.IncludeProposed),
+                    cancellationToken),
+                "decorate-nodes" => await DecorateNodesAsync(session, options, cancellationToken),
                 _ => throw new InvalidOperationException($"Unknown command: {options.Command}")
             };
 
@@ -90,10 +114,11 @@ internal static class CliApplication
     {
         if (arguments.Count == 0 || arguments[0] is not (
             "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
-            or "usages" or "relations" or "route" or "surface"))
+            or "usages" or "relations" or "route" or "surface" or "assessments"
+            or "prepare" or "decorate-nodes"))
         {
             throw new ArgumentException(
-                "A build, summary, orientation, entity, symbols, search, usages, relations, route, or surface command is required.");
+                "A build, summary, orientation, entity, symbols, search, usages, relations, route, surface, assessments, prepare, or decorate-nodes command is required.");
         }
 
         var roots = new List<string>();
@@ -113,9 +138,31 @@ internal static class CliApplication
         int? maxDepth = null;
         int? maxVisited = null;
         int? maxEntities = null;
+        string? task = null;
+        int? tokenBudget = null;
+        string? inputPath = null;
+        var dryRun = false;
+        var includeProposed = false;
+        var includeStale = false;
+        var includeHistory = false;
         for (var index = 1; index < arguments.Count; index++)
         {
             var option = arguments[index];
+            switch (option)
+            {
+                case "--dry-run":
+                    dryRun = true;
+                    continue;
+                case "--include-proposed":
+                    includeProposed = true;
+                    continue;
+                case "--include-stale":
+                    includeStale = true;
+                    continue;
+                case "--include-history":
+                    includeHistory = true;
+                    continue;
+            }
             if (index + 1 >= arguments.Count)
             {
                 throw new ArgumentException($"Missing value for {option}.");
@@ -174,6 +221,15 @@ internal static class CliApplication
                 case "--max-entities" when int.TryParse(value, out var parsedMaxEntities):
                     maxEntities = parsedMaxEntities;
                     break;
+                case "--task":
+                    task = value;
+                    break;
+                case "--token-budget" when int.TryParse(value, out var parsedTokenBudget):
+                    tokenBudget = parsedTokenBudget;
+                    break;
+                case "--input":
+                    inputPath = value;
+                    break;
                 default:
                     throw new ArgumentException($"Unknown option or invalid value: {option} {value}");
             }
@@ -210,6 +266,19 @@ internal static class CliApplication
         {
             throw new ArgumentException("surface requires --stable-key or --id.");
         }
+        if (arguments[0] == "assessments" && string.IsNullOrWhiteSpace(stableKey) && id is null)
+        {
+            throw new ArgumentException("assessments requires --stable-key or --id.");
+        }
+        if (arguments[0] == "prepare"
+            && (string.IsNullOrWhiteSpace(stableKey) && id is null || string.IsNullOrWhiteSpace(task)))
+        {
+            throw new ArgumentException("prepare requires --task and --stable-key or --id.");
+        }
+        if (arguments[0] == "decorate-nodes" && string.IsNullOrWhiteSpace(inputPath))
+        {
+            throw new ArgumentException("decorate-nodes requires --input <file|->.");
+        }
         if (arguments[0] == "route"
             && (string.IsNullOrWhiteSpace(sourceStableKey) && sourceId is null
                 || string.IsNullOrWhiteSpace(targetStableKey) && targetId is null))
@@ -221,17 +290,37 @@ internal static class CliApplication
         return new CliOptions(
             arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit,
             kinds, domains, direction, sourceStableKey, sourceId, targetStableKey, targetId,
-            viaStableKeys, maxDepth, maxVisited, maxEntities);
+            viaStableKeys, maxDepth, maxVisited, maxEntities, task, tokenBudget, inputPath,
+            dryRun, includeProposed, includeStale, includeHistory);
+    }
+
+    private static async Task<DecorateNodesResult> DecorateNodesAsync(
+        CartographerSession session,
+        CliOptions options,
+        CancellationToken cancellationToken)
+    {
+        var json = options.InputPath == "-"
+            ? await Console.In.ReadToEndAsync(cancellationToken)
+            : await File.ReadAllTextAsync(Path.GetFullPath(options.InputPath!), cancellationToken);
+        if (Encoding.UTF8.GetByteCount(json) > 1_048_576)
+        {
+            throw new InvalidDataException("Decoration payload exceeds the 1 MiB limit.");
+        }
+        var batch = JsonSerializer.Deserialize<NodeDecorationBatch>(json, JsonOptions)
+            ?? throw new InvalidDataException("Decoration input is not a valid JSON object.");
+        return await session.DecorateNodesAsync(batch, options.DryRun, cancellationToken);
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface|assessments|prepare|decorate-nodes> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>] [--query <text>] "
         + "[--direction <incoming|outgoing|both>] [--domain <domain>] [--kind <relation-kind>] "
         + "[--source-key <key> | --source-id <number>] [--target-key <key> | --target-id <number>] "
         + "[--via-key <stable-key>] "
-        + "[--max-depth <number>] [--max-visited <10-20000>] [--max-entities <10-1000>] [--limit <number>]";
+        + "[--max-depth <number>] [--max-visited <10-20000>] [--max-entities <10-1000>] [--limit <number>] "
+        + "[--task <text>] [--token-budget <800-32000>] [--input <file|->] [--dry-run] "
+        + "[--include-proposed] [--include-stale] [--include-history]";
 
     private sealed record CliOptions(
         string Command,
@@ -251,5 +340,12 @@ internal static class CliApplication
         IReadOnlyList<string> ViaStableKeys,
         int? MaxDepth,
         int? MaxVisited,
-        int? MaxEntities);
+        int? MaxEntities,
+        string? Task,
+        int? TokenBudget,
+        string? InputPath,
+        bool DryRun,
+        bool IncludeProposed,
+        bool IncludeStale,
+        bool IncludeHistory);
 }

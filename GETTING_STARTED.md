@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.6.0` is the Change Surface Alpha of the complete rewrite. It
+Kraken Atlas `0.7.0` is the Agent Memory Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -13,6 +13,11 @@ operations, and PostgreSQL objects into bounded cross-domain Routes.
 It can project a bounded change surface from any exact entity, including direct
 and transitive dependencies, affected projects, related attributed tests, and
 focused build/test commands.
+The first prepared-change workflow fits ranked static context and reusable
+accepted assessments into an explicit token budget. Agents can record typed,
+evidence-backed knowledge through the versioned node-decoration JSON contract;
+claims remain separate from canonical facts and become stale when captured
+dependencies change.
 
 ## Requirements
 
@@ -63,9 +68,15 @@ npm run check:vsix
 12. Run `Kraken Atlas: Show Change Surface` with a method, endpoint, contract,
     or database-object stable key. Inspect dependency direction, related tests,
     affected projects, and verification commands.
-13. Run `Kraken Atlas: Restart Cartographer`, then show the summary again.
-14. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
-15. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+13. Run `Kraken Atlas: Prepare Change Context Pack` for the same entity and a
+    concrete task. Confirm the estimated output respects the selected budget.
+14. Run `Kraken Atlas: Apply Node Decorations from JSON` with a schema-valid
+    batch. Review the dry-run result before confirming the atomic write.
+15. Run `Kraken Atlas: Show Node Assessments` and verify status, freshness,
+    author, confidence, evidence, and claim identity.
+16. Run `Kraken Atlas: Restart Cartographer`, then show the assessments again.
+17. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
+18. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
 
 The Atlas database is stored under the VS Code workspace storage directory and

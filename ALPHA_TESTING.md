@@ -1,10 +1,11 @@
-# Kraken Atlas Change Surface Alpha Testing
+# Kraken Atlas Agent Memory Alpha Testing
 
 ## Purpose
 
 This alpha validates the durable Cartographer foundation, complete static .NET
-feature Routes, and the first evidence-backed change-surface projection in real
-VS Code environments. It is intentionally narrower than the planned product.
+feature Routes, evidence-backed change surfaces, token-budgeted prepared-change
+Context Packs, and durable agent assessments in real VS Code environments. It
+is intentionally narrower than the planned product.
 
 The preview currently discovers solutions, .NET and package.json projects,
 project references, relevant workspace files, project roles, build dimensions,
@@ -23,11 +24,15 @@ these facts through VS Code, JSON-RPC, and CLI.
 It also returns bounded direct/transitive neighbors, dependency direction,
 affected projects, attributed xUnit/NUnit/MSTest test cases, and focused build
 or test commands for an exact seed entity.
+The Agent Memory slice combines those facts with current accepted assessments
+under an explicit output budget. A versioned JSON command records typed claims
+in a separate SQLite enrichment plane with exact selectors, evidence,
+provenance, confidence, idempotency, and dependency-based freshness.
 
 It does not yet provide Minimal API or middleware semantics, EF Core model and
 migration mapping, TypeScript/React semantics, impact analysis, MCP tools,
-Context Packs, or AI-authored node decorations. Please evaluate the capabilities
-that exist rather than the planned semantic surface.
+source-body Context Pack slices, or documentation indexing. Please evaluate the
+capabilities that exist rather than the planned semantic surface.
 
 ## Distribution and License Status
 
@@ -89,12 +94,23 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
     related attributed tests, evidence, and focused verification commands.
 14. Repeat with a high-fanout DTO or database object. The response must respect
     depth/entity bounds and report truncation rather than flooding the output.
-15. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
+15. Run `Kraken Atlas: Prepare Change Context Pack` for the service method and a
+    concrete task. Verify ranked evidence, reusable assessments, tests, commands,
+    omitted counts, and `estimatedTokens <= tokenBudget`.
+16. Apply a node-decoration batch first with `decorate-nodes --dry-run`, then
+    without the flag. Repeat the same operation and verify status `replayed` with
+    the same claim IDs.
+17. Run `Kraken Atlas: Show Node Assessments`. Verify canonical facts are not
+    presented as agent claims and each claim has status, freshness, confidence,
+    agent identity, exact evidence, and a stable claim ID.
+18. Change one evidenced source file, rebuild, and query with `--include-stale`.
+    The dependent assessment must be stale and absent from normal prepared packs.
+19. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
    existing Atlas generation should reopen successfully.
-16. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
+20. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
    lock errors or stale Cartographer processes.
-17. Close and reopen VS Code, then show the summary again to verify persistence.
-18. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
+21. Close and reopen VS Code, then show the summary and assessments again.
+22. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
 
 Kraken Atlas performs static discovery and does not execute the application,
@@ -119,6 +135,11 @@ Please include:
 - Change surfaces that omit proven direct neighbors, expand through unrelated
   shared types, misclassify dependency direction, miss attributed tests, or
   suggest irrelevant projects and commands.
+- Prepared packs that exceed their token budget, omit the seed, fail to select a
+  related test, mix stale claims into normal results, or lose assessment labels.
+- Decoration batches that partially apply, accept fuzzy selectors, duplicate an
+  idempotent operation, overwrite canonical facts, or fail to become stale after
+  an evidenced file changes.
 - Atlas counts and build duration.
 - Expected projects that were missing or unexpected projects that appeared.
 - The exact command that failed and the visible error.
@@ -152,10 +173,18 @@ diagnostic export does not contain source bodies.
 - Test selection currently recognizes xUnit `Fact`/`Theory`, NUnit test
   attributes, and MSTest test-method attributes. Dynamic/custom test discovery
   and per-test runner filters remain planned.
+- Prepared-change token counts are deterministic JSON-size estimates, not model-
+  tokenizer counts. Packs contain identities, relations, evidence locations,
+  projects, commands, and assessments, but no source bodies.
+- Assessment dependency capture is conservative: a change to an evidenced file
+  can stale every claim depending on an entity in that file. Persisted Route
+  evidence and explicit documentation fingerprints await their dedicated stores.
+- Accepted requests below confidence `0.8` or without canonical evidence are
+  stored as proposed and returned with an `accepted_downgraded` diagnostic.
 - Symbol search matches name and qualified-name fragments and returns at most 100
   results.
 - The VSIX is framework-dependent and requires an installed .NET 10 runtime.
-- Additional semantic analyzers and AI-facing query tools remain planned work.
+- MCP exposure and native VS Code language-model tools remain planned work.
 - Workspace storage is local to the VS Code profile and workspace identity.
 
 ## Uninstall and Local Data

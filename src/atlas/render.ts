@@ -1,10 +1,13 @@
 import {
   AtlasEntitySearchResult,
   AtlasSummary,
+  AssessmentQueryResult,
   ChangeSurfaceItem,
   ChangeSurfaceResult,
   CodeUsageResult,
+  DecorateNodesResult,
   EntityDetail,
+  PreparedChangeResult,
   RelationQueryResult,
   RouteQueryResult,
   SymbolSearchResult,
@@ -250,6 +253,104 @@ function appendSurfaceItems(lines: string[], heading: string, items: ChangeSurfa
     );
     lines.push(`  ${relation.evidence.relativePath}:${relation.evidence.startLine}:${relation.evidence.startColumn}`);
   }
+}
+
+export function renderAssessments(result: AssessmentQueryResult): string {
+  if (result.atlasState === "not_created") {
+    return "Assessments: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before querying assessments.";
+  }
+  if (result.atlasState === "entity_not_found" || !result.focus) {
+    return `Assessments: entity_not_found\nGeneration: ${result.generation ?? "unknown"}`;
+  }
+  const suffix = result.truncated ? "+" : "";
+  const lines = [
+    `Assessments: ${result.focus.qualifiedName}`,
+    `Stable key: ${result.focus.stableKey}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Claims: ${result.assessments.length}${suffix}`
+  ];
+  for (const assessment of result.assessments) {
+    lines.push(
+      "",
+      `- ${assessment.dimension}/${assessment.updateKind} | ${assessment.status} | ${assessment.freshness} | confidence ${assessment.confidence.toFixed(2)}`,
+      `  ${assessment.statement}`,
+      `  ${assessment.claimId} | ${assessment.agentName}${assessment.agentModel ? `/${assessment.agentModel}` : ""}`
+    );
+    for (const evidence of assessment.evidence) {
+      lines.push(`  evidence: ${evidence.summary}`);
+    }
+    for (const reason of assessment.staleReasons) {
+      lines.push(`  stale: ${reason}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+export function renderPreparedChange(result: PreparedChangeResult): string {
+  if (result.atlasState === "not_created") {
+    return "Prepared change: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before preparing a change.";
+  }
+  if (result.atlasState === "entity_not_found" || !result.seed) {
+    return `Prepared change: entity_not_found\nGeneration: ${result.generation ?? "unknown"}`;
+  }
+  const lines = [
+    `Prepared change: ${result.task}`,
+    `Seed: ${result.seed.qualifiedName}`,
+    `Stable key: ${result.seed.stableKey}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Budget: ${result.estimatedTokens}/${result.tokenBudget} estimated tokens | truncated ${result.truncated}`,
+    "",
+    "Ranked Context"
+  ];
+  for (const item of result.items) {
+    const relation = item.relationKind ? ` | ${item.relationDomain}/${item.relationKind}` : "";
+    const direction = item.pathDirection ? ` | ${item.pathDirection}` : "";
+    const project = item.project ? ` | ${item.project.relativePath}` : "";
+    lines.push(`- ${item.score} | ${item.relevance}${direction}${relation} | ${item.entity.qualifiedName}${project}`);
+    if (item.evidence) {
+      lines.push(`  ${item.evidence.relativePath}:${item.evidence.startLine}:${item.evidence.startColumn}`);
+    }
+  }
+  if (result.assessments.length > 0) {
+    lines.push("", "Reusable Assessments");
+    for (const assessment of result.assessments) {
+      lines.push(
+        `- ${assessment.dimension}/${assessment.updateKind} | ${assessment.status} | confidence ${assessment.confidence.toFixed(2)}`,
+        `  ${assessment.statement}`,
+        `  ${assessment.claimId}`
+      );
+    }
+  }
+  if (result.verificationCommands.length > 0) {
+    lines.push("", "Verification Commands");
+    for (const command of result.verificationCommands) {
+      lines.push(`- ${command.kind} | ${command.commandText}`);
+    }
+  }
+  if (result.omittedItems > 0 || result.omittedAssessments > 0) {
+    lines.push("", `Omitted by budget: ${result.omittedItems} context items, ${result.omittedAssessments} assessments`);
+  }
+  return lines.join("\n");
+}
+
+export function renderDecorationResult(result: DecorateNodesResult): string {
+  const lines = [
+    `Node decorations: ${result.status}`,
+    `Operation: ${result.operationId}`,
+    `Generation: ${result.atlasGeneration}`,
+    `Session: ${result.sessionId}`,
+    `Updates: ${result.results.length}`
+  ];
+  for (const item of result.results) {
+    lines.push(
+      `- ${item.clientUpdateId} | ${item.updateKind} | ${item.status} | evidence ${item.evidenceCount} | dependencies ${item.dependencyCount}`,
+      `  ${item.claimIds.join(", ")}`
+    );
+  }
+  for (const diagnostic of result.diagnostics) {
+    lines.push(`- ${diagnostic.code} | ${diagnostic.path} | ${diagnostic.message}`);
+  }
+  return lines.join("\n");
 }
 
 export function renderWorkspaceOrientation(

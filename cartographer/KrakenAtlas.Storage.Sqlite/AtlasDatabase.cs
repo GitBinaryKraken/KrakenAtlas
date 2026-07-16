@@ -4,7 +4,7 @@ namespace KrakenAtlas.Storage.Sqlite;
 
 internal static class AtlasDatabase
 {
-    private const int CurrentSchemaVersion = 2;
+    private const int CurrentSchemaVersion = 3;
 
     private static readonly IReadOnlyList<string> Migrations =
     [
@@ -234,6 +234,79 @@ internal static class AtlasDatabase
         CREATE INDEX ix_build_dimensions_generation ON build_dimensions(workspace_id, generation_id, project_id);
         CREATE INDEX ix_workspace_commands_generation ON workspace_commands(workspace_id, generation_id, command_kind);
         CREATE INDEX ix_repository_rules_generation ON repository_rules(workspace_id, generation_id, precedence);
+        """,
+        """
+        CREATE TABLE analysis_sessions (
+            id TEXT PRIMARY KEY,
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+            atlas_generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            operation_id TEXT NOT NULL,
+            payload_hash TEXT NOT NULL,
+            agent_name TEXT NOT NULL,
+            agent_model TEXT,
+            agent_client TEXT,
+            agent_client_version TEXT,
+            purpose TEXT NOT NULL,
+            task_fingerprint TEXT,
+            scope_json TEXT,
+            status TEXT NOT NULL,
+            created_utc TEXT NOT NULL,
+            completed_utc TEXT,
+            result_json TEXT,
+            UNIQUE(workspace_id, operation_id)
+        );
+
+        CREATE TABLE assessment_claims (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL REFERENCES analysis_sessions(id),
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id),
+            subject_stable_key TEXT NOT NULL,
+            subject_kind TEXT NOT NULL,
+            subject_qualified_name TEXT NOT NULL,
+            validated_generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            last_checked_generation_id INTEGER NOT NULL REFERENCES atlas_generations(id),
+            client_update_id TEXT NOT NULL,
+            update_kind TEXT NOT NULL,
+            dimension TEXT NOT NULL,
+            statement TEXT NOT NULL,
+            update_json TEXT NOT NULL,
+            conditions_json TEXT,
+            confidence REAL NOT NULL CHECK(confidence >= 0 AND confidence <= 1),
+            requested_status TEXT NOT NULL,
+            status TEXT NOT NULL,
+            target_stable_key TEXT,
+            group_key TEXT,
+            tags_json TEXT NOT NULL,
+            created_utc TEXT NOT NULL,
+            updated_utc TEXT NOT NULL,
+            UNIQUE(session_id, client_update_id)
+        );
+
+        CREATE TABLE assessment_evidence (
+            id INTEGER PRIMARY KEY,
+            claim_id TEXT NOT NULL REFERENCES assessment_claims(id) ON DELETE CASCADE,
+            ordinal INTEGER NOT NULL,
+            evidence_kind TEXT NOT NULL,
+            evidence_json TEXT NOT NULL,
+            summary TEXT NOT NULL,
+            UNIQUE(claim_id, ordinal)
+        );
+
+        CREATE TABLE assessment_dependencies (
+            id INTEGER PRIMARY KEY,
+            claim_id TEXT NOT NULL REFERENCES assessment_claims(id) ON DELETE CASCADE,
+            dependency_kind TEXT NOT NULL,
+            stable_key TEXT NOT NULL,
+            expected_value TEXT NOT NULL,
+            details_json TEXT,
+            UNIQUE(claim_id, dependency_kind, stable_key)
+        );
+
+        CREATE INDEX ix_analysis_sessions_workspace ON analysis_sessions(workspace_id, created_utc);
+        CREATE INDEX ix_assessment_claims_subject ON assessment_claims(workspace_id, subject_stable_key, status);
+        CREATE INDEX ix_assessment_claims_group ON assessment_claims(workspace_id, group_key, status);
+        CREATE INDEX ix_assessment_claims_target ON assessment_claims(workspace_id, target_stable_key, status);
+        CREATE INDEX ix_assessment_dependencies_claim ON assessment_dependencies(claim_id);
         """
     ];
 

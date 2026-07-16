@@ -223,6 +223,124 @@ export interface ChangeSurfaceResult {
   verificationCommands: WorkspaceCommandDetail[];
 }
 
+export interface AssessmentSubject {
+  stableKey: string;
+  kind: string;
+  qualifiedName: string;
+  currentEntityId?: number;
+}
+
+export interface AssessmentEvidenceDetail {
+  kind: string;
+  summary: string;
+}
+
+export interface AgentAssessmentDetail {
+  claimId: string;
+  sessionId: string;
+  clientUpdateId: string;
+  subject: AssessmentSubject;
+  updateKind: string;
+  dimension: string;
+  statement: string;
+  update: Record<string, unknown>;
+  conditions?: Record<string, unknown>;
+  confidence: number;
+  status: string;
+  freshness: "current" | "stale";
+  staleReasons: string[];
+  validatedGeneration: number;
+  lastCheckedGeneration: number;
+  agentName: string;
+  agentModel?: string;
+  agentClient?: string;
+  tags: string[];
+  evidence: AssessmentEvidenceDetail[];
+  createdUtc: string;
+  updatedUtc: string;
+}
+
+export interface AssessmentQueryResult {
+  atlasState: "not_created" | "entity_not_found" | "current";
+  generation?: number;
+  focus?: RelationEntity;
+  truncated: boolean;
+  assessments: AgentAssessmentDetail[];
+}
+
+export interface NodeDecorationBatch {
+  $schema: string;
+  schemaVersion: "1.0";
+  operationId: string;
+  workspace: {
+    workspaceKey: string;
+    expectedAtlasGeneration: number;
+  };
+  session: Record<string, unknown>;
+  options?: Record<string, unknown>;
+  decorations: Array<Record<string, unknown>>;
+}
+
+export interface DecorationDiagnostic {
+  code: string;
+  path: string;
+  message: string;
+}
+
+export interface DecorationResultItem {
+  clientUpdateId: string;
+  updateKind: string;
+  subjectEntityId: number;
+  status: string;
+  claimIds: string[];
+  groupKey?: string;
+  evidenceCount: number;
+  dependencyCount: number;
+}
+
+export interface DecorateNodesResult {
+  schemaVersion: "1.0";
+  operationId: string;
+  workspaceKey: string;
+  atlasGeneration: number;
+  sessionId: string;
+  status: "validated" | "applied" | "replayed" | "rejected";
+  results: DecorationResultItem[];
+  diagnostics: DecorationDiagnostic[];
+}
+
+export interface PreparedChangeItem {
+  entity: RelationEntity;
+  relevance: "seed" | "direct" | "related_test" | "transitive";
+  score: number;
+  depth: number;
+  pathDirection?: "dependency" | "dependent";
+  relationDomain?: string;
+  relationKind?: string;
+  project?: ChangeSurfaceProject;
+  evidence?: EntityLocationDetail;
+}
+
+export interface PreparedChangeResult {
+  atlasState: "not_created" | "entity_not_found" | "current";
+  generation?: number;
+  task: string;
+  tokenBudget: number;
+  estimatedTokens: number;
+  truncated: boolean;
+  surfaceTruncated: boolean;
+  graphTruncated: boolean;
+  seed?: RelationEntity;
+  seedProject?: ChangeSurfaceProject;
+  agentInstructions: string[];
+  items: PreparedChangeItem[];
+  assessments: AgentAssessmentDetail[];
+  affectedProjects: ChangeSurfaceProject[];
+  verificationCommands: WorkspaceCommandDetail[];
+  omittedItems: number;
+  omittedAssessments: number;
+}
+
 export interface OrientationEvidence {
   relativePath: string;
   line: number;

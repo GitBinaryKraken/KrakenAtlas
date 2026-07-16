@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace KrakenAtlas.Core;
 
 public sealed record WorkspaceSnapshot(
@@ -395,6 +398,174 @@ public sealed record ChangeSurfaceResult(
         int maxEntities) => new(
             "entity_not_found", generation, null, null, false, false, maxDepth, maxEntities,
             [], [], [], [], []);
+}
+
+public sealed record AssessmentSubject(
+    string StableKey,
+    string Kind,
+    string QualifiedName,
+    long? CurrentEntityId);
+
+public sealed record AssessmentEvidenceDetail(
+    string Kind,
+    string Summary);
+
+public sealed record AgentAssessmentDetail(
+    string ClaimId,
+    string SessionId,
+    string ClientUpdateId,
+    AssessmentSubject Subject,
+    string UpdateKind,
+    string Dimension,
+    string Statement,
+    JsonElement Update,
+    JsonElement? Conditions,
+    double Confidence,
+    string Status,
+    string Freshness,
+    IReadOnlyList<string> StaleReasons,
+    long ValidatedGeneration,
+    long LastCheckedGeneration,
+    string AgentName,
+    string? AgentModel,
+    string? AgentClient,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<AssessmentEvidenceDetail> Evidence,
+    DateTimeOffset CreatedUtc,
+    DateTimeOffset UpdatedUtc);
+
+public sealed record AssessmentQueryResult(
+    string AtlasState,
+    long? Generation,
+    RelationEntity? Focus,
+    bool Truncated,
+    IReadOnlyList<AgentAssessmentDetail> Assessments)
+{
+    public static AssessmentQueryResult NotCreated() =>
+        new("not_created", null, null, false, []);
+
+    public static AssessmentQueryResult EntityNotFound(long generation) =>
+        new("entity_not_found", generation, null, false, []);
+}
+
+public sealed record DecorationDiagnostic(
+    string Code,
+    string Path,
+    string Message);
+
+public sealed record DecorationResultItem(
+    string ClientUpdateId,
+    string UpdateKind,
+    long SubjectEntityId,
+    string Status,
+    IReadOnlyList<string> ClaimIds,
+    string? GroupKey,
+    int EvidenceCount,
+    int DependencyCount);
+
+public sealed record DecorateNodesResult(
+    string SchemaVersion,
+    string OperationId,
+    string WorkspaceKey,
+    long AtlasGeneration,
+    string SessionId,
+    string Status,
+    IReadOnlyList<DecorationResultItem> Results,
+    IReadOnlyList<DecorationDiagnostic> Diagnostics);
+
+public sealed record DecorationWorkspace(
+    string WorkspaceKey,
+    long ExpectedAtlasGeneration);
+
+public sealed record DecorationAgent(
+    string Name,
+    string? Model,
+    string? Client,
+    string? ClientVersion);
+
+public sealed record DecorationSession(
+    string? SessionId,
+    DecorationAgent Agent,
+    string Purpose,
+    string? TaskFingerprint,
+    JsonElement? Scope);
+
+public sealed record DecorationOptions(
+    bool? Atomic,
+    bool? DryRun,
+    bool? CompleteSession,
+    string? ConflictPolicy,
+    string? MissingSubjectPolicy);
+
+public sealed record NodeSelector(
+    string? StableKey,
+    long? EntityId,
+    string? ExpectedKind,
+    string? ExpectedQualifiedName);
+
+public sealed record NodeDecoration(
+    string ClientUpdateId,
+    NodeSelector Subject,
+    JsonElement Update,
+    string Statement,
+    double Confidence,
+    string RequestedStatus,
+    JsonElement? Conditions,
+    string DependencyPolicy,
+    IReadOnlyList<JsonElement> Evidence,
+    IReadOnlyList<JsonElement>? Dependencies,
+    IReadOnlyList<string>? SupersedesClaimIds,
+    IReadOnlyList<string>? Tags);
+
+public sealed record NodeDecorationBatch(
+    [property: JsonPropertyName("$schema")] string Schema,
+    string SchemaVersion,
+    string OperationId,
+    DecorationWorkspace Workspace,
+    DecorationSession Session,
+    DecorationOptions? Options,
+    IReadOnlyList<NodeDecoration> Decorations);
+
+public sealed record PreparedChangeItem(
+    RelationEntity Entity,
+    string Relevance,
+    int Score,
+    int Depth,
+    string? PathDirection,
+    string? RelationDomain,
+    string? RelationKind,
+    ChangeSurfaceProject? Project,
+    EntityLocationDetail? Evidence);
+
+public sealed record PreparedChangeResult(
+    string AtlasState,
+    long? Generation,
+    string Task,
+    int TokenBudget,
+    int EstimatedTokens,
+    bool Truncated,
+    bool SurfaceTruncated,
+    bool GraphTruncated,
+    RelationEntity? Seed,
+    ChangeSurfaceProject? SeedProject,
+    IReadOnlyList<string> AgentInstructions,
+    IReadOnlyList<PreparedChangeItem> Items,
+    IReadOnlyList<AgentAssessmentDetail> Assessments,
+    IReadOnlyList<ChangeSurfaceProject> AffectedProjects,
+    IReadOnlyList<WorkspaceCommandDetail> VerificationCommands,
+    int OmittedItems,
+    int OmittedAssessments)
+{
+    public static PreparedChangeResult NotCreated(string task, int tokenBudget) => new(
+        "not_created", null, task, tokenBudget, 0, false, false, false, null, null,
+        [], [], [], [], [], 0, 0);
+
+    public static PreparedChangeResult EntityNotFound(
+        long generation,
+        string task,
+        int tokenBudget) => new(
+            "entity_not_found", generation, task, tokenBudget, 0, false, false, false,
+            null, null, [], [], [], [], [], 0, 0);
 }
 
 public sealed record OrientationEvidence(

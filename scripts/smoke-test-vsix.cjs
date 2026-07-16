@@ -316,9 +316,104 @@ try {
     throw new Error(`Packaged change surface was incomplete: ${JSON.stringify(surface)}`);
   }
 
+  const decorationPath = path.join(temporaryRoot, "packaged-persona-assessment.json");
+  fs.writeFileSync(decorationPath, JSON.stringify({
+    $schema: "https://raw.githubusercontent.com/GitBinaryKraken/KrakenAtlas/main/docs/planning/contracts/node-decoration-batch.schema.json",
+    schemaVersion: "1.0",
+    operationId: "packaged-persona-role",
+    workspace: {
+      workspaceKey: firstBuild.workspaceKey,
+      expectedAtlasGeneration: firstBuild.generation
+    },
+    session: {
+      agent: { name: "vsix-smoke", model: "deterministic", client: "packaged-cli" },
+      purpose: "Prove packaged durable agent knowledge."
+    },
+    options: {
+      atomic: true,
+      dryRun: false,
+      completeSession: true,
+      conflictPolicy: "record",
+      missingSubjectPolicy: "reject"
+    },
+    decorations: [{
+      clientUpdateId: "classify-persona-service",
+      subject: {
+        stableKey: logicMethod.stableKey,
+        expectedKind: "method",
+        expectedQualifiedName: logicMethod.qualifiedName
+      },
+      update: {
+        kind: "classify_role",
+        role: "application_service",
+        layer: "application",
+        responsibility: "Coordinates the public Persona read."
+      },
+      statement: "This method is the application-service boundary for the public Persona read.",
+      confidence: 0.95,
+      requestedStatus: "accepted",
+      dependencyPolicy: "capture_from_evidence",
+      evidence: [{
+        kind: "source_location",
+        path: "Logic/PersonaService.cs",
+        startLine: 13,
+        endLine: 14
+      }],
+      tags: ["persona", "application-service"]
+    }]
+  }, null, 2));
+  const dryRun = cartographer(assembly, "decorate-nodes", "--input", decorationPath, "--dry-run");
+  const applied = cartographer(assembly, "decorate-nodes", "--input", decorationPath);
+  const replayed = cartographer(assembly, "decorate-nodes", "--input", decorationPath);
+  if (
+    dryRun.status !== "validated" ||
+    applied.status !== "applied" ||
+    replayed.status !== "replayed" ||
+    applied.results?.[0]?.status !== "accepted" ||
+    replayed.results?.[0]?.claimIds?.[0] !== applied.results?.[0]?.claimIds?.[0]
+  ) {
+    throw new Error(
+      `Packaged node decoration workflow failed: ${JSON.stringify({ dryRun, applied, replayed })}`
+    );
+  }
+  const assessments = cartographer(
+    assembly, "assessments", "--stable-key", logicMethod.stableKey
+  );
+  const prepared = cartographer(
+    assembly,
+    "prepare",
+    "--stable-key",
+    logicMethod.stableKey,
+    "--task",
+    "Add audit logging to the public Persona read",
+    "--token-budget",
+    "4000"
+  );
+  if (
+    assessments.assessments?.length !== 1 ||
+    assessments.assessments[0].freshness !== "current" ||
+    prepared.estimatedTokens > prepared.tokenBudget ||
+    !prepared.assessments?.some(item => item.updateKind === "classify_role") ||
+    !prepared.items?.some(item => item.relevance === "related_test")
+  ) {
+    throw new Error(
+      `Packaged agent-memory query was incomplete: ${JSON.stringify({ assessments, prepared })}`
+    );
+  }
+
   const secondBuild = cartographer(assembly, "build");
   if (secondBuild.generation !== 2) {
     throw new Error(`Cartographer restart build did not advance the generation: ${JSON.stringify(secondBuild)}`);
+  }
+  const currentAfterRebuild = cartographer(
+    assembly, "assessments", "--stable-key", logicMethod.stableKey
+  );
+  if (
+    currentAfterRebuild.generation !== 2 ||
+    currentAfterRebuild.assessments?.length !== 1 ||
+    currentAfterRebuild.assessments[0].freshness !== "current"
+  ) {
+    throw new Error(`Packaged assessment did not survive an unchanged rebuild: ${JSON.stringify(currentAfterRebuild)}`);
   }
 
   code(["--uninstall-extension", extensionId]);
@@ -330,7 +425,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and its test-aware change surface, built and reopened two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route, persisted and reused a current agent assessment in a budgeted Context Pack across two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {

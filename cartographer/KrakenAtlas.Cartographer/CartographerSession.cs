@@ -229,6 +229,61 @@ internal sealed class CartographerSession
             cancellationToken);
     }
 
+    public Task<AssessmentQueryResult> GetAssessmentsAsync(
+        GetAssessmentsParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(AssessmentQueryResult.NotCreated());
+        }
+        return activeRepository.GetAssessmentsAsync(
+            workspaceKey,
+            parameters.StableKey,
+            parameters.Id,
+            parameters.IncludeProposed ?? false,
+            parameters.IncludeStale ?? false,
+            parameters.IncludeHistory ?? false,
+            parameters.Limit ?? 50,
+            cancellationToken);
+    }
+
+    public Task<DecorateNodesResult> DecorateNodesAsync(
+        NodeDecorationBatch batch,
+        bool forceDryRun,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            throw new InvalidOperationException("Node decoration requires an initialized workspace.");
+        }
+        return activeRepository.DecorateNodesAsync(
+            workspaceKey, batch, forceDryRun, cancellationToken);
+    }
+
+    public Task<PreparedChangeResult> PrepareChangeAsync(
+        PrepareChangeParams parameters,
+        CancellationToken cancellationToken)
+    {
+        var activeRepository = RequireRepository();
+        if (workspaceKey is null)
+        {
+            return Task.FromResult(PreparedChangeResult.NotCreated(
+                parameters.Task, parameters.TokenBudget ?? 4000));
+        }
+        return activeRepository.PrepareChangeAsync(
+            workspaceKey,
+            parameters.Task,
+            parameters.StableKey,
+            parameters.Id,
+            parameters.TokenBudget ?? 4000,
+            parameters.MaxDepth ?? 3,
+            parameters.IncludeProposed ?? false,
+            cancellationToken);
+    }
+
     private AtlasRepository RequireRepository() => repository
         ?? throw new InvalidOperationException("Cartographer has not been initialized.");
 }

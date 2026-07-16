@@ -30,12 +30,17 @@ The local Atlas may contain:
   use, inheritance, implementations, and overrides, including dispatch kind and
   exact source evidence spans.
 - Atlas generations, analyzer names, status, timings, and diagnostics.
+- User- or agent-submitted analysis-session metadata, typed assessment updates,
+  concise claim statements, confidence, status, tags, exact evidence references,
+  captured dependency fingerprints, and assessment history.
 - SQLite operational metadata required for persistence and migrations.
 
-The current Atlas does not store source file bodies. It stores source locations,
-declaration metadata, and relation metadata. Later Context Pack phases may store
-or emit bounded source slices; those phases must update this document before
-external testing.
+The current Atlas and prepared-change Context Packs do not store or emit source
+file bodies. They store source locations, declaration metadata, relation
+metadata, and agent-provided structured conclusions. Decoration payloads must
+not contain raw prompts, private reasoning, chain-of-thought, transcripts,
+secrets, or source bodies. A later source-slicing phase must update this document
+before external testing.
 
 ## Network and Telemetry
 

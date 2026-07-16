@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.6.0`
+Version `0.7.0`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.6.0` Change Surface Alpha builds on the Walking Cartographer foundation. It
+The `0.7.0` Agent Memory Alpha builds on the Walking Cartographer foundation. It
 contains:
 
 - A thin VS Code workspace extension and matching command-line surface.
@@ -56,13 +56,22 @@ contains:
   test cases, and focused build/test commands.
 - Canonical xUnit, NUnit, and MSTest `test_case` entities derived from test
   attributes, with exact source and owning-project evidence.
+- Token-budgeted prepared-change Context Packs that rank the seed, direct and
+  transitive change candidates, related tests, verification commands, and
+  reusable accepted assessments without storing or returning source bodies.
+- A durable assessment ledger separate from canonical facts, with versioned
+  analysis sessions, typed JSON updates, exact evidence, confidence, status,
+  provenance, idempotent operation replay, and dependency-driven freshness.
+- The version 1.0 `decorate_nodes` contract across CLI, JSON-RPC, and VS Code,
+  including generation pinning, dry-run validation, atomic writes, role and
+  feature membership, behavior, lifecycle, guidance, Landmarks, gaps, and review.
 - Cross-process tests proving persistence, stable identity, and rollback to the
   previous generation after failed discovery.
 
-The Change Surface Alpha covers a deliberately bounded static subset. Minimal
+The Agent Memory Alpha covers a deliberately bounded static subset. Minimal
 APIs, middleware ordering, EF Core models and migrations, dynamic URLs, runtime
-dispatch, TypeScript/React semantics, agent tools, Context Packs, and external
-package symbols remain planned.
+dispatch, TypeScript/React semantics, MCP tools, source slicing, documentation
+indexing, and external package symbols remain planned.
 
 ## Commands
 
@@ -77,6 +86,9 @@ package symbols remain planned.
 - `Kraken Atlas: Show Relations`
 - `Kraken Atlas: Trace Route`
 - `Kraken Atlas: Show Change Surface`
+- `Kraken Atlas: Prepare Change Context Pack`
+- `Kraken Atlas: Show Node Assessments`
+- `Kraken Atlas: Apply Node Decorations from JSON`
 - `Kraken Atlas: Restart Cartographer`
 - `Kraken Atlas: Export Diagnostics`
 - `Kraken Atlas: Open Architecture Plan`
@@ -114,6 +126,9 @@ dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Car
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll relations --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key http_endpoint:<hash> --direction both --limit 50
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll route --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --source-key csharp_symbol:<hash> --via-key csharp_symbol:<hash> --target-key database_object:<hash> --max-depth 16
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll surface --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --max-depth 3 --max-entities 200
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll prepare --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --task "Add audit logging" --token-budget 4000
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll assessments --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --include-proposed --include-stale
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll decorate-nodes --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --input .\node-decorations.json --dry-run
 ```
 
 AI agents should follow [the bounded query guide](docs/planning/AGENT_QUERY_GUIDE.md)

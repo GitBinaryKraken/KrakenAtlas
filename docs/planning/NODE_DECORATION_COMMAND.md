@@ -12,8 +12,9 @@ The authoritative version 1.0 payload is the Draft 2020-12 JSON Schema at
 An illustrative payload is checked in at
 [`contracts/node-decoration-batch.example.json`](contracts/node-decoration-batch.example.json).
 
-This is a Phase 2 implementation contract. Checking in the schema now lets agent
-integrations produce the same format before the storage command is enabled.
+Version 0.7 implements this Phase 2 contract through CLI, JSON-RPC, and the
+trusted-workspace VS Code adapter. MCP remains an adapter target over the same
+operation.
 
 ## One Operation, Multiple Adapters
 
@@ -23,6 +24,11 @@ All adapters invoke the same Cartographer application operation:
 - JSON-RPC: `decorate_nodes`, with the schema object as `params`
 - MCP: `decorate_nodes(payload)`
 - Internal VS Code API: `decorateNodes(payload)`
+
+The current implementation supports every version 1.0 update intent. Entity,
+relation, source-location, documentation-path, prior-claim, and manual evidence
+are accepted. Persisted Route evidence and explicit documentation-fingerprint
+dependencies remain disabled until those dedicated stores exist.
 
 The CLI supports `--dry-run`. A dash for `--input -` reads one JSON object from
 standard input, which allows an agent to pipe a generated payload without

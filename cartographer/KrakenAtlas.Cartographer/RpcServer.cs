@@ -13,6 +13,7 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
@@ -88,7 +89,10 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             "symbol.usages",
                             "relation.query",
                             "route.trace",
-                            "change.surface"
+                            "change.surface",
+                            "assessment.read",
+                            "assessment.write",
+                            "agent.prepare_change"
                         ])),
                     false);
             }
@@ -172,6 +176,28 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                         request.Id,
                         await session.GetChangeSurfaceAsync(
                             DeserializeParams<GetChangeSurfaceParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "get_entity_assessments" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.GetAssessmentsAsync(
+                            DeserializeParams<GetAssessmentsParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "decorate_nodes" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.DecorateNodesAsync(
+                            DeserializeParams<NodeDecorationBatch>(request.Params),
+                            false,
+                            cancellationToken)),
+                    false),
+                "prepare_change" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.PrepareChangeAsync(
+                            DeserializeParams<PrepareChangeParams>(request.Params),
                             cancellationToken)),
                     false),
                 _ => (

@@ -119,6 +119,26 @@ those high-fanout code relations when directly attached to the seed but does not
 recursively expand through them. Explicit relation-kind filters remain available
 for intentional member/type impact exploration.
 
+## Agent Memory Baseline
+
+On 2026-07-15, version 0.7 prepared a change for
+`KelpApiLogicLayer.Services.PersonaService.GetPublicPersona` with the task
+"Add auditable access logging to the public Persona read" and a 4,000-token
+budget. A fresh CLI process returned in 309 ms, including process startup:
+
+- 3,288 estimated tokens within the requested 4,000-token budget.
+- 9 ranked context items: the seed, all 5 direct items, and 3 transitive items.
+- The same 4 affected API, logic, data, and database-domain projects.
+- 4 focused verification commands.
+- 6 lower-ranked items explicitly omitted by budget.
+- No surface or relation-graph truncation.
+- No reusable assessments because the temporary benchmark Atlas had not been
+  decorated. The deterministic fixture separately proves accepted-assessment
+  inclusion and dependency-based staleness.
+
+The full Kelp index for this run remained 11 projects, 672 files, 6,594 entities,
+and 16,190 relations and completed in 34.5 seconds.
+
 ## Gold Persona Route
 
 The initial semantic and full-stack acceptance Route is the public Persona read:

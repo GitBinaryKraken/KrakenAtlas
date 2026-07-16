@@ -2,11 +2,14 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
   renderAtlasSummary,
+  renderAssessments,
   renderChangeSurface,
   renderCodeUsages,
+  renderDecorationResult,
   renderEntityDetail,
   renderEntitySearch,
   renderRelations,
+  renderPreparedChange,
   renderRoute,
   renderSymbolSearch,
   renderWorkspaceOrientation
@@ -286,6 +289,112 @@ test("renders cross-domain entity, relation, and route queries", () => {
   assert.match(surface, /Change surface: GET \/Persona/);
   assert.match(surface, /dependency \| framework\/handled_by/);
   assert.match(surface, /dotnet build "Api\/Api\.csproj"/);
+});
+
+test("renders prepared changes and durable assessment results", () => {
+  const seed = {
+    id: 50,
+    stableKey: "csharp_symbol:persona-service",
+    kind: "method",
+    name: "GetPublicPersonaAsync",
+    qualifiedName: "Logic.PersonaService.GetPublicPersonaAsync(string)",
+    signature: "Task<Persona> GetPublicPersonaAsync(string sid)"
+  };
+  const assessment = {
+    claimId: "claim:persona-role",
+    sessionId: "session:persona",
+    clientUpdateId: "classify-persona",
+    subject: {
+      stableKey: seed.stableKey,
+      kind: seed.kind,
+      qualifiedName: seed.qualifiedName,
+      currentEntityId: seed.id
+    },
+    updateKind: "classify_role",
+    dimension: "architecture",
+    statement: "This method is the application-service boundary for the Persona read.",
+    update: { kind: "classify_role", role: "application_service", layer: "application" },
+    confidence: 0.96,
+    status: "accepted",
+    freshness: "current" as const,
+    staleReasons: [],
+    validatedGeneration: 8,
+    lastCheckedGeneration: 8,
+    agentName: "codex",
+    agentModel: "gpt-5",
+    agentClient: "integration-test",
+    tags: ["persona"],
+    evidence: [{ kind: "source_location", summary: "source_location Logic/PersonaService.cs:13" }],
+    createdUtc: "2026-07-15T12:00:00Z",
+    updatedUtc: "2026-07-15T12:00:00Z"
+  };
+  const assessments = renderAssessments({
+    atlasState: "current",
+    generation: 8,
+    focus: seed,
+    truncated: false,
+    assessments: [assessment]
+  });
+  assert.match(assessments, /architecture\/classify_role \| accepted \| current/);
+  assert.match(assessments, /claim:persona-role/);
+
+  const prepared = renderPreparedChange({
+    atlasState: "current",
+    generation: 8,
+    task: "Add Persona audit logging",
+    tokenBudget: 2000,
+    estimatedTokens: 842,
+    truncated: false,
+    surfaceTruncated: false,
+    graphTruncated: false,
+    seed,
+    agentInstructions: [],
+    items: [{
+      entity: seed,
+      relevance: "seed",
+      score: 100,
+      depth: 0,
+      evidence: {
+        fileStableKey: "file:persona-service",
+        relativePath: "Logic/PersonaService.cs",
+        locationKind: "definition",
+        startLine: 13,
+        startColumn: 5,
+        endLine: 14,
+        endColumn: 60,
+        isGenerated: false
+      }
+    }],
+    assessments: [assessment],
+    affectedProjects: [],
+    verificationCommands: [],
+    omittedItems: 0,
+    omittedAssessments: 0
+  });
+  assert.match(prepared, /Budget: 842\/2000 estimated tokens/);
+  assert.match(prepared, /100 \| seed \| Logic\.PersonaService/);
+  assert.match(prepared, /Reusable Assessments/);
+
+  const decoration = renderDecorationResult({
+    schemaVersion: "1.0",
+    operationId: "persona-assessment",
+    workspaceKey: "workspace:test",
+    atlasGeneration: 8,
+    sessionId: "session:persona",
+    status: "applied",
+    results: [{
+      clientUpdateId: "classify-persona",
+      updateKind: "classify_role",
+      subjectEntityId: 50,
+      status: "accepted",
+      claimIds: ["claim:persona-role"],
+      evidenceCount: 1,
+      dependencyCount: 2
+    }],
+    diagnostics: []
+  });
+  assert.match(decoration, /Node decorations: applied/);
+  assert.match(decoration, /dependencies 2/);
 });
 
 test("renders workspace orientation with facets, commands, and rule evidence", () => {
