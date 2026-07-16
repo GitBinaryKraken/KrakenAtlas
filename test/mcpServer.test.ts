@@ -130,15 +130,23 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kraken-atlas-mcp-"));
   const workspaceRoot = path.join(temporaryRoot, "workspace");
   const atlasPath = path.join(temporaryRoot, "atlas", "atlas.sqlite3");
+  const pendingSetupPath = path.join(path.dirname(atlasPath), "agent-setup.pending.json");
   fs.cpSync(path.resolve(process.cwd(), "test-fixtures", "workspace-discovery"), workspaceRoot, {
     recursive: true
   });
+  fs.mkdirSync(path.dirname(atlasPath), { recursive: true });
+  fs.writeFileSync(pendingSetupPath, `${JSON.stringify({
+    schemaVersion: "1.0",
+    clientLabel: "Integration test",
+    configuredUtc: new Date().toISOString(),
+    extensionVersion: "0.9.5"
+  })}\n`);
   const mcp = new McpHarness(assembly, workspaceRoot, atlasPath);
   try {
     const initialized = await mcp.request<{
       protocolVersion: string;
       capabilities: { tools: { listChanged: boolean } };
-      serverInfo: { name: string };
+      serverInfo: { name: string; version: string };
       instructions: string;
     }>("initialize", {
       protocolVersion: "2025-11-25",
@@ -152,6 +160,8 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     assert.match(initialized.instructions, /get_atlas_health/);
     assert.match(initialized.instructions, /no_repository/);
     assert.match(initialized.instructions, /prepare_change/);
+    assert.match(initialized.instructions, /numeric id/);
+    assert.match(initialized.instructions, /never abbreviate/);
     mcp.notify("notifications/initialized");
 
     const listed = await mcp.request<{
@@ -180,6 +190,38 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     assert.equal(health.isError, false);
     assert.equal(health.structuredContent.atlasState, "not_created");
     assert.equal(health.structuredContent.buildRequired, true);
+    assert.equal(fs.existsSync(pendingSetupPath), true);
+    fs.writeFileSync(pendingSetupPath, `${JSON.stringify({
+      schemaVersion: "1.0",
+      clientLabel: "Integration test",
+      configuredUtc: new Date().toISOString(),
+      extensionVersion: initialized.serverInfo.version
+    })}\n`);
+    const verifiedHealth = await mcp.request<McpToolResult<AtlasHealthResult>>("tools/call", {
+      name: "get_atlas_health",
+      arguments: {}
+    });
+    assert.equal(verifiedHealth.isError, false);
+    assert.equal(fs.existsSync(pendingSetupPath), false);
+    const receiptDirectory = path.join(path.dirname(atlasPath), "agent-connections");
+    const receiptFiles = fs.readdirSync(receiptDirectory);
+    assert.equal(receiptFiles.length, 1);
+    const receipt = JSON.parse(fs.readFileSync(
+      path.join(receiptDirectory, receiptFiles[0]), "utf8"
+    )) as {
+      clientName: string;
+      serverVersion: string;
+      initializedUtc: string;
+      toolsListedUtc: string;
+      healthCalledUtc: string;
+      atlasPath: string;
+    };
+    assert.equal(receipt.clientName, "integration-test");
+    assert.equal(receipt.serverVersion, initialized.serverInfo.version);
+    assert.ok(receipt.initializedUtc);
+    assert.ok(receipt.toolsListedUtc);
+    assert.ok(receipt.healthCalledUtc);
+    assert.equal(receipt.atlasPath, path.resolve(atlasPath));
 
     const orientation = await mcp.request<McpToolResult<{ atlasState: string }>>("tools/call", {
       name: "get_workspace_orientation",
@@ -212,6 +254,32 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     });
     assert.equal(built.isError, false);
     assert.equal(built.structuredContent.generation, 1);
+
+    const ambiguous = await mcp.request<McpToolResult<TaskContextResult>>("tools/call", {
+      name: "prepare_change",
+      arguments: {
+        task: "Change project behavior",
+        query: "project",
+        tokenBudget: 1800
+      }
+    });
+    assert.equal(ambiguous.isError, false);
+    assert.equal(ambiguous.structuredContent.resolution, "needs_seed");
+    assert.ok(ambiguous.structuredContent.candidates.length >= 2);
+    assert.deepEqual(
+      ambiguous.structuredContent.candidates.map(candidate => candidate.rank),
+      ambiguous.structuredContent.candidates.map((_, index) => index + 1)
+    );
+    assert.match(ambiguous.structuredContent.candidates[0].selectionReason, /project/);
+    const retry = ambiguous.structuredContent.nextActions[0];
+    assert.equal(retry.tool, "prepare_change");
+    assert.equal(retry.arguments.id, ambiguous.structuredContent.candidates[0].entity.id);
+
+    const selected = await mcp.request<McpToolResult<TaskContextResult>>("tools/call", {
+      name: retry.tool,
+      arguments: retry.arguments
+    });
+    assert.equal(selected.structuredContent.resolution, "exact");
 
     const prepared = await mcp.request<McpToolResult<TaskContextResult>>("tools/call", {
       name: "prepare_change",

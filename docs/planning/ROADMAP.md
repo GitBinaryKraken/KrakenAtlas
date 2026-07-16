@@ -116,6 +116,9 @@ Kelp API host.
 Implemented in 0.9.5: explicit Atlas health, analyzer-version upgrade
 invalidation, non-Git workflow guidance, machine-local connection diagnostics,
 and automatic refresh of Atlas-managed agent setup.
+Implemented in 0.9.6: permanent client-neutral workflow guidance, exact
+ambiguity-recovery actions, source-free MCP connection receipts, temporary
+setup-state cleanup after verified health, and user-visible connection status.
 Assessment-owned group materialization, richer conflict selection, and semantic
 change classification remain.
 

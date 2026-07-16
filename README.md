@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.9.5`
+Version `0.9.6`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.9.5` Health and Upgrade Alpha builds on the Tactical Retrieval Alpha. It
+The `0.9.6` Agent Guidance Alpha builds on the Health and Upgrade Alpha. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a
@@ -27,6 +27,12 @@ contains:
   and other MCP-capable agents. It installs the appropriate repository
   instructions and client connection adapter without changing Cartographer's
   agent-neutral core.
+- A permanent compact agent bootstrap with task-start, ambiguity-recovery, and
+  narrow-investigation workflows for any supported MCP client.
+- Ranked seed explanations and executable `nextActions` that retry exact agent
+  queries by numeric entity ID without copying or shortening stable keys.
+- Source-free private MCP connection receipts and a temporary setup marker that
+  clears after the configured client successfully calls Atlas health.
 - An out-of-process .NET 10 Cartographer process using JSON-RPC 2.0.
 - A queryable health surface that detects missing or stale Atlas generations,
   analyzer-version changes, workspace-input changes, Git availability,
@@ -133,11 +139,13 @@ unsaved editor overlays, and file-level dependent rebinds remain planned.
 - `Kraken Atlas: Restart Cartographer`
 - `Kraken Atlas: Export Diagnostics`
 - `Kraken Atlas: Set Up AI Agent`
+- `Kraken Atlas: Show Agent Connection`
 - `Kraken Atlas: Copy Generic MCP Configuration`
 - `Kraken Atlas: Open Architecture Plan`
 
 The diagnostic export contains environment and Atlas metadata such as local
-paths, versions, health reasons, counts, timings, capabilities, and errors. It does not include
+paths, versions, health reasons, connection milestones, counts, timings,
+capabilities, and errors. It does not include
 source file bodies or project and entity inventories. Review the JSON before
 sharing it because local paths can still be sensitive.
 
@@ -207,13 +215,20 @@ Setup is opt-in and supports multi-root workspaces. Instruction updates own only
 the explicit Atlas HTML-comment block. On trusted activation, Atlas refreshes
 existing managed instruction blocks and the marked Codex and Claude server
 entries after extension upgrades or workspace moves.
+Setup also creates a temporary pending marker in private VS Code workspace
+storage. The local MCP server clears that marker after the selected client
+successfully calls `get_atlas_health` and keeps a source-free connection receipt.
+Use `Kraken Atlas: Show Agent Connection` to distinguish configured, initialized,
+tools-discovered, path-changed, old-version, and current verified connections.
 Generated connection files contain local absolute paths and should be treated as
 machine-local configuration unless a team deliberately replaces them with a
 portable launcher. Restart the selected agent after its connection changes.
 
 Instructions and connection are separate requirements: instruction files teach
 the agent when and how to query Atlas, but only an active MCP connection exposes
-the tools. The next Atlas build maps installed instruction files as governing
+the tools. The compact managed instruction block remains after verification so
+future sessions still discover Atlas; only temporary private setup state is
+removed. The next Atlas build maps installed instruction files as governing
 repository rules.
 
 ## MCP Agent Tools
@@ -224,8 +239,10 @@ when `buildRequired` is true, then use `get_workspace_orientation`. It should
 call `project_git_changes` before a rebuild only when health reports a Git
 repository. `prepare_change` is for a concrete coding task, not an Atlas install
 or workspace-health review. It can start with task text or a search hint;
-if the seed is ambiguous it returns `needs_seed` and ranked stable-key
-candidates.
+if the seed is ambiguous it returns `needs_seed`, ranked candidates, selection
+reasons, and executable `nextActions`. Exact follow-up calls should prefer the
+returned numeric entity ID. Stable keys are canonical opaque identities and
+must never be abbreviated.
 
 MCP source excerpts are local, opt-in, code-file-only, line-bounded, and counted
 inside the requested token budget. They are returned to the invoking client but

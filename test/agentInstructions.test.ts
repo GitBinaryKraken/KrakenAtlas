@@ -30,6 +30,10 @@ test("creates bounded Atlas instructions without teaching direct SQLite access",
   assert.match(update.content, /project_git_changes/);
   assert.match(update.content, /no_repository/);
   assert.match(update.content, /prepare_change/);
+  assert.match(update.content, /Suggested workflows/);
+  assert.match(update.content, /numeric `id`/);
+  assert.match(update.content, /never abbreviate a stable key/);
+  assert.match(update.content, /search_code` with `kinds/);
   assert.match(update.content, /Do not use it for Atlas install/);
   assert.match(update.content, /machine-local and path-bound/);
   assert.match(update.content, /Do not inspect or query the Atlas SQLite database directly/);

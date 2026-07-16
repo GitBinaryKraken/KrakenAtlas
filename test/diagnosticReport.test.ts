@@ -91,6 +91,13 @@ test("diagnostic reports include operational metadata without project or source 
       },
       reasons: [{ code: "coverage_partial", message: "Coverage is partial." }],
       recommendedActions: ["Use prepare_change only for concrete coding changes."]
+    },
+    agentConnection: {
+      state: "connected_current",
+      message: "Codex verified Kraken Atlas through get_atlas_health.",
+      clients: [],
+      setupPending: false,
+      recommendations: []
     }
   });
 
@@ -99,6 +106,7 @@ test("diagnostic reports include operational metadata without project or source 
   assert.equal(report.atlas.analyzerRuns[0].durationMs, 139);
   assert.equal(report.atlas.health?.git.status, "no_repository");
   assert.equal(report.atlas.health?.buildRequired, false);
+  assert.equal(report.agentConnection?.state, "connected_current");
   assert.equal(report.privacy.containsSourceBodies, false);
   assert.equal(report.privacy.telemetrySentByKrakenAtlas, false);
   assert.match(json, /SecretWorkspace/);

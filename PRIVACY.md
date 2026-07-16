@@ -19,6 +19,13 @@ unrelated settings. These connection files contain local absolute workspace,
 extension, and Atlas paths. The generic MCP command writes the same connection
 information to the local clipboard.
 
+Setup also writes a temporary pending marker to private VS Code workspace
+storage. The local MCP server records source-free connection receipts as a
+client initializes, discovers tools, and successfully calls Atlas health. A
+receipt contains client/server and protocol versions, workspace and Atlas paths,
+and milestone timestamps. It does not contain prompts, source bodies, tool
+arguments, or tool results. Successful health removes the pending marker.
+
 ## Current Data Collected Locally
 
 The local Atlas may contain:
@@ -89,6 +96,8 @@ a destination. It includes:
 - Cartographer capabilities and status.
 - Atlas generation, aggregate counts, analyzer timings, and diagnostics.
 - Startup or runtime errors when available.
+- The summarized private agent-connection state and source-free receipt
+  metadata when available.
 
 It excludes source bodies, entity inventories, and project lists. Local paths and
 analyzer error text may still be sensitive. Review the file before sharing it.
@@ -104,8 +113,10 @@ its own Cartographer assembly.
 ## Storage and Deletion
 
 The Atlas path is reported by the diagnostic export. VS Code may retain workspace
-storage across reloads, extension upgrades, or uninstall. To remove the Atlas,
-close VS Code and delete the reported SQLite file or its containing Kraken Atlas
+storage across reloads, extension upgrades, or uninstall. The same private
+storage directory contains `agent-setup.pending.json` when setup is awaiting
+verification and source-free receipts under `agent-connections`. To remove all
+Kraken Atlas workspace data, close VS Code and delete the reported Kraken Atlas
 storage directory.
 
 ## License Status

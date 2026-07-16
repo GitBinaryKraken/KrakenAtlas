@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.9.6 - 2026-07-16
+
+- Install a compact permanent agent bootstrap with concrete task-start,
+  ambiguity-recovery, and narrow-investigation workflows.
+- Add ranked seed selection reasons and executable `nextActions` that let an
+  agent retry `prepare_change` exactly with a numeric entity ID.
+- Clarify that complete stable keys are canonical opaque identities and must
+  never be abbreviated; broad searches should use entity-kind filters.
+- Record source-free MCP initialize, tool-discovery, and health milestones in
+  private workspace storage and clear temporary setup state after verified
+  health.
+- Add `Kraken Atlas: Show Agent Connection` and include the summarized
+  connection state in diagnostic exports.
+- Add MCP, guidance, manifest, diagnostics, and connection-state regressions.
+
 ## 0.9.5 - 2026-07-16
 
 - Add `get_atlas_health` across MCP, JSON-RPC, CLI, and VS Code with explicit

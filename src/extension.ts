@@ -38,6 +38,15 @@ import {
   hasManagedClaudeMcpConfiguration,
   updateClaudeMcpConfiguration
 } from "./agentDiscovery/mcpJsonConfig";
+import {
+  AgentConnectionReceipt,
+  PendingAgentSetup,
+  agentConnectionDirectoryName,
+  evaluateAgentConnection,
+  parseAgentConnectionReceipt,
+  pendingAgentSetupFileName,
+  renderAgentConnectionStatus
+} from "./agentDiscovery/connectionStatus";
 import { CartographerClient, resolveCartographerAssemblyPath } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
@@ -107,6 +116,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const health = await client.getAtlasHealth();
         output.clear();
         output.appendLine(renderAtlasHealth(health, version));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.showAgentConnection", async () => {
+      await runCommand(async () => {
+        const connection = await readAgentConnectionStatus(
+          storageRoot, atlasPath, workspaceRoots, version, true);
+        output.clear();
+        output.appendLine(renderAgentConnectionStatus(connection, version));
         output.show(true);
       });
     }),
@@ -457,10 +475,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await runCommand(() => exportDiagnostics(context, client, output, workspaceRoots, atlasPath, version));
     }),
     vscode.commands.registerCommand("krakenAtlas.installAgentInstructions", async () => {
-      await runCommand(() => setupAiAgent(requireMcpLaunch(mcpLaunch)));
+      await runCommand(() => setupAiAgent(storageRoot, requireMcpLaunch(mcpLaunch), version));
     }),
     vscode.commands.registerCommand("krakenAtlas.setupAgent", async () => {
-      await runCommand(() => setupAiAgent(requireMcpLaunch(mcpLaunch)));
+      await runCommand(() => setupAiAgent(storageRoot, requireMcpLaunch(mcpLaunch), version));
     }),
     vscode.commands.registerCommand("krakenAtlas.copyMcpConfiguration", async () => {
       await runCommand(async () => {
@@ -479,6 +497,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   if (mcpLaunch) {
     await refreshManagedAgentConfiguration(mcpLaunch, output);
+    await readAgentConnectionStatus(
+      storageRoot, atlasPath, workspaceRoots, version, true);
   }
 }
 
@@ -497,6 +517,9 @@ async function exportDiagnostics(
   extensionVersion: string
 ): Promise<void> {
   const runtime = await inspectDotnetRuntime();
+  const storageRoot = context.storageUri ?? vscode.Uri.joinPath(context.globalStorageUri, "no-workspace");
+  const agentConnection = await readAgentConnectionStatus(
+    storageRoot, atlasPath, workspaceRoots, extensionVersion, false);
   let session;
   let foundation;
   let summary;
@@ -533,6 +556,7 @@ async function exportDiagnostics(
     foundation,
     summary,
     health,
+    agentConnection,
     cartographerError
   });
   const fileName = `kraken-atlas-diagnostics-${report.generatedUtc.replace(/[:.]/g, "-")}.json`;
@@ -615,7 +639,11 @@ function requireMcpLaunch(launch: McpLaunchDefinition | undefined): McpLaunchDef
   return launch;
 }
 
-async function setupAiAgent(mcpLaunch: McpLaunchDefinition): Promise<void> {
+async function setupAiAgent(
+  storageRoot: vscode.Uri,
+  mcpLaunch: McpLaunchDefinition,
+  extensionVersion: string
+): Promise<void> {
   if (!vscode.workspace.isTrusted) {
     throw new Error("Setting up an AI agent requires a trusted workspace.");
   }
@@ -716,6 +744,17 @@ async function setupAiAgent(mcpLaunch: McpLaunchDefinition): Promise<void> {
     await vscode.env.clipboard.writeText(renderGenericMcpConfiguration(mcpLaunch));
   }
 
+  await vscode.workspace.fs.createDirectory(storageRoot);
+  await vscode.workspace.fs.writeFile(
+    vscode.Uri.joinPath(storageRoot, pendingAgentSetupFileName),
+    Buffer.from(`${JSON.stringify({
+      schemaVersion: "1.0",
+      clientLabel: selected.label,
+      configuredUtc: new Date().toISOString(),
+      extensionVersion
+    } satisfies PendingAgentSetup, null, 2)}\n`, "utf8")
+  );
+
   const changed = plans.filter(plan => plan.update.change !== "unchanged");
   const summary = changed.length === 0
     ? "Kraken Atlas agent setup files are already current."
@@ -743,6 +782,73 @@ async function setupAiAgent(mcpLaunch: McpLaunchDefinition): Promise<void> {
     const document = await vscode.workspace.openTextDocument((changed[0] ?? plans[0]).uri);
     await vscode.window.showTextDocument(document, { preview: true });
   }
+}
+
+async function readAgentConnectionStatus(
+  storageRoot: vscode.Uri,
+  atlasPath: string,
+  workspaceRoots: string[],
+  extensionVersion: string,
+  clearVerifiedSetup: boolean
+) {
+  const receipts = await readAgentConnectionReceipts(storageRoot);
+  const pendingUri = vscode.Uri.joinPath(storageRoot, pendingAgentSetupFileName);
+  const pendingContent = await readOptionalWorkspaceText(pendingUri);
+  let pendingSetup: PendingAgentSetup | undefined;
+  if (pendingContent) {
+    try {
+      const candidate = JSON.parse(pendingContent) as PendingAgentSetup;
+      if (candidate.schemaVersion === "1.0"
+        && typeof candidate.clientLabel === "string"
+        && typeof candidate.configuredUtc === "string"
+        && Number.isFinite(Date.parse(candidate.configuredUtc))
+        && typeof candidate.extensionVersion === "string") {
+        pendingSetup = candidate;
+      }
+    } catch {
+      pendingSetup = undefined;
+    }
+  }
+  const status = evaluateAgentConnection(receipts, {
+    extensionVersion,
+    atlasPath,
+    workspaceRoots,
+    pendingSetup
+  });
+  if (clearVerifiedSetup && status.state === "connected_current" && pendingSetup) {
+    await vscode.workspace.fs.delete(pendingUri, { useTrash: false });
+    return evaluateAgentConnection(receipts, {
+      extensionVersion,
+      atlasPath,
+      workspaceRoots
+    });
+  }
+  return status;
+}
+
+async function readAgentConnectionReceipts(storageRoot: vscode.Uri): Promise<AgentConnectionReceipt[]> {
+  const directory = vscode.Uri.joinPath(storageRoot, agentConnectionDirectoryName);
+  let entries: [string, vscode.FileType][];
+  try {
+    entries = await vscode.workspace.fs.readDirectory(directory);
+  } catch (error) {
+    if (error instanceof vscode.FileSystemError && error.code === "FileNotFound") {
+      return [];
+    }
+    throw error;
+  }
+  const receipts: AgentConnectionReceipt[] = [];
+  for (const [name, type] of entries) {
+    if (type !== vscode.FileType.File || !name.endsWith(".json")) {
+      continue;
+    }
+    const content = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(directory, name));
+    const receipt = parseAgentConnectionReceipt(Buffer.from(content).toString("utf8"));
+    if (receipt) {
+      receipts.push(receipt);
+    }
+  }
+  return receipts;
 }
 
 async function refreshManagedAgentConfiguration(

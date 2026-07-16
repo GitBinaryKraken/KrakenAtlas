@@ -160,6 +160,18 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 33. Open a folder that is deliberately not a Git repository. Confirm the normal
     health, build, summary, orientation, search, relation, Route, and Context Pack
     tools remain usable without repeated Git calls.
+34. Immediately after agent setup, run `Kraken Atlas: Show Agent Connection`.
+    Confirm it reports configured but not verified and does not add temporary
+    setup prose to the repository instruction file.
+35. Have the selected agent call `get_atlas_health`, then show the connection
+    again. Confirm it reports `connected_current`, records initialize/tool-list/
+    health milestones when available, and removes the private pending marker.
+36. Give `prepare_change` an intentionally ambiguous but concrete task. Confirm
+    candidates include deterministic ranks, selection reasons, and executable
+    `nextActions`; invoking a selected action unchanged must resolve exactly.
+37. Pass an abbreviated stable key to an exact relation query and confirm it is
+    rejected cleanly. Retry with the result's numeric entity ID or complete
+    stable key and confirm the query succeeds.
 
 Kraken Atlas performs static discovery and does not execute the application,
 instantiate EF Core contexts, run migrations, or connect to project databases.

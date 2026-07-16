@@ -3,7 +3,8 @@
 This guide describes the bounded query surface available in the Agent Discovery
 Alpha. An agent should query Cartographer before recursively reading a workspace.
 Stable keys returned by one query are the exact identities used by later
-queries.
+queries. Treat them as opaque complete values: never abbreviate one. Numeric
+entity IDs are preferred exact follow-ups within the current Atlas generation.
 
 ## Agent Discovery
 
@@ -28,6 +29,12 @@ Instruction files and MCP connection files solve different problems. The first
 teaches tool-use policy; the second exposes the tools. If an agent can read the
 instructions but cannot list Kraken Atlas tools, its MCP client adapter is not
 loaded and must be configured or restarted.
+
+Setup verification is stored privately, not as disposable repository prose.
+`Kraken Atlas: Show Agent Connection` reports whether a client is configured,
+initialized, tools-discovered, path-changed, old-version, or current after a
+successful health call. The permanent compact instruction block remains so each
+new agent session can discover Atlas.
 
 ## Recommended Workflow
 
@@ -191,8 +198,10 @@ Begin with health, build when `buildRequired` is true, then request orientation.
 Project live Git changes before rebuilding only when health reports a repository,
 and use `prepare_change` only for concrete code changes. It returns `resolution: auto` with a Context
 Pack only when one seed is sufficiently distinct. `needs_seed` returns ranked
-candidates and requires an exact follow-up. `no_match` means task vocabulary did
-not resolve inside current mapped metadata; use `search_code` or source search.
+candidates, selection reasons, and executable `nextActions`. Invoke the chosen
+action unchanged or retry with its numeric ID. `no_match` means task vocabulary
+did not resolve inside current mapped metadata; use `search_code`, adding
+`kinds` when the domain is known, or source search.
 
 Assessment reads and writes remain separate tools from structural map queries.
 This prevents an agent-authored conclusion from being mistaken for a compiler or
@@ -200,7 +209,9 @@ framework fact and lets callers opt into proposed, stale, or historical claims.
 
 ## Interpreting Results
 
-- Treat `stableKey` as canonical identity; do not join entities by basename.
+- Treat `stableKey` as canonical identity; do not join entities by basename,
+  shorten keys, or reconstruct keys from display text. Use the returned numeric
+  ID for an exact follow-up in the same generation.
 - Use `domain`, `kind`, `dispatchKind`, and `logicalScope` together. For example,
   `framework/dispatches_to/di` with scope `scoped` is stronger than a compiler
   implementation relation for the active composition root.

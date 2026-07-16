@@ -54,7 +54,12 @@ Use the Kraken Atlas MCP tools as the first source of repository context before 
 5. Use \`search_code\`, \`get_relations\`, and \`trace_route\` to expand only the required graph neighborhood.
 6. Read reusable agent conclusions with \`get_assessments\`. Call \`decorate_nodes\` only for durable, evidence-backed conclusions that should survive the current session.
 
-Treat stable keys as canonical identities. Prefer bounded Atlas results and source excerpts over full-file reads. Generated MCP client entries are machine-local and path-bound; the trusted VS Code extension refreshes Atlas-managed instructions plus Codex and Claude connection entries on activation after upgrades or workspace moves. If a client starts before that refresh, rerun \`Kraken Atlas: Set Up AI Agent\` and restart the client. These instructions describe how to use Atlas; they do not connect the MCP server by themselves. Report a missing MCP connection instead of treating direct SQLite access as an equivalent fallback.
+Suggested workflows:
+- New task: \`get_atlas_health\` -> build if required -> \`get_workspace_orientation\` -> \`prepare_change\`.
+- Ambiguous task: choose a ranked candidate and retry \`prepare_change\` with its numeric \`id\`; never abbreviate a stable key.
+- Narrow investigation: \`search_code\` with \`kinds\` -> \`get_relations\` using the returned \`id\` -> \`trace_route\` only when a path question remains.
+
+Treat full stable keys as canonical identities and prefer numeric \`id\` values for exact follow-up calls. Prefer bounded Atlas results and source excerpts over full-file reads. Generated MCP client entries are machine-local and path-bound; the trusted VS Code extension refreshes Atlas-managed instructions plus Codex and Claude connection entries on activation after upgrades or workspace moves. If a client starts before that refresh, rerun \`Kraken Atlas: Set Up AI Agent\` and restart the client. These instructions describe how to use Atlas; they do not connect the MCP server by themselves. Report a missing MCP connection instead of treating direct SQLite access as an equivalent fallback.
 ${managedInstructionsEnd}`;
 
 export function updateAgentInstructions(existing: string | undefined): AgentInstructionUpdate {

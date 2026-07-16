@@ -8,6 +8,7 @@ namespace KrakenAtlas.Cartographer;
 
 internal sealed class McpServer(
     CartographerSession session,
+    AgentConnectionReceiptStore connectionReceipts,
     Stream input,
     Stream output,
     TextWriter error)
@@ -52,6 +53,7 @@ internal sealed class McpServer(
                 cancellationToken);
             return await new McpServer(
                 session,
+                new AgentConnectionReceiptStore(options.AtlasPath, options.WorkspaceRoots),
                 Console.OpenStandardInput(),
                 Console.OpenStandardOutput(),
                 error).RunAsync(cancellationToken);
@@ -133,6 +135,13 @@ internal sealed class McpServer(
         if (method == "notifications/initialized")
         {
             initialized = initializeResponded;
+            if (initialized)
+            {
+                await TryRecordConnectionAsync(
+                    connectionReceipts.RecordInitializedAsync,
+                    "initialization",
+                    cancellationToken);
+            }
             return;
         }
         if (method.StartsWith("notifications/", StringComparison.Ordinal))
@@ -158,6 +167,12 @@ internal sealed class McpServer(
             var negotiated = requested is not null && SupportedProtocolVersions.Contains(requested)
                 ? requested
                 : LatestProtocolVersion;
+            var clientInfo = ReadClientInfo(parameters);
+            connectionReceipts.Begin(
+                clientInfo.Name,
+                clientInfo.Version,
+                GetServiceVersion(),
+                negotiated);
             initializeResponded = true;
             await WriteResultAsync(writer, id, new
             {
@@ -169,7 +184,7 @@ internal sealed class McpServer(
                     title = "Kraken Atlas Cartographer",
                     version = GetServiceVersion()
                 },
-                instructions = "Use Kraken Atlas before broad source exploration. Start with get_atlas_health, build when buildRequired is true, then use get_workspace_orientation. If health reports Git no_repository, skip project_git_changes. Use prepare_change only for concrete coding changes, not install or workspace-health review. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
+                instructions = "Use Kraken Atlas before broad source exploration. New task: get_atlas_health, build when required, get_workspace_orientation, then prepare_change. If prepare_change returns needs_seed, use a candidate nextActions entry or retry with its numeric id; never abbreviate a stable key. Narrow investigation: search_code with kinds, get_relations by id, then trace_route only when a path question remains. Skip project_git_changes when health reports no_repository. Use prepare_change only for concrete coding changes. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
             });
             return;
         }
@@ -188,6 +203,10 @@ internal sealed class McpServer(
         switch (method)
         {
             case "tools/list":
+                await TryRecordConnectionAsync(
+                    connectionReceipts.RecordToolsListedAsync,
+                    "tool discovery",
+                    cancellationToken);
                 await WriteResultAsync(writer, id, new { tools = CreateToolDefinitions() });
                 return;
             case "tools/call":
@@ -233,6 +252,13 @@ internal sealed class McpServer(
                 "decorate_nodes" => await DecorateNodesAsync(arguments, cancellationToken),
                 _ => throw new InvalidOperationException($"Unknown Kraken Atlas tool: {call.Name}")
             };
+            if (call.Name == "get_atlas_health")
+            {
+                await TryRecordConnectionAsync(
+                    connectionReceipts.RecordHealthCalledAsync,
+                    "health verification",
+                    cancellationToken);
+            }
             await WriteToolResultAsync(writer, id, value, false);
         }
         catch (Exception exception)
@@ -279,17 +305,17 @@ internal sealed class McpServer(
         Tool(
             "search_code",
             "Search Code Map",
-            "Search mapped symbols, HTTP endpoints, service registrations, database operations, and database objects. Returns stable keys for exact follow-up queries.",
+            "Search mapped symbols, HTTP endpoints, service registrations, database operations, and database objects. Use kinds to narrow broad queries. Returns numeric IDs and full stable keys for exact follow-up queries.",
             """{"type":"object","properties":{"query":{"type":"string"},"kinds":{"type":"array","items":{"type":"string"}},"limit":{"type":"integer","minimum":1,"maximum":100}},"required":["query"],"additionalProperties":false}"""),
         Tool(
             "get_relations",
             "Get Code Relations",
-            "Query incoming, outgoing, or bidirectional relations for one exact stable key or entity ID. Filter by relation domains or kinds to inspect a specific map dimension.",
+            "Query incoming, outgoing, or bidirectional relations for one full stable key or numeric entity ID. Never abbreviate a stable key; prefer the returned numeric ID. Filter by relation domains or kinds to inspect a specific map dimension.",
             """{"type":"object","properties":{"stableKey":{"type":"string"},"id":{"type":"integer"},"direction":{"type":"string","enum":["incoming","outgoing","both"]},"domains":{"type":"array","items":{"type":"string"}},"kinds":{"type":"array","items":{"type":"string"}},"limit":{"type":"integer","minimum":1,"maximum":100}},"additionalProperties":false}"""),
         Tool(
             "trace_route",
             "Trace Code Route",
-            "Trace a bounded execution or dependency path between exact source and target entities, optionally through ordered stable-key waypoints and relation filters.",
+            "Trace a bounded execution or dependency path between exact source and target entities. Prefer numeric sourceId and targetId; never abbreviate stable keys. Ordered full-key waypoints and relation filters are optional.",
             """{"type":"object","properties":{"sourceStableKey":{"type":"string"},"sourceId":{"type":"integer"},"targetStableKey":{"type":"string"},"targetId":{"type":"integer"},"viaStableKeys":{"type":"array","items":{"type":"string"}},"domains":{"type":"array","items":{"type":"string"}},"kinds":{"type":"array","items":{"type":"string"}},"maxDepth":{"type":"integer","minimum":1,"maximum":32},"maxVisited":{"type":"integer","minimum":10,"maximum":20000}},"additionalProperties":false}"""),
         Tool(
             "project_git_changes",
@@ -299,7 +325,7 @@ internal sealed class McpServer(
         Tool(
             "prepare_change",
             "Prepare Change Context",
-            "Resolve a concrete coding-change task to a likely seed and return a token-budgeted Context Pack with related symbols, tests, projects, assessments, verification commands, and optional bounded source excerpts. Do not use for Atlas install, setup, or workspace-health reviews. If resolution is needs_seed, call again with a candidate stableKey.",
+            "Resolve a concrete coding-change task to a likely seed and return a token-budgeted Context Pack with related symbols, tests, projects, assessments, verification commands, and optional bounded source excerpts. Do not use for Atlas install, setup, or workspace-health reviews. If resolution is needs_seed, invoke a returned nextActions entry or retry with the candidate numeric id.",
             """{"type":"object","properties":{"task":{"type":"string","minLength":1,"maxLength":2000},"query":{"type":"string"},"stableKey":{"type":"string"},"id":{"type":"integer"},"tokenBudget":{"type":"integer","minimum":800,"maximum":32000,"default":4000},"maxDepth":{"type":"integer","minimum":1,"maximum":8,"default":3},"includeProposed":{"type":"boolean","default":false},"includeSource":{"type":"boolean","default":true},"sourceLineLimit":{"type":"integer","minimum":8,"maximum":120,"default":24},"candidateLimit":{"type":"integer","minimum":1,"maximum":20,"default":8}},"required":["task"],"additionalProperties":false}"""),
         Tool(
             "get_assessments",
@@ -341,6 +367,43 @@ internal sealed class McpServer(
 
     private static JsonElement EmptyObject() =>
         JsonSerializer.Deserialize<JsonElement>("{}");
+
+    private static McpClientInfo ReadClientInfo(JsonElement parameters)
+    {
+        if (parameters.ValueKind != JsonValueKind.Object
+            || !parameters.TryGetProperty("clientInfo", out var clientInfo)
+            || clientInfo.ValueKind != JsonValueKind.Object)
+        {
+            return new McpClientInfo("unknown-mcp-client", null);
+        }
+        var name = clientInfo.TryGetProperty("name", out var nameElement)
+            && nameElement.ValueKind == JsonValueKind.String
+            ? nameElement.GetString()
+            : null;
+        var version = clientInfo.TryGetProperty("version", out var versionElement)
+            && versionElement.ValueKind == JsonValueKind.String
+            ? versionElement.GetString()
+            : null;
+        return new McpClientInfo(
+            string.IsNullOrWhiteSpace(name) ? "unknown-mcp-client" : name,
+            version);
+    }
+
+    private async Task TryRecordConnectionAsync(
+        Func<CancellationToken, Task> record,
+        string stage,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await record(cancellationToken);
+        }
+        catch (Exception exception)
+        {
+            await error.WriteLineAsync(
+                $"Kraken Atlas could not record MCP {stage}: {exception.Message}");
+        }
+    }
 
     private static object? ReadId(JsonElement message) =>
         message.ValueKind == JsonValueKind.Object && message.TryGetProperty("id", out var id)
@@ -417,6 +480,7 @@ internal sealed class McpServer(
     }
 
     private sealed record McpOptions(IReadOnlyList<string> WorkspaceRoots, string AtlasPath);
+    private sealed record McpClientInfo(string Name, string? Version);
     private sealed record McpToolCall
     {
         public required string Name { get; init; }

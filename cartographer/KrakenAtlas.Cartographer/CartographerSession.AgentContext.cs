@@ -70,6 +70,7 @@ internal sealed partial class CartographerSession
                 "exact",
                 [],
                 [],
+                [],
                 exactPack);
         }
 
@@ -79,7 +80,16 @@ internal sealed partial class CartographerSession
         if (ranked.Count == 0)
         {
             return new TaskContextResult(
-                "current", generation, task, "no_match", terms, [], null);
+                "current", generation, task, "no_match", terms, [],
+                [new AgentNextAction(
+                    "search_code",
+                    "No task seed matched. Search the mapped code with a narrower query or explicit kinds.",
+                    new Dictionary<string, object?>
+                    {
+                        ["query"] = string.Join(' ', terms),
+                        ["limit"] = 10
+                    })],
+                null);
         }
 
         var top = ranked[0];
@@ -104,7 +114,9 @@ internal sealed partial class CartographerSession
         if (!canSelect)
         {
             return new TaskContextResult(
-                "current", generation, task, "needs_seed", terms, ranked, null);
+                "current", generation, task, "needs_seed", terms, ranked,
+                BuildCandidateRetryActions(parameters, ranked),
+                null);
         }
 
         var pack = await PrepareChangeCoreAsync(
@@ -118,6 +130,7 @@ internal sealed partial class CartographerSession
             "auto",
             terms,
             ranked,
+            [],
             pack);
     }
 
@@ -166,15 +179,46 @@ internal sealed partial class CartographerSession
 
         return candidates.Values
             .Select(candidate => new TaskSeedCandidate(
+                0,
                 candidate.Entity,
                 candidate.Score,
                 candidate.MatchedTerms.OrderBy(value => value, StringComparer.OrdinalIgnoreCase).ToArray(),
-                candidate.ExactNameMatch))
+                candidate.ExactNameMatch,
+                BuildSelectionReason(candidate)))
             .OrderByDescending(candidate => candidate.Score)
             .ThenByDescending(candidate => candidate.ExactNameMatch)
             .ThenBy(candidate => candidate.Entity.QualifiedName, StringComparer.Ordinal)
             .Take(limit)
+            .Select((candidate, index) => candidate with { Rank = index + 1 })
             .ToArray();
+    }
+
+    private static IReadOnlyList<AgentNextAction> BuildCandidateRetryActions(
+        PrepareTaskParams parameters,
+        IReadOnlyList<TaskSeedCandidate> candidates) => candidates
+            .Select(candidate => new AgentNextAction(
+                "prepare_change",
+                $"Select candidate {candidate.Rank}: {candidate.Entity.Kind} {candidate.Entity.QualifiedName}",
+                new Dictionary<string, object?>
+                {
+                    ["task"] = parameters.Task,
+                    ["id"] = candidate.Entity.Id,
+                    ["tokenBudget"] = parameters.TokenBudget ?? 4000,
+                    ["maxDepth"] = parameters.MaxDepth ?? 3,
+                    ["includeProposed"] = parameters.IncludeProposed ?? false,
+                    ["includeSource"] = parameters.IncludeSource ?? true,
+                    ["sourceLineLimit"] = parameters.SourceLineLimit ?? 24
+                }))
+            .ToArray();
+
+    private static string BuildSelectionReason(CandidateAccumulator candidate)
+    {
+        var match = candidate.ExactNameMatch ? "exact name" : "metadata";
+        var terms = string.Join(", ", candidate.MatchedTerms.OrderBy(value => value, StringComparer.OrdinalIgnoreCase));
+        var project = candidate.Entity.ProjectName is null
+            ? string.Empty
+            : $" in project {candidate.Entity.ProjectName}";
+        return $"{match} match on {terms}; {candidate.Entity.Kind}{project}.";
     }
 
     private async Task<PreparedChangeResult> AttachSourceSlicesAsync(

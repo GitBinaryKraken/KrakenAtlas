@@ -28,6 +28,7 @@ test("preserves the published identity and exposes the bounded semantic command 
   assert.deepEqual(manifest.contributes.commands.map((item) => item.command), [
     "krakenAtlas.showStatus",
     "krakenAtlas.showHealth",
+    "krakenAtlas.showAgentConnection",
     "krakenAtlas.buildAtlas",
     "krakenAtlas.showAtlasSummary",
     "krakenAtlas.showWorkspaceOrientation",
@@ -57,6 +58,7 @@ test("preserves the published identity and exposes the bounded semantic command 
   assert.ok(manifest.activationEvents.includes("onStartupFinished"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.exportDiagnostics"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.showHealth"));
+  assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.showAgentConnection"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.installAgentInstructions"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.setupAgent"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.copyMcpConfiguration"));

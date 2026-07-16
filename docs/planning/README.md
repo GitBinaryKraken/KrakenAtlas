@@ -7,6 +7,7 @@ published Kraken Atlas identity.
 - [Product scope](PRODUCT.md)
 - [AI agent query requirements](AGENT_QUERY_REQUIREMENTS.md)
 - [Current AI agent query guide](AGENT_QUERY_GUIDE.md)
+- [Agent guidance contract](AGENT_GUIDANCE_CONTRACT.md)
 - [AI feature implementation workflow](FEATURE_IMPLEMENTATION_WORKFLOW.md)
 - [Node knowledge and assessment model](NODE_KNOWLEDGE_MODEL.md)
 - [Node decoration command contract](NODE_DECORATION_COMMAND.md)

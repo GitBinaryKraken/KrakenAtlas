@@ -723,11 +723,18 @@ public sealed record PreparedChangeResult(
             null, null, [], [], [], [], [], 0, 0);
 }
 
+public sealed record AgentNextAction(
+    string Tool,
+    string Reason,
+    IReadOnlyDictionary<string, object?> Arguments);
+
 public sealed record TaskSeedCandidate(
+    int Rank,
     AtlasEntitySearchMatch Entity,
     int Score,
     IReadOnlyList<string> MatchedTerms,
-    bool ExactNameMatch);
+    bool ExactNameMatch,
+    string SelectionReason);
 
 public sealed record TaskContextResult(
     string AtlasState,
@@ -736,10 +743,14 @@ public sealed record TaskContextResult(
     string Resolution,
     IReadOnlyList<string> QueryTerms,
     IReadOnlyList<TaskSeedCandidate> Candidates,
+    IReadOnlyList<AgentNextAction> NextActions,
     PreparedChangeResult? ContextPack)
 {
     public static TaskContextResult NotCreated(string task) => new(
-        "not_created", null, task, "not_created", [], [], null);
+        "not_created", null, task, "not_created", [], [],
+        [new AgentNextAction("build_atlas", "Build the Atlas before preparing a change.",
+            new Dictionary<string, object?>())],
+        null);
 }
 
 public sealed record OrientationEvidence(

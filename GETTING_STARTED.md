@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.9.5` is the Health and Upgrade Alpha of the complete rewrite. It
+Kraken Atlas `0.9.6` is the Agent Guidance Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -102,14 +102,21 @@ npm run check:vsix
 20. Run `Kraken Atlas: Set Up AI Agent`, select the agent actually used in this
     workspace, and review the managed instruction and connection files. Existing
     content outside Atlas-owned entries must remain unchanged.
-21. Reload VS Code or restart the selected agent when prompted. For an
+21. Run `Kraken Atlas: Show Agent Connection`. It should report setup pending
+    until the selected client completes an Atlas health call.
+22. Reload VS Code or restart the selected agent when prompted. For an
     unsupported client, paste the copied generic configuration into that
     client's MCP settings first.
-22. Open the agent, enable or trust the `Kraken Atlas` MCP tools when prompted,
+23. Open the agent, enable or trust the `Kraken Atlas` MCP tools when prompted,
     and ask it to check Atlas health. Confirm `get_atlas_health` is selected,
     followed by a build when required and `get_workspace_orientation`.
-23. Ask the agent to prepare a concrete code change. Confirm `prepare_change` returns
-    either a bounded Context Pack or `needs_seed` with ranked exact identities.
+24. Run `Kraken Atlas: Show Agent Connection` again. It should report
+    `connected_current`; the private pending marker should be gone while the
+    compact repository instruction block remains.
+25. Ask the agent to prepare a concrete code change. Confirm `prepare_change`
+    returns either a bounded Context Pack or `needs_seed` with ranked exact
+    identities, selection reasons, and executable `nextActions`. A retry using
+    the returned numeric ID should resolve exactly.
 
 The Atlas database is stored under the VS Code workspace storage directory and
 is not written into the source repository.

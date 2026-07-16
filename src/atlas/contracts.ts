@@ -456,10 +456,18 @@ export interface PreparedChangeResult {
 }
 
 export interface TaskSeedCandidate {
+  rank: number;
   entity: AtlasEntitySearchMatch;
   score: number;
   matchedTerms: string[];
   exactNameMatch: boolean;
+  selectionReason: string;
+}
+
+export interface AgentNextAction {
+  tool: string;
+  reason: string;
+  arguments: Record<string, unknown>;
 }
 
 export interface TaskContextResult {
@@ -469,6 +477,7 @@ export interface TaskContextResult {
   resolution: "not_created" | "exact" | "auto" | "needs_seed" | "no_match";
   queryTerms: string[];
   candidates: TaskSeedCandidate[];
+  nextActions: AgentNextAction[];
   contextPack?: PreparedChangeResult;
 }
 
