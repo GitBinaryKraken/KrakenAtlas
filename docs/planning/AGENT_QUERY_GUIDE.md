@@ -7,16 +7,23 @@ queries.
 
 ## Agent Discovery
 
-The VS Code extension registers the Kraken Atlas MCP server automatically, but
-the user must enable its tools for the active Agent session. The MCP initialize
-response tells connected agents to use Atlas before broad source exploration.
+The extension registers the Kraken Atlas MCP server automatically for agents
+that consume VS Code's native MCP provider. Independent agent extensions can run
+their own MCP host and therefore need a client adapter.
 
-For durable repository-level discovery, run `Kraken Atlas: Install Agent
-Instructions`. It can install the same bounded workflow into `AGENTS.md`,
-`.github/copilot-instructions.md`, or `CLAUDE.md`. The installer owns only the
-content between its HTML comment markers, preserves all other instructions, and
-is safe to rerun. Those files do not configure MCP for clients outside VS Code;
-the client must still be connected to the Kraken Atlas server.
+For durable repository-level discovery and connection, run `Kraken Atlas: Set
+Up AI Agent`. Native VS Code/Copilot, Codex, Claude Code, and generic
+MCP-compatible clients all receive the same Cartographer launch definition.
+Only the client-specific serialization differs. The setup flow can install the
+bounded workflow into `AGENTS.md`, `.github/copilot-instructions.md`, or
+`CLAUDE.md`; it can also update `.codex/config.toml`, update `.mcp.json`, or copy
+a generic `mcpServers` JSON object. Existing instructions and unrelated MCP
+servers are preserved.
+
+Instruction files and MCP connection files solve different problems. The first
+teaches tool-use policy; the second exposes the tools. If an agent can read the
+instructions but cannot list Kraken Atlas tools, its MCP client adapter is not
+loaded and must be configured or restarted.
 
 ## Recommended Workflow
 

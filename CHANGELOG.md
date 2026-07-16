@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.9.2 - 2026-07-16
+
+- Separate repository instructions from MCP client connection setup so agents
+  do not appear configured when their tools are still unavailable.
+- Generate one agent-neutral Cartographer stdio launch definition for native VS
+  Code agents, Codex, Claude Code, and generic MCP clients.
+- Add `Kraken Atlas: Set Up AI Agent` with direct Codex and Claude adapters,
+  automatic native VS Code registration, and a generic copied MCP configuration
+  for other agent extensions.
+- Preserve unrelated Codex TOML and Claude JSON configuration, refresh only
+  Atlas-managed entries after extension upgrades, and retain the previous
+  instruction-installer command as a compatibility alias.
+- Document the lack of a universal third-party VS Code agent handoff and the
+  machine-local nature of generated absolute connection paths.
+
 ## 0.9.1 - 2026-07-15
 
 - Add an opt-in agent-instruction installer for `AGENTS.md`, GitHub Copilot, and

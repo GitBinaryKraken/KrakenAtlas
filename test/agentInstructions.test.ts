@@ -7,7 +7,12 @@ import {
   updateAgentInstructions
 } from "../src/agentDiscovery/instructions";
 
-test("defines instruction targets for Codex, Copilot, and Claude discovery", () => {
+test("defines agent-neutral, Copilot, and Claude instruction targets", () => {
+  assert.deepEqual(agentInstructionTargets.map(target => target.id), [
+    "agents",
+    "copilot",
+    "claude"
+  ]);
   assert.deepEqual(agentInstructionTargets.map(target => target.relativePath), [
     "AGENTS.md",
     ".github/copilot-instructions.md",
@@ -23,6 +28,8 @@ test("creates bounded Atlas instructions without teaching direct SQLite access",
   assert.match(update.content, /project_git_changes/);
   assert.match(update.content, /prepare_change/);
   assert.match(update.content, /Do not inspect or query the Atlas SQLite database directly/);
+  assert.match(update.content, /Set Up AI Agent/);
+  assert.doesNotMatch(update.content, /\.codex\/config\.toml/);
   assert.equal(update.content.endsWith("\n"), true);
 });
 

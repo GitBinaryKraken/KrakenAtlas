@@ -39,7 +39,8 @@ test("preserves the published identity and exposes the bounded semantic command 
     "krakenAtlas.applyDecorations",
     "krakenAtlas.restartCartographer",
     "krakenAtlas.exportDiagnostics",
-    "krakenAtlas.installAgentInstructions",
+    "krakenAtlas.setupAgent",
+    "krakenAtlas.copyMcpConfiguration",
     "krakenAtlas.openPlanning"
   ]);
   assert.equal(manifest.contributes.languageModelTools, undefined);
@@ -48,8 +49,11 @@ test("preserves the published identity and exposes the bounded semantic command 
     label: "Kraken Atlas"
   }]);
   assert.equal(manifest.engines.vscode, "^1.105.0");
+  assert.ok(manifest.activationEvents.includes("onStartupFinished"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.exportDiagnostics"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.installAgentInstructions"));
+  assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.setupAgent"));
+  assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.copyMcpConfiguration"));
   assert.ok(manifest.files.includes("ALPHA_TESTING.md"));
   assert.ok(manifest.files.includes("PRIVACY.md"));
 });

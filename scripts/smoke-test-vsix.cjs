@@ -197,9 +197,9 @@ try {
     );
   }
   if (!installedManifest.contributes?.commands?.some(
-    command => command.command === "krakenAtlas.installAgentInstructions"
+    command => command.command === "krakenAtlas.setupAgent"
   )) {
-    throw new Error("Installed extension does not contribute the agent instruction installer.");
+    throw new Error("Installed extension does not contribute the AI agent setup command.");
   }
 
   const agentInstructions = require(path.join(
@@ -224,6 +224,66 @@ try {
     repeatedInstructions.content !== installedInstructions.content
   ) {
     throw new Error("Packaged agent instruction updates are not idempotent.");
+  }
+
+  const codexConfig = require(path.join(
+    extensionRoot,
+    "dist",
+    "agentDiscovery",
+    "codexConfig.js"
+  ));
+  const installedCodexConfig = codexConfig.updateCodexMcpConfiguration(
+    "model = \"gpt-5\"\n",
+    {
+      command: "dotnet",
+      args: [
+        path.join(extensionRoot, "cartographer", "KrakenAtlas.Cartographer", "publish", "KrakenAtlas.Cartographer.dll"),
+        "--mcp",
+        "--workspace",
+        workspaceRoot,
+        "--atlas",
+        atlasPath
+      ],
+      cwd: extensionRoot
+    }
+  );
+  if (
+    installedCodexConfig.change !== "appended" ||
+    !installedCodexConfig.content.startsWith("model = \"gpt-5\"\n\n") ||
+    !installedCodexConfig.content.includes("[mcp_servers.kraken_atlas]") ||
+    !installedCodexConfig.content.includes("default_tools_approval_mode = \"writes\"")
+  ) {
+    throw new Error("Packaged Codex MCP configuration was incomplete or destructive.");
+  }
+
+  const mcpJsonConfig = require(path.join(
+    extensionRoot,
+    "dist",
+    "agentDiscovery",
+    "mcpJsonConfig.js"
+  ));
+  const installedClaudeConfig = mcpJsonConfig.updateClaudeMcpConfiguration(
+    JSON.stringify({ mcpServers: { existing: { command: "existing" } } }, null, 2),
+    {
+      command: "dotnet",
+      args: [
+        path.join(extensionRoot, "cartographer", "KrakenAtlas.Cartographer", "publish", "KrakenAtlas.Cartographer.dll"),
+        "--mcp",
+        "--workspace",
+        workspaceRoot,
+        "--atlas",
+        atlasPath
+      ],
+      cwd: extensionRoot
+    }
+  );
+  const parsedClaudeConfig = JSON.parse(installedClaudeConfig.content);
+  if (
+    installedClaudeConfig.change !== "appended" ||
+    parsedClaudeConfig.mcpServers.existing.command !== "existing" ||
+    parsedClaudeConfig.mcpServers["kraken-atlas"].env.KRAKEN_ATLAS_MANAGED_BY_EXTENSION !== "1"
+  ) {
+    throw new Error("Packaged Claude MCP configuration was incomplete or destructive.");
   }
 
   const assembly = path.join(

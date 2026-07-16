@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.9.1` is the Agent Discovery Alpha of the complete rewrite. It
+Kraken Atlas `0.9.2` is the Agent Connection Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -27,12 +27,13 @@ facts for unaffected projects, and still commits one complete Atlas generation.
 Working-tree and commit-range Git projection maps changed files onto current
 symbols, graph impact, tests, projects, commands, and durable assessments at
 risk before the next rebuild.
-The extension also registers a local MCP server for the active workspace. Its
+The extension also registers an agent-neutral local MCP server for the active workspace. Its
 task-first `prepare_change` tool can resolve a likely seed or return explicit
 candidate stable keys, then emit bounded source excerpts inside the pack budget.
-An opt-in command can install a managed Atlas workflow into `AGENTS.md`, GitHub
-Copilot instructions, or `CLAUDE.md` so repository agents discover those tools
-without the user repeating the workflow in every task.
+An opt-in setup command installs both the appropriate managed instruction file
+and, when the selected agent does not consume VS Code's native MCP provider, a
+client connection adapter. Direct adapters are included for Codex and Claude;
+other MCP-capable agents can use the generic copied stdio configuration.
 
 ## Requirements
 
@@ -93,12 +94,16 @@ npm run check:vsix
 17. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
 18. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
-19. Run `Kraken Atlas: Install Agent Instructions`, select the instruction file
-    used by your coding agent, and review the managed block. Existing content
-    outside the block must remain unchanged.
-20. Open Agent mode, enable the `Kraken Atlas` MCP tools, and ask for workspace
-    orientation. Confirm `get_workspace_orientation` is selected.
-21. Ask the agent to prepare a concrete change. Confirm `prepare_change` returns
+19. Run `Kraken Atlas: Set Up AI Agent`, select the agent actually used in this
+    workspace, and review the managed instruction and connection files. Existing
+    content outside Atlas-owned entries must remain unchanged.
+20. Reload VS Code or restart the selected agent when prompted. For an
+    unsupported client, paste the copied generic configuration into that
+    client's MCP settings first.
+21. Open the agent, enable or trust the `Kraken Atlas` MCP tools when prompted,
+    and ask for workspace orientation. Confirm `get_workspace_orientation` is
+    selected.
+22. Ask the agent to prepare a concrete change. Confirm `prepare_change` returns
     either a bounded Context Pack or `needs_seed` with ranked exact identities.
 
 The Atlas database is stored under the VS Code workspace storage directory and

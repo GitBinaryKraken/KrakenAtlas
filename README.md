@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.9.1`
+Version `0.9.2`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,14 +17,16 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.9.1` Agent Discovery Alpha builds on the Incremental Agent Loop Alpha. It
+The `0.9.2` Agent Connection Alpha builds on the Agent Discovery Alpha. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a
-  bundled MCP stdio server registered automatically for the active workspace.
-- An opt-in repository instruction installer for `AGENTS.md`,
-  `.github/copilot-instructions.md`, and `CLAUDE.md`. Managed Atlas blocks are
-  idempotent and preserve all existing repository guidance outside the block.
+  bundled, agent-neutral MCP stdio server registered automatically with native
+  VS Code agents for the active workspace.
+- An opt-in AI agent setup flow for native VS Code agents, Codex, Claude Code,
+  and other MCP-capable agents. It installs the appropriate repository
+  instructions and client connection adapter without changing Cartographer's
+  agent-neutral core.
 - An out-of-process .NET 10 Cartographer process using JSON-RPC 2.0.
 - Deterministic discovery of .NET solutions, C# projects, package.json projects,
   project references, and relevant workspace files.
@@ -118,7 +120,8 @@ unsaved editor overlays, and file-level dependent rebinds remain planned.
 - `Kraken Atlas: Apply Node Decorations from JSON`
 - `Kraken Atlas: Restart Cartographer`
 - `Kraken Atlas: Export Diagnostics`
-- `Kraken Atlas: Install Agent Instructions`
+- `Kraken Atlas: Set Up AI Agent`
+- `Kraken Atlas: Copy Generic MCP Configuration`
 - `Kraken Atlas: Open Architecture Plan`
 
 The diagnostic export contains environment and Atlas metadata such as local
@@ -165,29 +168,39 @@ dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Car
 AI agents should follow [the bounded query guide](docs/planning/AGENT_QUERY_GUIDE.md)
 instead of opening or reverse-engineering the SQLite schema directly.
 
-## Agent Discovery
+## Agent Discovery And Connection
 
-VS Code 1.105 or newer automatically discovers the bundled MCP server. After a
-user enables the `Kraken Atlas` tools in Agent mode, the client receives
-server-level workflow instructions and descriptions for all ten tools. MCP
-registration makes Atlas available, but a model still controls whether it calls
-an available tool.
+Atlas uses one agent-neutral stdio MCP launch definition. Native VS Code agents,
+including GitHub Copilot Chat, discover it through the extension provider. Some
+agent extensions run a separate host and do not consume VS Code's provider, so
+they require their own small connection adapter.
 
-Run `Kraken Atlas: Install Agent Instructions` to make Atlas the repository's
-declared first source of code context. Select one or all of:
+Run `Kraken Atlas: Set Up AI Agent` and select the active client:
 
-- `AGENTS.md` for Codex and compatible repository agents.
-- `.github/copilot-instructions.md` for GitHub Copilot.
-- `CLAUDE.md` for Claude Code and compatible clients.
+- `VS Code Chat / GitHub Copilot` uses the automatic extension provider and
+  installs `.github/copilot-instructions.md`.
+- `Codex` installs `AGENTS.md` and a managed `.codex/config.toml` MCP entry.
+- `Claude Code` installs `CLAUDE.md` and a managed `.mcp.json` MCP entry while
+  preserving other JSON servers and settings.
+- `Other MCP-capable agent` installs `AGENTS.md` and copies a generic
+  `mcpServers` stdio configuration for the client's own settings UI or file.
 
-The command is opt-in, supports multi-root workspaces, creates missing parent
-directories, and writes only between explicit Kraken Atlas managed markers. It
-preserves existing instructions, updates its managed block on repeat runs, and
-refuses incomplete or duplicate markers rather than overwriting ambiguous
-content. The next Atlas build maps the installed file as a governing repository
-instruction. Agents outside VS Code still need Kraken Atlas configured as an
-MCP server; an instruction file can direct tool use but cannot install or enable
-the server itself.
+`Kraken Atlas: Copy Generic MCP Configuration` is also available independently.
+There is no universal VS Code API that injects MCP tools into every third-party
+agent extension; the generic descriptor is the fallback for any MCP-compatible
+client whose configuration Atlas does not yet adapt directly.
+
+Setup is opt-in and supports multi-root workspaces. Instruction updates own only
+the explicit Atlas HTML-comment block. Codex and Claude connection updates own
+only their marked Atlas server entry and refresh it after extension upgrades.
+Generated connection files contain local absolute paths and should be treated as
+machine-local configuration unless a team deliberately replaces them with a
+portable launcher. Restart the selected agent after its connection changes.
+
+Instructions and connection are separate requirements: instruction files teach
+the agent when and how to query Atlas, but only an active MCP connection exposes
+the tools. The next Atlas build maps installed instruction files as governing
+repository rules.
 
 ## MCP Agent Tools
 

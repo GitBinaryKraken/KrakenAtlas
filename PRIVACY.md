@@ -10,11 +10,14 @@ network backend.
 The extension launches a local Cartographer child process and stores its Atlas in
 a local SQLite database owned by VS Code workspace storage.
 
-`Kraken Atlas: Install Agent Instructions` modifies a repository only after the
-user selects a workspace folder and instruction target. It can create or update
-`AGENTS.md`, `.github/copilot-instructions.md`, and `CLAUDE.md`. Updates are
-limited to an explicit Kraken Atlas managed block; content outside that block is
-preserved.
+`Kraken Atlas: Set Up AI Agent` modifies a repository only after the user
+selects a workspace folder and client. It can create or update `AGENTS.md`,
+`.github/copilot-instructions.md`, `CLAUDE.md`, `.codex/config.toml`, and
+`.mcp.json`. Instruction updates are limited to an explicit Atlas managed block.
+Connection updates are limited to the managed Atlas server entry and preserve
+unrelated settings. These connection files contain local absolute workspace,
+extension, and Atlas paths. The generic MCP command writes the same connection
+information to the local clipboard.
 
 ## Current Data Collected Locally
 

@@ -18,7 +18,7 @@ export const agentInstructionTargets: readonly AgentInstructionTarget[] = [
   {
     id: "agents",
     label: "AGENTS.md",
-    description: "Codex and other agents that honor repository AGENTS.md files",
+    description: "Repository agents that honor the shared AGENTS.md convention",
     relativePath: "AGENTS.md"
   },
   {
@@ -50,7 +50,7 @@ Use the Kraken Atlas MCP tools as the first source of repository context before 
 5. Use \`search_code\`, \`get_relations\`, and \`trace_route\` to expand only the required graph neighborhood.
 6. Read reusable agent conclusions with \`get_assessments\`. Call \`decorate_nodes\` only for durable, evidence-backed conclusions that should survive the current session.
 
-Treat stable keys as canonical identities. Prefer bounded Atlas results and source excerpts over full-file reads. If the Kraken Atlas tools are unavailable, report that they must be enabled instead of treating direct SQLite access as an equivalent fallback.
+Treat stable keys as canonical identities. Prefer bounded Atlas results and source excerpts over full-file reads. These instructions describe how to use Atlas; they do not connect the MCP server by themselves. If the Kraken Atlas tools are unavailable, run \`Kraken Atlas: Set Up AI Agent\`, select the active client, and restart that agent before retrying. Report a missing MCP connection instead of treating direct SQLite access as an equivalent fallback.
 ${managedInstructionsEnd}`;
 
 export function updateAgentInstructions(existing: string | undefined): AgentInstructionUpdate {

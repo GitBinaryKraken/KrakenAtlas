@@ -17,10 +17,25 @@ import {
 } from "./atlas/render";
 import { NodeDecorationBatch } from "./atlas/contracts";
 import {
+  codexConfigRelativePath,
+  hasManagedCodexMcpConfiguration,
+  updateCodexMcpConfiguration
+} from "./agentDiscovery/codexConfig";
+import {
   AgentInstructionTarget,
   agentInstructionTargets,
   updateAgentInstructions
 } from "./agentDiscovery/instructions";
+import {
+  McpLaunchDefinition,
+  createAtlasMcpLaunchDefinition,
+  renderGenericMcpConfiguration
+} from "./agentDiscovery/mcpConnection";
+import {
+  claudeMcpConfigRelativePath,
+  hasManagedClaudeMcpConfiguration,
+  updateClaudeMcpConfiguration
+} from "./agentDiscovery/mcpJsonConfig";
 import { CartographerClient, resolveCartographerAssemblyPath } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
@@ -41,7 +56,14 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   activeClient = client;
   const version = String(context.extension.packageJSON.version ?? "unknown");
-  const mcpArguments = workspaceRoots.flatMap(root => ["--workspace", root]);
+  const mcpLaunch = workspaceRoots.length === 0
+    ? undefined
+    : createAtlasMcpLaunchDefinition({
+      assemblyPath: resolveCartographerAssemblyPath(context.extensionPath),
+      atlasPath,
+      extensionPath: context.extensionPath,
+      workspaceRoots
+    });
   context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider(
     "krakenAtlas.cartographer",
     {
@@ -49,20 +71,17 @@ export function activate(context: vscode.ExtensionContext): void {
         if (workspaceRoots.length === 0) {
           return [];
         }
+        if (!mcpLaunch) {
+          return [];
+        }
         const definition = new vscode.McpStdioServerDefinition(
           "Kraken Atlas",
-          "dotnet",
-          [
-            resolveCartographerAssemblyPath(context.extensionPath),
-            "--mcp",
-            ...mcpArguments,
-            "--atlas",
-            atlasPath
-          ],
-          {},
+          mcpLaunch.command,
+          [...mcpLaunch.args],
+          { ...(mcpLaunch.env ?? {}) },
           version
         );
-        definition.cwd = vscode.Uri.file(context.extensionPath);
+        definition.cwd = vscode.Uri.file(mcpLaunch.cwd);
         return [definition];
       },
       resolveMcpServerDefinition: async (server) => {
@@ -428,7 +447,16 @@ export function activate(context: vscode.ExtensionContext): void {
       await runCommand(() => exportDiagnostics(context, client, output, workspaceRoots, atlasPath, version));
     }),
     vscode.commands.registerCommand("krakenAtlas.installAgentInstructions", async () => {
-      await runCommand(() => installAgentInstructions());
+      await runCommand(() => setupAiAgent(requireMcpLaunch(mcpLaunch)));
+    }),
+    vscode.commands.registerCommand("krakenAtlas.setupAgent", async () => {
+      await runCommand(() => setupAiAgent(requireMcpLaunch(mcpLaunch)));
+    }),
+    vscode.commands.registerCommand("krakenAtlas.copyMcpConfiguration", async () => {
+      await runCommand(async () => {
+        await vscode.env.clipboard.writeText(renderGenericMcpConfiguration(requireMcpLaunch(mcpLaunch)));
+        vscode.window.showInformationMessage("Kraken Atlas copied a generic stdio MCP configuration.");
+      });
     }),
     vscode.commands.registerCommand("krakenAtlas.openPlanning", async () => {
       await runCommand(async () => {
@@ -438,6 +466,10 @@ export function activate(context: vscode.ExtensionContext): void {
       });
     })
   );
+
+  if (mcpLaunch) {
+    void refreshManagedAgentMcpConfigurations(mcpLaunch, output);
+  }
 }
 
 export async function deactivate(): Promise<void> {
@@ -552,11 +584,27 @@ async function runCommand(action: () => Promise<void>): Promise<void> {
 
 interface AgentInstructionPick extends vscode.QuickPickItem {
   targets: readonly AgentInstructionTarget[];
+  connections: readonly AgentConnectionKind[];
 }
 
-async function installAgentInstructions(): Promise<void> {
+interface AgentSetupPlan {
+  relativePath: string;
+  uri: vscode.Uri;
+  update: { change: "created" | "appended" | "updated" | "unchanged"; content: string };
+}
+
+type AgentConnectionKind = "native-vscode" | "codex" | "claude" | "generic";
+
+function requireMcpLaunch(launch: McpLaunchDefinition | undefined): McpLaunchDefinition {
+  if (!launch) {
+    throw new Error("Open a workspace folder before setting up an AI agent.");
+  }
+  return launch;
+}
+
+async function setupAiAgent(mcpLaunch: McpLaunchDefinition): Promise<void> {
   if (!vscode.workspace.isTrusted) {
-    throw new Error("Installing agent instructions requires a trusted workspace.");
+    throw new Error("Setting up an AI agent requires a trusted workspace.");
   }
 
   const workspaceFolder = await chooseInstructionWorkspaceFolder();
@@ -564,44 +612,83 @@ async function installAgentInstructions(): Promise<void> {
     return;
   }
 
+  const target = (id: AgentInstructionTarget["id"]): AgentInstructionTarget => {
+    const found = agentInstructionTargets.find(candidate => candidate.id === id);
+    if (!found) {
+      throw new Error(`Missing agent instruction target: ${id}`);
+    }
+    return found;
+  };
   const picks: AgentInstructionPick[] = [
-    ...agentInstructionTargets.map(target => ({
-      label: target.label,
-      description: target.id === "agents" ? "Recommended" : undefined,
-      detail: target.description,
-      targets: [target]
-    })),
     {
-      label: "All supported instruction files",
-      detail: "Install managed guidance for AGENTS.md, GitHub Copilot, and Claude",
-      targets: agentInstructionTargets
+      label: "VS Code Chat / GitHub Copilot",
+      description: "Automatic connection",
+      detail: "Use the extension-provided MCP server and repository Copilot instructions",
+      targets: [target("copilot")],
+      connections: ["native-vscode"]
+    },
+    {
+      label: "Codex",
+      detail: "Install AGENTS.md and a project-scoped .codex/config.toml connection",
+      targets: [target("agents")],
+      connections: ["codex"]
+    },
+    {
+      label: "Claude Code",
+      detail: "Install CLAUDE.md and a project-scoped .mcp.json connection",
+      targets: [target("claude")],
+      connections: ["claude"]
+    },
+    {
+      label: "Other MCP-capable agent",
+      detail: "Install AGENTS.md and copy a generic stdio MCP configuration",
+      targets: [target("agents")],
+      connections: ["generic"]
+    },
+    {
+      label: "All supported clients",
+      detail: "Install every instruction file plus Codex and Claude MCP adapters",
+      targets: agentInstructionTargets,
+      connections: ["native-vscode", "codex", "claude"]
     }
   ];
   const selected = await vscode.window.showQuickPick(picks, {
-    title: "Kraken Atlas: Install Agent Instructions",
-    placeHolder: "Choose which coding agents should discover Kraken Atlas",
+    title: "Kraken Atlas: Set Up AI Agent",
+    placeHolder: "Choose the AI agent that should connect to Atlas",
     ignoreFocusOut: true
   });
   if (!selected) {
     return;
   }
 
-  const plans: Array<{
-    target: AgentInstructionTarget;
-    uri: vscode.Uri;
-    update: ReturnType<typeof updateAgentInstructions>;
-  }> = [];
+  const plans: AgentSetupPlan[] = [];
   for (const target of selected.targets) {
     const segments = target.relativePath.split("/");
     const uri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
     const existing = await readOptionalWorkspaceText(uri);
     const update = updateAgentInstructions(existing);
-    plans.push({ target, uri, update });
+    plans.push({ relativePath: target.relativePath, uri, update });
+  }
+  const installsCodex = selected.connections.includes("codex");
+  if (installsCodex) {
+    const segments = codexConfigRelativePath.split("/");
+    const uri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
+    const existing = await readOptionalWorkspaceText(uri);
+    const update = updateCodexMcpConfiguration(existing, mcpLaunch);
+    plans.push({ relativePath: codexConfigRelativePath, uri, update });
+  }
+  const installsClaude = selected.connections.includes("claude");
+  if (installsClaude) {
+    const segments = claudeMcpConfigRelativePath.split("/");
+    const uri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
+    const existing = await readOptionalWorkspaceText(uri);
+    const update = updateClaudeMcpConfiguration(existing, mcpLaunch);
+    plans.push({ relativePath: claudeMcpConfigRelativePath, uri, update });
   }
 
   for (const plan of plans) {
     if (plan.update.change !== "unchanged") {
-      const segments = plan.target.relativePath.split("/");
+      const segments = plan.relativePath.split("/");
       if (segments.length > 1) {
         await vscode.workspace.fs.createDirectory(
           vscode.Uri.joinPath(workspaceFolder.uri, ...segments.slice(0, -1))
@@ -611,15 +698,86 @@ async function installAgentInstructions(): Promise<void> {
     }
   }
 
+  const copiesGeneric = selected.connections.includes("generic");
+  if (copiesGeneric) {
+    await vscode.env.clipboard.writeText(renderGenericMcpConfiguration(mcpLaunch));
+  }
+
   const changed = plans.filter(plan => plan.update.change !== "unchanged");
   const summary = changed.length === 0
-    ? "Kraken Atlas agent instructions are already current."
-    : `Kraken Atlas installed agent instructions in ${changed.map(plan => plan.target.relativePath).join(", ")}. ` +
-      "The next Atlas build will map them as governing repository instructions.";
-  const open = await vscode.window.showInformationMessage(summary, "Open Instructions");
+    ? "Kraken Atlas agent setup files are already current."
+    : `Kraken Atlas installed agent setup in ${changed.map(plan => plan.relativePath).join(", ")}. ` +
+      "The next Atlas build will map instruction files as governing repository rules.";
+  const connectionNotes: string[] = [];
+  if (selected.connections.includes("native-vscode")) {
+    connectionNotes.push("VS Code agents receive Atlas through the extension's native MCP provider.");
+  }
+  if (installsCodex || installsClaude) {
+    connectionNotes.push("Reload VS Code or restart the selected agent before opening a new task.");
+  }
+  if (copiesGeneric) {
+    connectionNotes.push("A generic MCP configuration is on the clipboard; paste it into the agent's MCP settings and restart that agent.");
+  }
+  const detail = `${summary} ${connectionNotes.join(" ")}`.trim();
+  const canReload = installsCodex || installsClaude;
+  const actions = canReload ? ["Reload VS Code", "Open Instructions"] : ["Open Instructions"];
+  const open = await vscode.window.showInformationMessage(detail, ...actions);
+  if (open === "Reload VS Code") {
+    await vscode.commands.executeCommand("workbench.action.reloadWindow");
+    return;
+  }
   if (open === "Open Instructions") {
     const document = await vscode.workspace.openTextDocument((changed[0] ?? plans[0]).uri);
     await vscode.window.showTextDocument(document, { preview: true });
+  }
+}
+
+async function refreshManagedAgentMcpConfigurations(
+  launch: McpLaunchDefinition,
+  output: vscode.OutputChannel
+): Promise<void> {
+  if (!vscode.workspace.isTrusted) {
+    return;
+  }
+
+  for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    await refreshManagedMcpConfiguration(
+      vscode.Uri.joinPath(folder.uri, ...codexConfigRelativePath.split("/")),
+      "Codex",
+      hasManagedCodexMcpConfiguration,
+      existing => updateCodexMcpConfiguration(existing, launch),
+      output
+    );
+    await refreshManagedMcpConfiguration(
+      vscode.Uri.joinPath(folder.uri, ...claudeMcpConfigRelativePath.split("/")),
+      "Claude",
+      hasManagedClaudeMcpConfiguration,
+      existing => updateClaudeMcpConfiguration(existing, launch),
+      output
+    );
+  }
+}
+
+async function refreshManagedMcpConfiguration(
+  uri: vscode.Uri,
+  clientName: string,
+  isManaged: (content: string) => boolean,
+  updateConfiguration: (content: string) => AgentSetupPlan["update"],
+  output: vscode.OutputChannel
+): Promise<void> {
+  const existing = await readOptionalWorkspaceText(uri);
+  if (!existing || !isManaged(existing)) {
+    return;
+  }
+  try {
+    const update = updateConfiguration(existing);
+    if (update.change !== "unchanged") {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(update.content, "utf8"));
+      output.appendLine(`Refreshed managed ${clientName} MCP configuration: ${uri.fsPath}`);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    output.appendLine(`Could not refresh managed ${clientName} MCP configuration at ${uri.fsPath}: ${message}`);
   }
 }
 
