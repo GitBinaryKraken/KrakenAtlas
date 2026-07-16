@@ -68,6 +68,14 @@ public sealed record GetChangeSurfaceParams(
     int? MaxDepth,
     int? MaxEntities);
 
+public sealed record GetGitChangesParams(
+    string? Mode,
+    string? BaseRef,
+    string? TargetRef,
+    int? MaxDepth,
+    int? MaxEntities,
+    int? MaxFiles);
+
 public sealed record GetAssessmentsParams(
     string? StableKey,
     long? Id,

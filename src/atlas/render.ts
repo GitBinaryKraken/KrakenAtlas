@@ -7,6 +7,7 @@ import {
   CodeUsageResult,
   DecorateNodesResult,
   EntityDetail,
+  GitChangeProjectionResult,
   PreparedChangeResult,
   RelationQueryResult,
   RouteQueryResult,
@@ -229,6 +230,69 @@ export function renderChangeSurface(result: ChangeSurfaceResult): string {
     for (const project of result.affectedProjects) {
       const test = project.isTest ? " | test" : "";
       lines.push(`- ${project.relativePath} | ${project.projectKind}${test}`);
+    }
+  }
+  if (result.verificationCommands.length > 0) {
+    lines.push("", "Verification Commands");
+    for (const command of result.verificationCommands) {
+      lines.push(`- ${command.kind} | ${command.commandText}`);
+    }
+  }
+  return lines.join("\n");
+}
+
+export function renderGitChanges(result: GitChangeProjectionResult): string {
+  if (result.atlasState === "not_created") {
+    return "Git projection: Atlas not_created\n\nRun Kraken Atlas: Build Atlas before projecting changes.";
+  }
+  if (result.atlasState === "no_repository") {
+    return "Git projection: no_repository\n\nNo Git repository contains an open workspace root.";
+  }
+
+  const range = result.mode === "range" ? ` | ${result.baseRef}...${result.targetRef}` : "";
+  const lines = [
+    `Git projection: ${result.mode}${range}`,
+    `Generation: ${result.generation ?? "unknown"}`,
+    `Truncated: ${result.truncated}`
+  ];
+  for (const repository of result.repositories) {
+    lines.push(
+      "",
+      `Repository: ${repository.repositoryRoot}`,
+      `Branch: ${repository.branch ?? "detached"} | HEAD ${repository.head.slice(0, 12)} | dirty ${repository.dirty}`,
+      `Changed files: ${repository.changedFiles.length}${repository.changesTruncated ? "+" : ""}`
+    );
+    for (const file of repository.changedFiles) {
+      const rename = file.oldPath ? ` <- ${file.oldPath}` : "";
+      const project = file.project ? ` | ${file.project.relativePath}` : "";
+      lines.push(`- ${file.status} | ${file.path}${rename}${project}`);
+      for (const entity of file.entities) {
+        lines.push(`  ${entity.kind} | ${entity.qualifiedName} | ${entity.stableKey}`);
+      }
+    }
+  }
+  if (result.impacts.length > 0) {
+    lines.push("", "Projected Impact");
+    for (const impact of result.impacts) {
+      const project = impact.project ? ` | ${impact.project.relativePath}` : "";
+      lines.push(
+        `- depth ${impact.depth} | ${impact.pathDirection} | ${impact.relationDomain}/${impact.relationKind} | ${impact.entity.qualifiedName}${project}`
+      );
+      lines.push(`  from ${impact.changedEntityStableKey}`);
+    }
+  }
+  appendSurfaceItems(lines, "Related Tests", result.relatedTests);
+  if (result.assessmentsAtRisk.length > 0) {
+    lines.push("", "Assessments At Risk");
+    for (const risk of result.assessmentsAtRisk) {
+      const dependencies = risk.dependencies
+        .map(dependency => `${dependency.kind}:${dependency.stableKey}`)
+        .join(", ");
+      lines.push(
+        `- ${risk.status} | ${risk.subject.qualifiedName} | ${dependencies}`,
+        `  ${risk.statement}`,
+        `  ${risk.claimId}`
+      );
     }
   }
   if (result.verificationCommands.length > 0) {

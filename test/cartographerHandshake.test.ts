@@ -11,6 +11,7 @@ import {
   BuildAtlasResult,
   CodeUsageResult,
   EntityDetail,
+  GitChangeProjectionResult,
   SymbolSearchResult,
   WorkspaceOrientation
 } from "../src/atlas/contracts";
@@ -117,6 +118,12 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
   fs.cpSync(path.resolve(process.cwd(), "test-fixtures", "workspace-discovery"), workspaceRoot, {
     recursive: true
   });
+  fs.writeFileSync(path.join(workspaceRoot, ".gitignore"), "bin/\nobj/\n");
+  execFileSync("git", ["init"], { cwd: workspaceRoot });
+  execFileSync("git", ["config", "user.email", "kraken-atlas-tests@example.invalid"], { cwd: workspaceRoot });
+  execFileSync("git", ["config", "user.name", "Kraken Atlas Tests"], { cwd: workspaceRoot });
+  execFileSync("git", ["add", "."], { cwd: workspaceRoot });
+  execFileSync("git", ["commit", "-m", "baseline"], { cwd: workspaceRoot });
 
   const start = async () => {
     const cartographer = new CartographerHarness(assembly);
@@ -144,10 +151,12 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       "relation.query",
       "route.trace",
       "change.surface",
+      "git.change_projection",
       "framework.aspnet_core",
       "database.ef_core",
       "assessment.read",
       "assessment.write",
+      "assessment.git_risk",
       "agent.prepare_change",
       "agent.prepare_task",
       "agent.source_slices",
@@ -165,6 +174,9 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
 
     const firstBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
     assert.equal(firstBuild.generation, 1);
+    assert.equal(firstBuild.indexing.mode, "full");
+    assert.equal(firstBuild.indexing.analyzedProjects, 2);
+    assert.equal(firstBuild.indexing.reusedProjects, 0);
     assert.deepEqual(firstBuild.counts, {
       solutions: 1,
       projects: 2,
@@ -228,7 +240,48 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     assert.ok(getMessageUsages.usages.some(usage => usage.relationKind === "calls"));
 
     const secondBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
-    assert.equal(secondBuild.generation, 2);
+    assert.equal(secondBuild.generation, 1);
+    assert.equal(secondBuild.indexing.mode, "unchanged");
+    assert.equal(secondBuild.indexing.analyzedProjects, 0);
+    assert.equal(secondBuild.indexing.reusedProjects, 2);
+
+    fs.appendFileSync(path.join(workspaceRoot, "src", "App", "Program.cs"), "\n// incremental index probe\n");
+    const incrementalBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
+    assert.equal(incrementalBuild.generation, 2);
+    assert.equal(incrementalBuild.indexing.mode, "incremental");
+    assert.equal(incrementalBuild.indexing.changedFiles, 1);
+    assert.equal(incrementalBuild.indexing.changedProjects, 1);
+    assert.equal(incrementalBuild.indexing.analyzedProjects, 1);
+    assert.equal(incrementalBuild.indexing.reusedProjects, 1);
+    const workingTree = await cartographer.request<GitChangeProjectionResult>("get_git_changes", {
+      mode: "working_tree",
+      maxDepth: 2,
+      maxEntities: 50,
+      maxFiles: 20
+    });
+    assert.equal(workingTree.atlasState, "current");
+    assert.equal(workingTree.mode, "working_tree");
+    assert.equal(workingTree.repositories.length, 1);
+    const changedProgram = workingTree.repositories[0].changedFiles.find(file =>
+      file.path === "src/App/Program.cs");
+    assert.ok(changedProgram);
+    assert.equal(changedProgram.status, "modified");
+    assert.equal(changedProgram.project?.name, "App");
+    assert.ok(changedProgram.fileStableKey);
+
+    execFileSync("git", ["add", "src/App/Program.cs"], { cwd: workspaceRoot });
+    execFileSync("git", ["commit", "-m", "change app"], { cwd: workspaceRoot });
+    const range = await cartographer.request<GitChangeProjectionResult>("get_git_changes", {
+      mode: "range",
+      baseRef: "HEAD~1",
+      targetRef: "HEAD",
+      maxDepth: 2,
+      maxEntities: 50,
+      maxFiles: 20
+    });
+    assert.equal(range.atlasState, "current");
+    assert.equal(range.mode, "range");
+    assert.equal(range.repositories[0].changedFiles[0]?.path, "src/App/Program.cs");
     const secondEntity = await cartographer.request<EntityDetail>("get_entity", { id: firstEntity.id });
     assert.equal(secondEntity.id, firstEntity.id);
     assert.equal(secondEntity.stableKey, firstEntity.stableKey);
@@ -251,7 +304,7 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     cartographer = await start();
     const reopened = await cartographer.request<AtlasSummary>("get_atlas_summary");
     assert.equal(reopened.generation, 2);
-    assert.deepEqual(reopened.counts, secondBuild.counts);
+    assert.deepEqual(reopened.counts, incrementalBuild.counts);
     await cartographer.stop();
 
     const cliSummary = JSON.parse(execFileSync("dotnet", [

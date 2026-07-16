@@ -1,4 +1,4 @@
-# Kraken Atlas Agent Tooling Beta Testing
+# Kraken Atlas Incremental Agent Loop Alpha Testing
 
 ## Purpose
 
@@ -38,7 +38,7 @@ ambiguous, and request code-only source excerpts inside a fixed token budget.
 
 It does not yet provide full MVC/filter semantics, complete EF relationship or
 snapshot interpretation, TypeScript/React semantics, predictive impact analysis,
-incremental indexing, Git change projection, or documentation indexing. Please
+unsaved editor overlays, file-level dependent rebinds, or documentation indexing. Please
 evaluate the capabilities that exist rather than the planned semantic surface.
 
 ## Distribution and License Status
@@ -111,21 +111,28 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 17. Run `Kraken Atlas: Show Node Assessments`. Verify canonical facts are not
     presented as agent claims and each claim has status, freshness, confidence,
     agent identity, exact evidence, and a stable claim ID.
-18. Change one evidenced source file, rebuild, and query with `--include-stale`.
+18. Change one evidenced source file and run `Kraken Atlas: Project Git Changes`
+    before rebuilding. Verify the file maps to current entities and the saved
+    claim appears under assessments at risk.
+19. Rebuild, then query with `--include-stale`.
     The dependent assessment must be stale and absent from normal prepared packs.
-19. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
+20. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
    existing Atlas generation should reopen successfully.
-20. Run `Kraken Atlas: Build Atlas` a second time. It should complete without DLL
-   lock errors or stale Cartographer processes.
-21. Close and reopen VS Code, then show the summary and assessments again.
-22. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
+21. Run `Kraken Atlas: Build Atlas` again without changing files. It should
+    report indexing mode `unchanged`, preserve the generation, and complete
+    without DLL lock errors or stale Cartographer processes.
+22. Change a leaf project and rebuild. Verify indexing mode `incremental`, a new
+    generation, and sensible analyzed/reused project counts.
+23. Close and reopen VS Code, then show the summary and assessments again.
+24. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
-23. In Agent mode, enable the `Kraken Atlas` tools and request workspace
-    orientation. Verify the agent can discover all nine MCP tools.
-24. Ask for a concrete feature change without supplying a stable key. Verify
+25. In Agent mode, enable the `Kraken Atlas` tools and request workspace
+    orientation. Verify the agent can discover all ten MCP tools, including
+    `project_git_changes`.
+26. Ask for a concrete feature change without supplying a stable key. Verify
     `prepare_change` returns either `auto`, `needs_seed` with ranked candidates,
     or `no_match`, never an unexplained fuzzy choice.
-25. Repeat with an exact query or stable key, a 4,000-token budget, and source
+27. Repeat with an exact query or stable key, a 4,000-token budget, and source
     enabled. Verify all excerpts are code files, no excerpt exceeds its requested
     line limit, and `estimatedTokens <= tokenBudget`.
 

@@ -161,21 +161,7 @@ internal static partial class CSharpFrameworkAnalyzer
             AddRelation,
             cancellationToken);
 
-        foreach (var request in requests)
-        {
-            foreach (var endpoint in endpoints.Where(endpoint =>
-                endpoint.Verb == request.Verb && RouteMatches(request.RouteTemplate, endpoint.RouteTemplate)))
-            {
-                AddRelation(new DiscoveredCodeRelation(
-                    request.EntityKey,
-                    endpoint.EntityKey,
-                    "matches_endpoint",
-                    "static",
-                    request.Evidence,
-                    "framework",
-                    "route_template"));
-            }
-        }
+        ConnectHttpRoutes(symbols, relations);
 
         void AddRelation(DiscoveredCodeRelation relation)
         {
@@ -184,6 +170,69 @@ internal static partial class CSharpFrameworkAnalyzer
                 relations.Add(relation);
             }
         }
+    }
+
+    internal static void ConnectHttpRoutes(
+        IReadOnlyDictionary<string, DiscoveredCodeSymbol> symbols,
+        ICollection<DiscoveredCodeRelation> relations)
+    {
+        var relationKeys = relations.Select(CreateRelationIdentity).ToHashSet(StringComparer.Ordinal);
+        var endpoints = symbols.Values
+            .Where(symbol => symbol.Kind == "http_endpoint" && symbol.Locations.Count > 0)
+            .Select(symbol => ParseHttpFact(symbol))
+            .Where(fact => fact is not null)
+            .Cast<HttpEndpointFact>()
+            .ToArray();
+        var requests = symbols.Values
+            .Where(symbol => symbol.Kind == "http_request" && symbol.Locations.Count > 0)
+            .Select(symbol => ParseHttpRequest(symbol))
+            .Where(fact => fact is not null)
+            .Cast<HttpRequestFact>()
+            .ToArray();
+
+        foreach (var request in requests)
+        {
+            foreach (var endpoint in endpoints.Where(endpoint =>
+                endpoint.Verb == request.Verb && RouteMatches(request.RouteTemplate, endpoint.RouteTemplate)))
+            {
+                var relation = new DiscoveredCodeRelation(
+                    request.EntityKey,
+                    endpoint.EntityKey,
+                    "matches_endpoint",
+                    "static",
+                    request.Evidence,
+                    "framework",
+                    "route_template");
+                if (relationKeys.Add(CreateRelationIdentity(relation)))
+                {
+                    relations.Add(relation);
+                }
+            }
+        }
+    }
+
+    private static HttpEndpointFact? ParseHttpFact(DiscoveredCodeSymbol symbol)
+    {
+        var separator = symbol.Name.IndexOf(' ');
+        return separator <= 0
+            ? null
+            : new HttpEndpointFact(
+                symbol.StableKey,
+                symbol.Name[..separator],
+                symbol.Name[(separator + 1)..],
+                symbol.Locations[0]);
+    }
+
+    private static HttpRequestFact? ParseHttpRequest(DiscoveredCodeSymbol symbol)
+    {
+        var separator = symbol.Name.IndexOf(' ');
+        return separator <= 0
+            ? null
+            : new HttpRequestFact(
+                symbol.StableKey,
+                symbol.Name[..separator],
+                symbol.Name[(separator + 1)..],
+                symbol.Locations[0]);
     }
 
     private static void CollectHttpEndpoints(

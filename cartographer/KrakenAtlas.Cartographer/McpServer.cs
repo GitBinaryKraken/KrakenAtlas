@@ -169,7 +169,7 @@ internal sealed class McpServer(
                     title = "Kraken Atlas Cartographer",
                     version = GetServiceVersion()
                 },
-                instructions = "Start with get_workspace_orientation. Build the Atlas if it is not_created. Use prepare_change for task-sized, token-budgeted context. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
+                instructions = "Start with get_workspace_orientation. Build the Atlas if it is not_created. Before rebuilding a changed workspace, use project_git_changes to map live edits and assessments at risk. Use prepare_change for task-sized, token-budgeted context. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
             });
             return;
         }
@@ -223,6 +223,8 @@ internal sealed class McpServer(
                     DeserializeArguments<GetRelationsParams>(arguments), cancellationToken),
                 "trace_route" => await session.TraceRouteAsync(
                     DeserializeArguments<TraceRouteParams>(arguments), cancellationToken),
+                "project_git_changes" => await session.GetGitChangesAsync(
+                    DeserializeArguments<GetGitChangesParams>(arguments), cancellationToken),
                 "prepare_change" => await session.PrepareTaskAsync(
                     DeserializeArguments<PrepareTaskParams>(arguments), cancellationToken),
                 "get_assessments" => await session.GetAssessmentsAsync(
@@ -283,6 +285,11 @@ internal sealed class McpServer(
             "Trace Code Route",
             "Trace a bounded execution or dependency path between exact source and target entities, optionally through ordered stable-key waypoints and relation filters.",
             """{"type":"object","properties":{"sourceStableKey":{"type":"string"},"sourceId":{"type":"integer"},"targetStableKey":{"type":"string"},"targetId":{"type":"integer"},"viaStableKeys":{"type":"array","items":{"type":"string"}},"domains":{"type":"array","items":{"type":"string"}},"kinds":{"type":"array","items":{"type":"string"}},"maxDepth":{"type":"integer","minimum":1,"maximum":32},"maxVisited":{"type":"integer","minimum":10,"maximum":20000}},"additionalProperties":false}"""),
+        Tool(
+            "project_git_changes",
+            "Project Git Changes",
+            "Project working-tree or commit-range changes onto mapped files, symbols, dependent behavior, tests, projects, verification commands, and durable assessments whose evidence is now at risk.",
+            """{"type":"object","properties":{"mode":{"type":"string","enum":["working_tree","range"],"default":"working_tree"},"baseRef":{"type":"string"},"targetRef":{"type":"string","default":"HEAD"},"maxDepth":{"type":"integer","minimum":1,"maximum":8,"default":2},"maxEntities":{"type":"integer","minimum":10,"maximum":1000,"default":100},"maxFiles":{"type":"integer","minimum":1,"maximum":1000,"default":100}},"additionalProperties":false}"""),
         Tool(
             "prepare_change",
             "Prepare Change Context",

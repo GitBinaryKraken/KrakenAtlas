@@ -33,6 +33,7 @@ test("preserves the published identity and exposes the bounded semantic command 
     "krakenAtlas.showRelations",
     "krakenAtlas.traceRoute",
     "krakenAtlas.showChangeSurface",
+    "krakenAtlas.projectGitChanges",
     "krakenAtlas.prepareChange",
     "krakenAtlas.showAssessments",
     "krakenAtlas.applyDecorations",

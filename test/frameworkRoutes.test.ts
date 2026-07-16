@@ -10,6 +10,7 @@ import {
   BuildAtlasResult,
   ChangeSurfaceResult,
   DecorateNodesResult,
+  GitChangeProjectionResult,
   PreparedChangeResult,
   RelationQueryResult,
   RouteQueryResult,
@@ -56,6 +57,12 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
     execFileSync("dotnet", ["restore", path.join(workspaceRoot, "FeatureFlow.slnx")], {
       encoding: "utf8"
     });
+    fs.writeFileSync(path.join(workspaceRoot, ".gitignore"), "bin/\nobj/\n");
+    execFileSync("git", ["init"], { cwd: workspaceRoot });
+    execFileSync("git", ["config", "user.email", "kraken-atlas-tests@example.invalid"], { cwd: workspaceRoot });
+    execFileSync("git", ["config", "user.name", "Kraken Atlas Tests"], { cwd: workspaceRoot });
+    execFileSync("git", ["add", "."], { cwd: workspaceRoot });
+    execFileSync("git", ["commit", "-m", "baseline"], { cwd: workspaceRoot });
     const build = invoke<BuildAtlasResult>("build");
     assert.equal(build.generation, 1);
     assert.equal(build.counts.solutions, 1);
@@ -515,6 +522,16 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       && item.source.endLine - item.source.startLine + 1 <= 12));
 
     fs.appendFileSync(path.join(workspaceRoot, "Logic", "PersonaService.cs"), "\n// Staleness fixture change.\n");
+    const gitChanges = invoke<GitChangeProjectionResult>(
+      "git-changes", "--mode", "working_tree", "--max-depth", "2", "--max-entities", "100"
+    );
+    assert.equal(gitChanges.atlasState, "current");
+    assert.ok(gitChanges.repositories[0].changedFiles.some(file =>
+      file.path === "Logic/PersonaService.cs" && file.status === "modified"));
+    assert.deepEqual(
+      gitChanges.assessmentsAtRisk.map(risk => risk.claimId).sort(),
+      applied.results.flatMap(item => item.claimIds).sort()
+    );
     const rebuilt = invoke<BuildAtlasResult>("build");
     assert.equal(rebuilt.generation, 2);
     const currentOnly = invoke<AssessmentQueryResult>(

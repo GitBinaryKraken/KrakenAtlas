@@ -51,32 +51,36 @@ internal sealed partial class CartographerSession
         }
 
         var snapshot = await discovery.DiscoverAsync(workspaceRoots, cancellationToken);
-        CSharpSemanticSnapshot semanticSnapshot;
-        var semanticStopwatch = Stopwatch.StartNew();
-        try
-        {
-            semanticSnapshot = await csharpDeclarationAnalyzer.AnalyzeAsync(snapshot, cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            semanticStopwatch.Stop();
-            semanticSnapshot = new CSharpSemanticSnapshot(
-                [],
-                [],
-                new AnalyzerExecution(
-                    CSharpDeclarationAnalyzer.AnalyzerName,
-                    CSharpDeclarationAnalyzer.AnalyzerVersion,
-                    CSharpDeclarationAnalyzer.Capability,
-                    "failed",
-                    semanticStopwatch.ElapsedMilliseconds,
-                    $"{exception.GetType().Name}: {exception.Message}"));
-        }
         workspaceKey = snapshot.StableKey;
-        var result = await activeRepository.BuildAsync(snapshot, semanticSnapshot, cancellationToken);
+        var current = await activeRepository.GetIndexStateAsync(
+            snapshot.StableKey,
+            CSharpDeclarationAnalyzer.AnalyzerName,
+            CSharpDeclarationAnalyzer.AnalyzerVersion,
+            cancellationToken);
+        var csharpProjectCount = snapshot.Projects.Count(project =>
+            project.Language == "csharp"
+            && project.RelativePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
+        if (current is not null
+            && current.SourceFingerprint == snapshot.SourceFingerprint
+            && current.SemanticStatus != "failed"
+            && current.SemanticProjects.Count == csharpProjectCount)
+        {
+            stopwatch.Stop();
+            return new BuildAtlasResult(
+                current.Generation,
+                snapshot.StableKey,
+                current.Counts,
+                stopwatch.ElapsedMilliseconds,
+                new AtlasIndexingSummary("unchanged", 0, 0, 0, 0, current.SemanticProjects.Count, []));
+        }
+
+        var indexed = await BuildSemanticSnapshotAsync(snapshot, current, cancellationToken);
+        var result = await activeRepository.BuildAsync(
+            snapshot,
+            indexed.Snapshot,
+            indexed.CacheEntries,
+            indexed.Indexing,
+            cancellationToken);
         stopwatch.Stop();
         return result with { DurationMs = stopwatch.ElapsedMilliseconds };
     }

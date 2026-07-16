@@ -90,10 +90,12 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             "relation.query",
                             "route.trace",
                             "change.surface",
+                            "git.change_projection",
                             "framework.aspnet_core",
                             "database.ef_core",
                             "assessment.read",
                             "assessment.write",
+                            "assessment.git_risk",
                             "agent.prepare_change",
                             "agent.prepare_task",
                             "agent.source_slices",
@@ -181,6 +183,13 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                         request.Id,
                         await session.GetChangeSurfaceAsync(
                             DeserializeParams<GetChangeSurfaceParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "get_git_changes" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.GetGitChangesAsync(
+                            DeserializeParams<GetGitChangesParams>(request.Params),
                             cancellationToken)),
                     false),
                 "get_entity_assessments" => (

@@ -77,6 +77,15 @@ internal static class CliApplication
                         options.MaxDepth,
                         options.MaxEntities),
                     cancellationToken),
+                "git-changes" => await session.GetGitChangesAsync(
+                    new GetGitChangesParams(
+                        options.Mode,
+                        options.BaseRef,
+                        options.TargetRef,
+                        options.MaxDepth,
+                        options.MaxEntities,
+                        options.MaxFiles),
+                    cancellationToken),
                 "assessments" => await session.GetAssessmentsAsync(
                     new GetAssessmentsParams(
                         options.StableKey,
@@ -130,10 +139,10 @@ internal static class CliApplication
         if (arguments.Count == 0 || arguments[0] is not (
             "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
             or "usages" or "relations" or "route" or "surface" or "assessments"
-            or "prepare" or "prepare-task" or "decorate-nodes"))
+            or "git-changes" or "prepare" or "prepare-task" or "decorate-nodes"))
         {
             throw new ArgumentException(
-                "A build, summary, orientation, entity, symbols, search, usages, relations, route, surface, assessments, prepare, prepare-task, or decorate-nodes command is required.");
+                "A build, summary, orientation, entity, symbols, search, usages, relations, route, surface, git-changes, assessments, prepare, prepare-task, or decorate-nodes command is required.");
         }
 
         var roots = new List<string>();
@@ -153,6 +162,10 @@ internal static class CliApplication
         int? maxDepth = null;
         int? maxVisited = null;
         int? maxEntities = null;
+        int? maxFiles = null;
+        string? mode = null;
+        string? baseRef = null;
+        string? targetRef = null;
         string? task = null;
         int? tokenBudget = null;
         int? sourceLineLimit = null;
@@ -241,6 +254,18 @@ internal static class CliApplication
                 case "--max-entities" when int.TryParse(value, out var parsedMaxEntities):
                     maxEntities = parsedMaxEntities;
                     break;
+                case "--max-files" when int.TryParse(value, out var parsedMaxFiles):
+                    maxFiles = parsedMaxFiles;
+                    break;
+                case "--mode":
+                    mode = value;
+                    break;
+                case "--base-ref":
+                    baseRef = value;
+                    break;
+                case "--target-ref":
+                    targetRef = value;
+                    break;
                 case "--task":
                     task = value;
                     break;
@@ -317,7 +342,8 @@ internal static class CliApplication
         return new CliOptions(
             arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit,
             kinds, domains, direction, sourceStableKey, sourceId, targetStableKey, targetId,
-            viaStableKeys, maxDepth, maxVisited, maxEntities, task, tokenBudget, sourceLineLimit,
+            viaStableKeys, maxDepth, maxVisited, maxEntities, maxFiles, mode, baseRef, targetRef,
+            task, tokenBudget, sourceLineLimit,
             inputPath, dryRun, includeSource, includeProposed, includeStale, includeHistory);
     }
 
@@ -339,13 +365,14 @@ internal static class CliApplication
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface|assessments|prepare|prepare-task|decorate-nodes> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface|git-changes|assessments|prepare|prepare-task|decorate-nodes> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>] [--query <text>] "
         + "[--direction <incoming|outgoing|both>] [--domain <domain>] [--kind <relation-kind>] "
         + "[--source-key <key> | --source-id <number>] [--target-key <key> | --target-id <number>] "
         + "[--via-key <stable-key>] "
         + "[--max-depth <number>] [--max-visited <10-20000>] [--max-entities <10-1000>] [--limit <number>] "
+        + "[--mode <working_tree|range>] [--base-ref <ref>] [--target-ref <ref>] [--max-files <1-1000>] "
         + "[--task <text>] [--token-budget <800-32000>] [--include-source] [--source-line-limit <8-120>] "
         + "[--input <file|->] [--dry-run] "
         + "[--include-proposed] [--include-stale] [--include-history]";
@@ -369,6 +396,10 @@ internal static class CliApplication
         int? MaxDepth,
         int? MaxVisited,
         int? MaxEntities,
+        int? MaxFiles,
+        string? Mode,
+        string? BaseRef,
+        string? TargetRef,
         string? Task,
         int? TokenBudget,
         int? SourceLineLimit,

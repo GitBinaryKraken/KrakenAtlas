@@ -42,6 +42,17 @@ export interface BuildAtlasResult {
   workspaceKey: string;
   counts: AtlasCounts;
   durationMs: number;
+  indexing: AtlasIndexingSummary;
+}
+
+export interface AtlasIndexingSummary {
+  mode: "full" | "incremental" | "unchanged";
+  changedFiles: number;
+  removedFiles: number;
+  changedProjects: number;
+  analyzedProjects: number;
+  reusedProjects: number;
+  analyzedProjectKeys: string[];
 }
 
 export interface EntityLocationDetail {
@@ -220,6 +231,58 @@ export interface ChangeSurfaceResult {
   transitive: ChangeSurfaceItem[];
   relatedTests: ChangeSurfaceItem[];
   affectedProjects: ChangeSurfaceProject[];
+  verificationCommands: WorkspaceCommandDetail[];
+}
+
+export interface GitChangedFileProjection {
+  status: "modified" | "added" | "deleted" | "renamed" | "copied" | "untracked" | "conflicted" | "type_changed";
+  path: string;
+  oldPath?: string;
+  fileStableKey?: string;
+  project?: ChangeSurfaceProject;
+  entitiesTruncated: boolean;
+  entities: RelationEntity[];
+}
+
+export interface GitRepositoryProjection {
+  repositoryRoot: string;
+  branch?: string;
+  head: string;
+  dirty: boolean;
+  changesTruncated: boolean;
+  changedFiles: GitChangedFileProjection[];
+}
+
+export interface GitProjectedImpact {
+  entity: RelationEntity;
+  changedEntityStableKey: string;
+  depth: number;
+  pathDirection: "dependency" | "dependent";
+  relationDomain: string;
+  relationKind: string;
+  project?: ChangeSurfaceProject;
+}
+
+export interface GitAssessmentRisk {
+  claimId: string;
+  subject: AssessmentSubject;
+  status: string;
+  statement: string;
+  dependencies: Array<{ kind: string; stableKey: string }>;
+}
+
+export interface GitChangeProjectionResult {
+  atlasState: "not_created" | "no_repository" | "current";
+  generation?: number;
+  mode: "working_tree" | "range";
+  baseRef?: string;
+  targetRef?: string;
+  truncated: boolean;
+  repositories: GitRepositoryProjection[];
+  impacts: GitProjectedImpact[];
+  relatedTests: ChangeSurfaceItem[];
+  affectedProjects: ChangeSurfaceProject[];
+  assessmentsAtRisk: GitAssessmentRisk[];
   verificationCommands: WorkspaceCommandDetail[];
 }
 

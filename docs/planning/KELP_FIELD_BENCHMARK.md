@@ -184,6 +184,31 @@ most 16 lines, 3 affected projects, and focused build commands. It used 2,945 of
 explicitly omitted, avoiding repeated local context while preserving their
 evidence locations.
 
+## Incremental Agent Loop Baseline
+
+On 2026-07-15, version 0.9.0 indexed the unchanged 11-project, 672-file Kelp
+workspace with the same 6,738 entities and 16,763 relations:
+
+- A cold schema-v4 build completed in 32.6 seconds and analyzed all 8 C#
+  projects.
+- The resulting SQLite Atlas, including Brotli-compressed per-project semantic
+  cache entries, was 8.17 MiB.
+- A repeated build completed in 508 ms, reported mode `unchanged`, analyzed no
+  projects, reused all 8 C# project caches, and preserved generation 1.
+- An isolated `AdminTools` source edit completed in 9.8 seconds, reported mode
+  `incremental`, analyzed 1 C# project, reused 7, and preserved the exact entity
+  and relation counts in generation 4.
+- An isolated `Kelp2025_WebUI` edit analyzed only that project and reused the
+  other 7 project caches. The initial implementation took 17.7 seconds before
+  cached semantic facts were bulk-promoted by the storage writer.
+
+The unchanged path meets the current 2-second target. The changed-project path
+does not: fresh `MSBuildWorkspace` project evaluation dominates after relation
+replay was removed. Keeping and refreshing a Roslyn/MSBuild workspace inside the
+long-lived Cartographer service is the next latency optimization. The benchmark
+does prove that unchanged projects are not semantically reanalyzed and that a
+complete atomic generation remains query-equivalent after a leaf edit.
+
 ## Gold Persona Route
 
 The initial semantic and full-stack acceptance Route is the public Persona read:

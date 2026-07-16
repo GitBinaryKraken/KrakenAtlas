@@ -13,7 +13,7 @@ namespace KrakenAtlas.Analyzers.Roslyn;
 public sealed class CSharpDeclarationAnalyzer
 {
     public const string AnalyzerName = "roslyn";
-    public const string AnalyzerVersion = "0.7.5";
+    public const string AnalyzerVersion = "0.9.0";
     public const string Capability = "csharp.routes";
 
     private static readonly object RegistrationLock = new();
@@ -55,21 +55,32 @@ public sealed class CSharpDeclarationAnalyzer
     public async Task<CSharpSemanticSnapshot> AnalyzeAsync(
         WorkspaceSnapshot snapshot,
         CancellationToken cancellationToken = default)
+        => await AnalyzeAsync(snapshot, null, [], [], cancellationToken);
+
+    public async Task<CSharpSemanticSnapshot> AnalyzeAsync(
+        WorkspaceSnapshot snapshot,
+        IReadOnlySet<string>? projectKeys,
+        IReadOnlyList<DiscoveredCodeSymbol> knownSymbols,
+        IReadOnlyList<AnalyzedProjectAssembly> knownProjectAssemblies,
+        CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
         var diagnostics = new List<string>();
-        var symbols = new Dictionary<string, DiscoveredCodeSymbol>(StringComparer.Ordinal);
+        var symbols = knownSymbols.ToDictionary(symbol => symbol.StableKey, StringComparer.Ordinal);
         var symbolHandles = new Dictionary<string, ISymbol>(StringComparer.Ordinal);
         var projectAnalyses = new List<RoslynProjectAnalysis>();
-        var projectKeysByAssembly = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var projectKeysByAssembly = knownProjectAssemblies
+            .GroupBy(project => project.AssemblyName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First().ProjectKey, StringComparer.OrdinalIgnoreCase);
         var csharpProjects = snapshot.Projects
             .Where(project => project.Language == "csharp"
-                && project.RelativePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase))
+                && project.RelativePath.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase)
+                && (projectKeys is null || projectKeys.Contains(project.StableKey)))
             .ToArray();
 
         if (csharpProjects.Length == 0)
         {
-            return Complete(symbols, [], diagnostics, 0, 0, stopwatch);
+            return Complete(symbols, [], diagnostics, 0, 0, stopwatch, projectKeysByAssembly);
         }
 
         EnsureMSBuildRegistered();
@@ -149,7 +160,37 @@ public sealed class CSharpDeclarationAnalyzer
             projectKeysByAssembly,
             relations,
             cancellationToken);
-        return Complete(symbols, relations, diagnostics, analyzedProjects, csharpProjects.Length, stopwatch);
+        return Complete(
+            symbols,
+            relations,
+            diagnostics,
+            analyzedProjects,
+            csharpProjects.Length,
+            stopwatch,
+            projectKeysByAssembly);
+    }
+
+    public static IReadOnlyList<DiscoveredCodeRelation> RebuildGlobalRelations(
+        IReadOnlyList<DiscoveredCodeSymbol> symbols,
+        IEnumerable<DiscoveredCodeRelation> relations)
+    {
+        var symbolsByKey = symbols.ToDictionary(symbol => symbol.StableKey, StringComparer.Ordinal);
+        var merged = relations
+            .Where(relation => relation.Kind != "matches_endpoint"
+                && (symbolsByKey.ContainsKey(relation.SourceEntityKey)
+                    || relation.SourceEntityKey.StartsWith("project:", StringComparison.Ordinal)))
+            .Distinct()
+            .ToList();
+        CSharpFrameworkAnalyzer.ConnectHttpRoutes(symbolsByKey, merged);
+        return merged
+            .OrderBy(relation => relation.SourceEntityKey, StringComparer.Ordinal)
+            .ThenBy(relation => relation.TargetSymbolKey, StringComparer.Ordinal)
+            .ThenBy(relation => relation.Domain, StringComparer.Ordinal)
+            .ThenBy(relation => relation.Kind, StringComparer.Ordinal)
+            .ThenBy(relation => relation.Evidence.SourceRelativePath, StringComparer.Ordinal)
+            .ThenBy(relation => relation.Evidence.StartLine)
+            .ThenBy(relation => relation.Evidence.StartColumn)
+            .ToArray();
     }
 
     private static async Task CollectProjectSymbolsAsync(
@@ -751,7 +792,8 @@ public sealed class CSharpDeclarationAnalyzer
         IReadOnlyList<string> diagnostics,
         int analyzedProjects,
         int projectCount,
-        Stopwatch stopwatch)
+        Stopwatch stopwatch,
+        IReadOnlyDictionary<string, string> projectKeysByAssembly)
     {
         stopwatch.Stop();
         var status = projectCount > 0 && analyzedProjects == 0
@@ -768,7 +810,11 @@ public sealed class CSharpDeclarationAnalyzer
                 Capability,
                 status,
                 stopwatch.ElapsedMilliseconds,
-                diagnostics.Count == 0 ? null : string.Join(" | ", diagnostics)));
+                diagnostics.Count == 0 ? null : string.Join(" | ", diagnostics)),
+            projectKeysByAssembly
+                .OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(entry => new AnalyzedProjectAssembly(entry.Value, entry.Key))
+                .ToArray());
     }
 
     private static void AddDiagnostic(ICollection<string> diagnostics, string diagnostic)

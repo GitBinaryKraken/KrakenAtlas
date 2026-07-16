@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.9.0 - 2026-07-15
+
+- Add content-fingerprint no-op builds that preserve the current generation and
+  skip Roslyn when the discovered workspace has not changed.
+- Add SQLite schema v4 with Brotli-compressed per-project Roslyn cache entries,
+  project input fingerprints, and analyzer-version isolation.
+- Reanalyze changed C# projects plus transitive project dependents while reusing
+  unaffected project facts in one complete atomic Atlas generation.
+- Rebuild cross-project HTTP route matches from merged cached and fresh facts so
+  independent UI/API projects remain connected after incremental indexing.
+- Add bounded Git working-tree and commit-range projection across mapped files,
+  symbols, dependencies, tests, projects, and verification commands.
+- Report durable assessment claims at risk before rebuild when changed files
+  touch captured file, entity, or relation dependencies.
+- Expose Git projection through CLI, JSON-RPC, MCP, the TypeScript client, and
+  `Kraken Atlas: Project Git Changes` in VS Code.
+- Prove full, unchanged, and one-project incremental builds; working-tree and
+  range projection; and pre-rebuild assessment risk in integration tests.
+
 ## 0.8.0 - 2026-07-15
 
 - Add a bundled MCP stdio server with current protocol negotiation, structured

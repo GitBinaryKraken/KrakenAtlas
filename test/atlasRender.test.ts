@@ -8,6 +8,7 @@ import {
   renderDecorationResult,
   renderEntityDetail,
   renderEntitySearch,
+  renderGitChanges,
   renderRelations,
   renderPreparedChange,
   renderRoute,
@@ -289,6 +290,62 @@ test("renders cross-domain entity, relation, and route queries", () => {
   assert.match(surface, /Change surface: GET \/Persona/);
   assert.match(surface, /dependency \| framework\/handled_by/);
   assert.match(surface, /dotnet build "Api\/Api\.csproj"/);
+});
+
+test("renders Git change projections and assessment risk", () => {
+  const rendered = renderGitChanges({
+    atlasState: "current",
+    generation: 9,
+    mode: "working_tree",
+    truncated: false,
+    repositories: [{
+      repositoryRoot: "E:\\Projects\\FeatureFlow",
+      branch: "main",
+      head: "1234567890abcdef",
+      dirty: true,
+      changesTruncated: false,
+      changedFiles: [{
+        status: "modified",
+        path: "Api/PersonaController.cs",
+        fileStableKey: "file:persona-controller",
+        project: {
+          stableKey: "project:api",
+          name: "Api",
+          relativePath: "Api/Api.csproj",
+          projectKind: "web",
+          isTest: false
+        },
+        entitiesTruncated: false,
+        entities: [{
+          id: 42,
+          stableKey: "symbol:get-persona",
+          kind: "method",
+          name: "GetPersona",
+          qualifiedName: "Api.PersonaController.GetPersona(string)",
+          signature: "Task<IActionResult> GetPersona(string sid)"
+        }]
+      }]
+    }],
+    impacts: [],
+    relatedTests: [],
+    affectedProjects: [],
+    assessmentsAtRisk: [{
+      claimId: "claim:persona-role",
+      subject: {
+        stableKey: "symbol:get-persona",
+        kind: "method",
+        qualifiedName: "Api.PersonaController.GetPersona(string)"
+      },
+      status: "accepted",
+      statement: "This action owns the public Persona read contract.",
+      dependencies: [{ kind: "file", stableKey: "file:persona-controller" }]
+    }],
+    verificationCommands: []
+  });
+  assert.match(rendered, /Git projection: working_tree/);
+  assert.match(rendered, /modified \| Api\/PersonaController\.cs/);
+  assert.match(rendered, /Assessments At Risk/);
+  assert.match(rendered, /claim:persona-role/);
 });
 
 test("renders prepared changes and durable assessment results", () => {

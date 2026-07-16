@@ -4,7 +4,7 @@ namespace KrakenAtlas.Storage.Sqlite;
 
 internal static class AtlasDatabase
 {
-    private const int CurrentSchemaVersion = 3;
+    private const int CurrentSchemaVersion = 4;
 
     private static readonly IReadOnlyList<string> Migrations =
     [
@@ -307,6 +307,22 @@ internal static class AtlasDatabase
         CREATE INDEX ix_assessment_claims_group ON assessment_claims(workspace_id, group_key, status);
         CREATE INDEX ix_assessment_claims_target ON assessment_claims(workspace_id, target_stable_key, status);
         CREATE INDEX ix_assessment_dependencies_claim ON assessment_dependencies(claim_id);
+        """,
+        """
+        CREATE TABLE semantic_project_cache (
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+            project_stable_key TEXT NOT NULL,
+            analyzer TEXT NOT NULL,
+            analyzer_version TEXT NOT NULL,
+            input_fingerprint TEXT NOT NULL,
+            assembly_name TEXT,
+            payload BLOB NOT NULL,
+            updated_utc TEXT NOT NULL,
+            PRIMARY KEY(workspace_id, project_stable_key, analyzer)
+        );
+
+        CREATE INDEX ix_semantic_project_cache_analyzer
+            ON semantic_project_cache(workspace_id, analyzer, analyzer_version);
         """
     ];
 

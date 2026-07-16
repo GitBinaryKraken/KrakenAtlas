@@ -161,6 +161,7 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
       "search_code",
       "get_relations",
       "trace_route",
+      "project_git_changes",
       "prepare_change",
       "get_assessments",
       "decorate_nodes"

@@ -10,6 +10,7 @@ import {
   CodeUsageResult,
   DecorateNodesResult,
   EntityDetail,
+  GitChangeProjectionResult,
   NodeDecorationBatch,
   PreparedChangeResult,
   RelationQueryResult,
@@ -200,6 +201,21 @@ export class CartographerClient {
     return this.request<ChangeSurfaceResult>(
       "get_change_surface",
       { stableKey, id, domains, kinds, maxDepth, maxEntities }
+    );
+  }
+
+  async getGitChanges(
+    mode: "working_tree" | "range" = "working_tree",
+    baseRef?: string,
+    targetRef?: string,
+    maxDepth = 2,
+    maxEntities = 100,
+    maxFiles = 100
+  ): Promise<GitChangeProjectionResult> {
+    await this.ensureStarted();
+    return this.request<GitChangeProjectionResult>(
+      "get_git_changes",
+      { mode, baseRef, targetRef, maxDepth, maxEntities, maxFiles }
     );
   }
 

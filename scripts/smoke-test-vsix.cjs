@@ -495,6 +495,7 @@ try {
   const mcpContext = mcpResponses.find(response => response.id === 3)?.result?.structuredContent;
   if (
     !mcpTools?.some(tool => tool.name === "prepare_change") ||
+    !mcpTools?.some(tool => tool.name === "project_git_changes") ||
     mcpContext?.resolution !== "auto" ||
     mcpContext.contextPack?.sourceSlicesIncluded < 1 ||
     mcpContext.contextPack?.estimatedTokens > mcpContext.contextPack?.tokenBudget
@@ -503,14 +504,19 @@ try {
   }
 
   const secondBuild = cartographer(assembly, "build");
-  if (secondBuild.generation !== 2) {
-    throw new Error(`Cartographer restart build did not advance the generation: ${JSON.stringify(secondBuild)}`);
+  if (
+    secondBuild.generation !== 1 ||
+    secondBuild.indexing?.mode !== "unchanged" ||
+    secondBuild.indexing?.analyzedProjects !== 0 ||
+    secondBuild.indexing?.reusedProjects !== 7
+  ) {
+    throw new Error(`Cartographer restart build was not an unchanged no-op: ${JSON.stringify(secondBuild)}`);
   }
   const currentAfterRebuild = cartographer(
     assembly, "assessments", "--stable-key", logicMethod.stableKey
   );
   if (
-    currentAfterRebuild.generation !== 2 ||
+    currentAfterRebuild.generation !== 1 ||
     currentAfterRebuild.assessments?.length !== 1 ||
     currentAfterRebuild.assessments[0].freshness !== "current"
   ) {
@@ -526,7 +532,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and Minimal API-to-EF Route, exercised the MCP task Context Pack with bounded source, persisted and reused a current agent assessment across two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and Minimal API-to-EF Route, exercised the MCP task Context Pack with bounded source, preserved a current agent assessment across an unchanged no-op build, then uninstalled it.`
   );
 } finally {
   if (installed) {

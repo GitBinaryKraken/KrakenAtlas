@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.8.0`
+Version `0.9.0`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.8.0` Agent Tooling Beta builds on the Framework Surface Alpha. It
+The `0.9.0` Incremental Agent Loop Alpha builds on the Agent Tooling Beta. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a
@@ -31,6 +31,9 @@ contains:
   included/pending source coverage.
 - A versioned SQLite Atlas with WAL, atomic generations, stable entity IDs,
   canonical containment and project-reference relations, and source evidence.
+- Content-fingerprint no-op builds and a compressed SQLite semantic cache that
+  reanalyzes changed C# projects plus transitive project dependents while reusing
+  unchanged project facts in a complete atomic generation.
 - Compiler-bound Roslyn declarations for namespaces, types, methods, properties,
   fields, events, overloads, partial types, visibility, generated/manual source,
   exact definition spans, and stable symbol identities.
@@ -71,9 +74,13 @@ contains:
   report ambiguity instead of guessing, rank direct and transitive change
   candidates, include related tests and verification commands, reuse accepted
   assessments, and optionally return bounded code excerpts.
-- Nine MCP tools for Atlas build, summary, orientation, entity search, relation
-  queries, Route tracing, task Context Packs, assessment reads, and durable node
-  decoration. Read-only tools are explicitly annotated.
+- Ten MCP tools for Atlas build, summary, orientation, entity search, relation
+  queries, Route tracing, Git change projection, task Context Packs, assessment
+  reads, and durable node decoration. Read-only tools are explicitly annotated.
+- Bounded Git working-tree and commit-range projection onto mapped files,
+  symbols, dependent behavior, tests, projects, and verification commands,
+  including pre-rebuild warnings for durable assessments whose file, entity, or
+  relation dependencies are touched.
 - A durable assessment ledger separate from canonical facts, with versioned
   analysis sessions, typed JSON updates, exact evidence, confidence, status,
   provenance, idempotent operation replay, and dependency-driven freshness.
@@ -83,11 +90,11 @@ contains:
 - Cross-process tests proving persistence, stable identity, and rollback to the
   previous generation after failed discovery.
 
-The Agent Tooling Beta covers a deliberately bounded static subset. EF
+The Incremental Agent Loop Alpha covers a deliberately bounded static subset. EF
 owned entities, relationships, generated snapshot interpretation, endpoint and
 MVC filters, dynamic route/SQL construction, runtime dispatch, TypeScript/React
-semantics, documentation indexing, external package symbols, incremental
-indexing, and Git change projection remain planned.
+semantics, documentation indexing, external package symbols, unsaved editor
+overlays, and file-level dependent rebinds remain planned.
 
 ## Commands
 
@@ -102,6 +109,7 @@ indexing, and Git change projection remain planned.
 - `Kraken Atlas: Show Relations`
 - `Kraken Atlas: Trace Route`
 - `Kraken Atlas: Show Change Surface`
+- `Kraken Atlas: Project Git Changes`
 - `Kraken Atlas: Prepare Change Context Pack`
 - `Kraken Atlas: Show Node Assessments`
 - `Kraken Atlas: Apply Node Decorations from JSON`
@@ -142,6 +150,8 @@ dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Car
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll relations --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key http_endpoint:<hash> --direction both --limit 50
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll route --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --source-key csharp_symbol:<hash> --via-key csharp_symbol:<hash> --target-key database_object:<hash> --max-depth 16
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll surface --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --max-depth 3 --max-entities 200
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll git-changes --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --mode working_tree --max-depth 2 --max-entities 100
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll git-changes --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --mode range --base-ref origin/main --target-ref HEAD
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll prepare --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --task "Add audit logging" --token-budget 4000
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll prepare-task --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --task "Add audit logging to Persona reads" --query PersonaService --token-budget 4000 --include-source --source-line-limit 24
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll assessments --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3 --stable-key csharp_symbol:<hash> --include-proposed --include-stale
@@ -155,9 +165,11 @@ instead of opening or reverse-engineering the SQLite schema directly.
 
 VS Code 1.105 or newer discovers the bundled `Kraken Atlas` MCP server from the
 extension. An agent should begin with `get_workspace_orientation`, call
-`build_atlas` when the Atlas is absent or stale, then use `prepare_change` for a
-concrete task. `prepare_change` can start with task text or a search hint; if the
-seed is ambiguous it returns `needs_seed` and ranked stable-key candidates.
+`build_atlas` when the Atlas is absent, use `project_git_changes` before a
+rebuild to understand live edits and assessment risk, then use `prepare_change`
+for a concrete task. `prepare_change` can start with task text or a search hint;
+if the seed is ambiguous it returns `needs_seed` and ranked stable-key
+candidates.
 
 MCP source excerpts are local, opt-in, code-file-only, line-bounded, and counted
 inside the requested token budget. They are returned to the invoking client but

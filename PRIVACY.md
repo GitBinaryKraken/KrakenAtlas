@@ -23,6 +23,9 @@ The local Atlas may contain:
 - Structured build and EditorConfig values plus references to governing
   repository instruction files, with scope and precedence.
 - Deterministic stable identifiers and file content hashes.
+- Brotli-compressed per-project semantic cache entries containing the same
+  declaration and relation metadata already represented in canonical Atlas
+  tables; cache entries do not contain source file bodies.
 - C# namespace, type, and member names; qualified names; signatures; visibility;
   containing-symbol relationships; exact definition spans; and generated/manual
   source status.
@@ -56,6 +59,8 @@ chain-of-thought, transcripts, secrets, or source bodies.
 
 Kraken Atlas does not transmit Atlas data, source data, paths, diagnostics, or
 usage events. It does not contact a Kraken Atlas service because none exists.
+Git change projection invokes only local `git` status, revision, branch, and
+diff commands. It does not fetch, pull, push, or otherwise contact a remote.
 The bundled MCP server is a local stdio child process. The AI client invoking an
 MCP tool may transmit returned results according to that client's own provider
 and privacy settings; that transmission is outside Kraken Atlas.

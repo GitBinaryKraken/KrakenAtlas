@@ -207,13 +207,20 @@ are selected by Cartographer, not supplied as arbitrary table names by agents.
 
 ## Incremental Indexing
 
-- Files are content-hashed and facts are owned by their originating file and
-  analyzer.
-- Analyzer output is staged under an index generation and committed atomically.
-- Re-indexing a file replaces its declarations, occurrences, and relation
-  evidence without leaving stale rows.
-- Public-surface changes trigger dependent-file rebinds based on project and
-  import dependencies.
+- Files are content-hashed and C# analyzer output is partitioned into compressed
+  per-project cache entries in the same SQLite Atlas.
+- An unchanged workspace fingerprint returns the active generation without
+  running Roslyn or opening a write transaction.
+- A changed project invalidates its transitive project dependents. Unaffected
+  cache entries are merged with fresh analyzer output before one complete Atlas
+  generation is committed atomically.
+- Cross-project route-template matches are rebuilt from the merged semantic set
+  so HTTP links do not depend on a direct project reference.
+- Project removal invalidates all current C# projects; rename and deletion facts
+  disappear because only the merged current semantic set moves into the new
+  generation.
+- Future public-surface classification will narrow dependent work from project
+  granularity to affected files and symbols.
 - Unsaved editor buffers can produce an in-memory overlay identified separately
   from the durable Atlas generation.
 - Every query reports durable generation, overlay state, and known stale or

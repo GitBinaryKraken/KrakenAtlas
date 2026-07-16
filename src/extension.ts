@@ -8,6 +8,7 @@ import {
   renderDecorationResult,
   renderEntityDetail,
   renderEntitySearch,
+  renderGitChanges,
   renderPreparedChange,
   renderRelations,
   renderRoute,
@@ -90,7 +91,7 @@ export function activate(context: vscode.ExtensionContext): void {
         );
         await showAtlasSummary(client, output, version);
         vscode.window.showInformationMessage(
-          `Kraken Atlas generation ${result.generation}: ${result.counts.projects} projects, ${result.counts.files} files.`
+          `Kraken Atlas ${result.indexing.mode}, generation ${result.generation}: ${result.counts.projects} projects, ${result.counts.files} files.`
         );
       });
     }),
@@ -251,6 +252,50 @@ export function activate(context: vscode.ExtensionContext): void {
         const result = await client.getChangeSurface(identity.stableKey, identity.id);
         output.clear();
         output.appendLine(renderChangeSurface(result));
+        output.show(true);
+      });
+    }),
+    vscode.commands.registerCommand("krakenAtlas.projectGitChanges", async () => {
+      await runCommand(async () => {
+        const mode = await vscode.window.showQuickPick(
+          [
+            { label: "Working tree", value: "working_tree" as const },
+            { label: "Commit range", value: "range" as const }
+          ],
+          { title: "Kraken Atlas: Project Git Changes", ignoreFocusOut: true }
+        );
+        if (!mode) {
+          return;
+        }
+        let baseRef: string | undefined;
+        let targetRef: string | undefined;
+        if (mode.value === "range") {
+          baseRef = await vscode.window.showInputBox({
+            title: "Kraken Atlas: Base Revision",
+            prompt: "Enter the base Git revision",
+            value: "HEAD~1",
+            ignoreFocusOut: true
+          });
+          if (!baseRef?.trim()) {
+            return;
+          }
+          targetRef = await vscode.window.showInputBox({
+            title: "Kraken Atlas: Target Revision",
+            prompt: "Enter the target Git revision",
+            value: "HEAD",
+            ignoreFocusOut: true
+          });
+          if (!targetRef?.trim()) {
+            return;
+          }
+        }
+        const result = await client.getGitChanges(
+          mode.value,
+          baseRef?.trim(),
+          targetRef?.trim()
+        );
+        output.clear();
+        output.appendLine(renderGitChanges(result));
         output.show(true);
       });
     }),

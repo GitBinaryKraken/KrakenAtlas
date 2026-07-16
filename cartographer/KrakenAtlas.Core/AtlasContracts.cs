@@ -101,7 +101,12 @@ public sealed record DiscoveredRepositoryRule(
 public sealed record CSharpSemanticSnapshot(
     IReadOnlyList<DiscoveredCodeSymbol> Symbols,
     IReadOnlyList<DiscoveredCodeRelation> Relations,
-    AnalyzerExecution AnalyzerRun);
+    AnalyzerExecution AnalyzerRun,
+    IReadOnlyList<AnalyzedProjectAssembly>? ProjectAssemblies = null);
+
+public sealed record AnalyzedProjectAssembly(
+    string ProjectKey,
+    string AssemblyName);
 
 public sealed record AnalyzerExecution(
     string Analyzer,
@@ -149,6 +154,15 @@ public sealed record AtlasCounts(
     int Relations,
     int ProjectDependencies);
 
+public sealed record AtlasIndexingSummary(
+    string Mode,
+    int ChangedFiles,
+    int RemovedFiles,
+    int ChangedProjects,
+    int AnalyzedProjects,
+    int ReusedProjects,
+    IReadOnlyList<string> AnalyzedProjectKeys);
+
 public sealed record ProjectSummary(
     long Id,
     string StableKey,
@@ -191,7 +205,29 @@ public sealed record BuildAtlasResult(
     long Generation,
     string WorkspaceKey,
     AtlasCounts Counts,
-    long DurationMs);
+    long DurationMs,
+    AtlasIndexingSummary Indexing);
+
+public sealed record IndexedFileState(
+    string StableKey,
+    string? ProjectKey,
+    string RelativePath,
+    string ContentHash);
+
+public sealed record SemanticProjectCacheEntry(
+    string ProjectKey,
+    string InputFingerprint,
+    string? AssemblyName,
+    IReadOnlyList<DiscoveredCodeSymbol> Symbols,
+    IReadOnlyList<DiscoveredCodeRelation> Relations);
+
+public sealed record AtlasIndexState(
+    long Generation,
+    string SourceFingerprint,
+    string SemanticStatus,
+    AtlasCounts Counts,
+    IReadOnlyList<IndexedFileState> Files,
+    IReadOnlyList<SemanticProjectCacheEntry> SemanticProjects);
 
 public sealed record EntityLocationDetail(
     string FileStableKey,
@@ -397,6 +433,82 @@ public sealed record ChangeSurfaceResult(
         int maxDepth,
         int maxEntities) => new(
             "entity_not_found", generation, null, null, false, false, maxDepth, maxEntities,
+            [], [], [], [], []);
+}
+
+public sealed record GitFileDelta(
+    string RepositoryRoot,
+    string Status,
+    string Path,
+    string? OldPath);
+
+public sealed record GitChangedFileProjection(
+    string Status,
+    string Path,
+    string? OldPath,
+    string? FileStableKey,
+    ChangeSurfaceProject? Project,
+    bool EntitiesTruncated,
+    IReadOnlyList<RelationEntity> Entities);
+
+public sealed record GitRepositoryProjection(
+    string RepositoryRoot,
+    string? Branch,
+    string Head,
+    bool Dirty,
+    bool ChangesTruncated,
+    IReadOnlyList<GitChangedFileProjection> ChangedFiles);
+
+public sealed record GitProjectedImpact(
+    RelationEntity Entity,
+    string ChangedEntityStableKey,
+    int Depth,
+    string PathDirection,
+    string RelationDomain,
+    string RelationKind,
+    ChangeSurfaceProject? Project);
+
+public sealed record GitAssessmentRisk(
+    string ClaimId,
+    AssessmentSubject Subject,
+    string Status,
+    string Statement,
+    IReadOnlyList<GitAssessmentRiskDependency> Dependencies);
+
+public sealed record GitAssessmentRiskDependency(
+    string Kind,
+    string StableKey);
+
+public sealed record GitChangeMap(
+    string AtlasState,
+    long? Generation,
+    bool Truncated,
+    IReadOnlyList<GitChangedFileProjection> ChangedFiles,
+    IReadOnlyList<GitAssessmentRisk> AssessmentRisks)
+{
+    public static GitChangeMap NotCreated() => new("not_created", null, false, [], []);
+}
+
+public sealed record GitChangeProjectionResult(
+    string AtlasState,
+    long? Generation,
+    string Mode,
+    string? BaseRef,
+    string? TargetRef,
+    bool Truncated,
+    IReadOnlyList<GitRepositoryProjection> Repositories,
+    IReadOnlyList<GitProjectedImpact> Impacts,
+    IReadOnlyList<ChangeSurfaceItem> RelatedTests,
+    IReadOnlyList<ChangeSurfaceProject> AffectedProjects,
+    IReadOnlyList<GitAssessmentRisk> AssessmentsAtRisk,
+    IReadOnlyList<WorkspaceCommandDetail> VerificationCommands)
+{
+    public static GitChangeProjectionResult NotCreated(
+        string mode,
+        string? baseRef,
+        string? targetRef,
+        IReadOnlyList<GitRepositoryProjection> repositories) => new(
+            "not_created", null, mode, baseRef, targetRef, false, repositories,
             [], [], [], [], []);
 }
 

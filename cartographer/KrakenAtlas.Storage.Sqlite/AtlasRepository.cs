@@ -17,6 +17,8 @@ public sealed partial class AtlasRepository(string databasePath)
     public async Task<BuildAtlasResult> BuildAsync(
         WorkspaceSnapshot snapshot,
         CSharpSemanticSnapshot semanticSnapshot,
+        IReadOnlyList<SemanticProjectCacheEntry> semanticProjects,
+        AtlasIndexingSummary indexing,
         CancellationToken cancellationToken = default)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -24,6 +26,8 @@ public sealed partial class AtlasRepository(string databasePath)
         await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
 
         var workspaceId = await UpsertWorkspaceAsync(connection, transaction, snapshot, cancellationToken);
+        var previousGeneration = await ReadCurrentGenerationForWriteAsync(
+            connection, transaction, workspaceId, cancellationToken);
         var generation = await InsertGenerationAsync(connection, transaction, workspaceId, snapshot, cancellationToken);
         await ReplaceRootsAsync(connection, transaction, workspaceId, snapshot.Roots, cancellationToken);
 
@@ -237,12 +241,54 @@ public sealed partial class AtlasRepository(string databasePath)
             entityIds,
             filesByPath,
             cancellationToken);
+        var analyzedProjectKeys = indexing.AnalyzedProjectKeys.ToHashSet(StringComparer.Ordinal);
+        var reusedSymbols = semanticProjects
+            .Where(project => !analyzedProjectKeys.Contains(project.ProjectKey))
+            .SelectMany(project => project.Symbols.Select(symbol => symbol.StableKey))
+            .Concat(semanticProjects
+                .Where(project => !analyzedProjectKeys.Contains(project.ProjectKey))
+                .Select(project => project.ProjectKey))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (previousGeneration is not null && reusedSymbols.Length > 0)
+        {
+            await PromoteCachedSemanticFactsAsync(
+                connection,
+                transaction,
+                workspaceId,
+                previousGeneration.Value,
+                generation,
+                reusedSymbols,
+                cancellationToken);
+            await ReadCurrentEntityIdsAsync(
+                connection,
+                transaction,
+                workspaceId,
+                generation,
+                entityIds,
+                cancellationToken);
+        }
+        var symbolsByKey = semanticSnapshot.Symbols.ToDictionary(
+            symbol => symbol.StableKey,
+            StringComparer.Ordinal);
+        var changedSemanticSnapshot = new CSharpSemanticSnapshot(
+            semanticSnapshot.Symbols
+                .Where(symbol => analyzedProjectKeys.Contains(symbol.ProjectKey))
+                .ToArray(),
+            semanticSnapshot.Relations
+                .Where(relation => relation.Kind == "matches_endpoint"
+                    || analyzedProjectKeys.Contains(relation.SourceEntityKey)
+                    || symbolsByKey.TryGetValue(relation.SourceEntityKey, out var source)
+                        && analyzedProjectKeys.Contains(source.ProjectKey))
+                .ToArray(),
+            semanticSnapshot.AnalyzerRun,
+            semanticSnapshot.ProjectAssemblies);
         await PersistCSharpSymbolsAsync(
             connection,
             transaction,
             workspaceId,
             generation,
-            semanticSnapshot,
+            changedSemanticSnapshot,
             projectIds,
             fileIds,
             entityIds,
@@ -264,11 +310,24 @@ public sealed partial class AtlasRepository(string databasePath)
             generation,
             semanticSnapshot.AnalyzerRun,
             cancellationToken);
+        await ReplaceSemanticProjectCacheAsync(
+            connection,
+            transaction,
+            workspaceId,
+            semanticSnapshot.AnalyzerRun.Analyzer,
+            semanticSnapshot.AnalyzerRun.AnalyzerVersion,
+            semanticProjects,
+            cancellationToken);
         await CompleteGenerationAsync(connection, transaction, workspaceId, generation, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
         var summary = await GetSummaryAsync(snapshot.StableKey, cancellationToken);
-        return new BuildAtlasResult(generation, snapshot.StableKey, summary.Counts, stopwatch.ElapsedMilliseconds);
+        return new BuildAtlasResult(
+            generation,
+            snapshot.StableKey,
+            summary.Counts,
+            stopwatch.ElapsedMilliseconds,
+            indexing);
     }
 
     public async Task<AtlasSummary> GetSummaryAsync(

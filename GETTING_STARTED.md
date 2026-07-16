@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.8.0` is the Agent Tooling Beta of the complete rewrite. It
+Kraken Atlas `0.9.0` is the Incremental Agent Loop Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -20,6 +20,13 @@ accepted assessments into an explicit token budget. Agents can record typed,
 evidence-backed knowledge through the versioned node-decoration JSON contract;
 claims remain separate from canonical facts and become stale when captured
 dependencies change.
+Repeated builds now return the current generation without running Roslyn when
+workspace content is unchanged. A changed build reanalyzes changed C# projects
+and their transitive project dependents, reuses compressed per-project semantic
+facts for unaffected projects, and still commits one complete Atlas generation.
+Working-tree and commit-range Git projection maps changed files onto current
+symbols, graph impact, tests, projects, commands, and durable assessments at
+risk before the next rebuild.
 The extension also registers a local MCP server for the active workspace. Its
 task-first `prepare_change` tool can resolve a likely seed or return explicit
 candidate stable keys, then emit bounded source excerpts inside the pack budget.

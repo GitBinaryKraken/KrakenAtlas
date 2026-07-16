@@ -19,14 +19,18 @@ queries.
    requested feature must pass through a particular contract or boundary.
 7. Run `surface` before editing to retrieve direct/transitive neighbors, affected
    projects, attributed tests, and focused build/test commands.
-8. Run `prepare-task` with a concrete task and token budget. Add `--query` when
+8. Run `git-changes --mode working_tree` before rebuilding an edited workspace.
+   This projects live changes onto current Atlas identities and identifies saved
+   assessments whose evidence is at risk. Use range mode for branch or review
+   comparisons.
+9. Run `prepare-task` with a concrete task and token budget. Add `--query` when
    task vocabulary does not closely match a symbol. If resolution is
    `needs_seed`, repeat with one returned stable key.
-9. Request `--include-source` only when the ranked identities and evidence spans
+10. Request `--include-source` only when the ranked identities and evidence spans
    are insufficient. Keep `--source-line-limit` small.
-10. After learning a reusable noncanonical conclusion, submit a schema-valid
+11. After learning a reusable noncanonical conclusion, submit a schema-valid
    `decorate-nodes --dry-run` batch, then apply it with the same operation ID.
-11. Read only the files and spans returned as evidence, then request broader
+12. Read only the files and spans returned as evidence, then request broader
    source context only when the map reports a gap or ambiguity.
 
 ## CLI Examples
@@ -50,6 +54,10 @@ cartographer route --source-key csharp_symbol:<hash> `
 # Inspect a bounded change surface and its verification targets.
 cartographer surface --stable-key csharp_symbol:<hash> `
   --max-depth 3 --max-entities 200
+
+# Project current edits or a commit range through the last Atlas generation.
+cartographer git-changes --mode working_tree --max-depth 2 --max-entities 100
+cartographer git-changes --mode range --base-ref origin/main --target-ref HEAD
 
 # Build a compact agent Context Pack for a concrete change.
 cartographer prepare --stable-key csharp_symbol:<hash> `
@@ -90,6 +98,7 @@ content-length framed JSON-RPC 2.0:
 - `get_relations`: `{ "stableKey": "...", "direction": "both", "domains": ["code", "framework", "database"], "kinds": [], "limit": 50 }`.
 - `trace_route`: `{ "sourceStableKey": "...", "targetStableKey": "...", "viaStableKeys": ["..."], "domains": ["code", "framework", "database"], "maxDepth": 16, "maxVisited": 5000 }`.
 - `get_change_surface`: `{ "stableKey": "...", "domains": ["code", "framework", "database"], "kinds": [], "maxDepth": 3, "maxEntities": 200 }`.
+- `get_git_changes`: `{ "mode": "working_tree", "maxDepth": 2, "maxEntities": 100, "maxFiles": 100 }` or `{ "mode": "range", "baseRef": "origin/main", "targetRef": "HEAD" }`.
 - `prepare_change`: `{ "task": "Add audit logging", "stableKey": "...", "tokenBudget": 4000, "maxDepth": 3, "includeProposed": false }`.
 - `prepare_task`: `{ "task": "Add audit logging", "query": "PersonaService", "tokenBudget": 4000, "includeSource": true, "sourceLineLimit": 24, "candidateLimit": 8 }`.
 - `get_entity_assessments`: `{ "stableKey": "...", "includeProposed": false, "includeStale": false, "includeHistory": false, "limit": 50 }`.
@@ -119,6 +128,14 @@ require `includeProposed`; stale and historical claims are queried explicitly an
 are never silently used as canonical facts. Decoration batches are pinned to the
 active generation, use exact selectors, and should be dry-run before application.
 
+Atlas builds report `indexing.mode` as `full`, `incremental`, or `unchanged`.
+`unchanged` preserves the generation and skips Roslyn. `incremental` creates a
+new complete generation after analyzing changed C# projects and transitive
+project dependents and reusing unaffected project cache entries. Git projection
+does not mutate the Atlas or run Git network operations. Run it before rebuilding
+when assessment risk against live edits matters; after rebuilding, normal claim
+freshness reports canonical staleness.
+
 ## MCP Tools
 
 The VS Code extension registers a local `Kraken Atlas` MCP stdio server with the
@@ -130,12 +147,13 @@ active workspace roots and private Atlas path. The available tools are:
 - `search_code`
 - `get_relations`
 - `trace_route`
+- `project_git_changes`
 - `prepare_change`
 - `get_assessments`
 - `decorate_nodes`
 
-Begin with orientation, build when `atlasState` is `not_created`, and prefer
-`prepare_change` for feature work. It returns `resolution: auto` with a Context
+Begin with orientation, build when `atlasState` is `not_created`, project live
+Git changes before rebuilding, and prefer `prepare_change` for feature work. It returns `resolution: auto` with a Context
 Pack only when one seed is sufficiently distinct. `needs_seed` returns ranked
 candidates and requires an exact follow-up. `no_match` means task vocabulary did
 not resolve inside current mapped metadata; use `search_code` or source search.

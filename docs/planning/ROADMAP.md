@@ -71,9 +71,10 @@ are implemented. Bounded cross-domain entity search, directional relation
 queries, and forward Routes with ordered waypoints are also implemented. The
 first bounded change-surface and related-test query is implemented with project
 ownership and focused verification commands. Task-first, token-budgeted Context
-Packs, bounded code excerpts, the versioned assessment ledger, and a nine-tool
-MCP server are implemented through CLI, JSON-RPC, and VS Code. General semantic
-diff impact, unresolved targets, richer conflict selection, and native
+Packs, bounded code excerpts, the versioned assessment ledger, a ten-tool MCP
+server, project-aware semantic caching, no-op builds, and Git change projection
+are implemented through CLI, JSON-RPC, and VS Code. General semantic diff
+classification, unresolved targets, richer conflict selection, and native
 language-model-tool duplication remain.
 
 Deliverables:
@@ -105,8 +106,11 @@ Implemented in 0.7: analysis sessions, typed claims, evidence-derived
 dependencies, dry-run/apply/replay, current/stale queries, prepared-change reuse,
 and source-change invalidation. Implemented in 0.8: MCP tools, task-first seed
 resolution, bounded source slices, and packaged agent-workflow verification.
-Assessment-owned group materialization, richer conflict selection, semantic diff
-impact, incremental indexing, and Git change projection remain.
+Implemented in 0.9: unchanged-build short circuiting, compressed per-project
+Roslyn cache, changed-project plus transitive-dependent invalidation, working-tree
+and commit-range projection, and pre-rebuild assessment-risk reporting.
+Assessment-owned group materialization, richer conflict selection, and semantic
+change classification remain.
 
 Exit gate:
 
@@ -169,7 +173,8 @@ Exit gate:
 
 Deliverables:
 
-- Project-aware invalidation and dependent-file rebinds.
+- Project-aware invalidation and dependent-file rebinds. Project-level
+  invalidation shipped in 0.9; file-level rebind precision remains.
 - Unsaved document overlays.
 - Document and section indexing with separate documentation FTS.
 - Evidence-backed documentation-to-entity links and reverse lookup.
