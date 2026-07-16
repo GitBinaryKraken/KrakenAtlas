@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.9.0` is the Incremental Agent Loop Alpha of the complete rewrite. It
+Kraken Atlas `0.9.1` is the Agent Discovery Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -30,6 +30,9 @@ risk before the next rebuild.
 The extension also registers a local MCP server for the active workspace. Its
 task-first `prepare_change` tool can resolve a likely seed or return explicit
 candidate stable keys, then emit bounded source excerpts inside the pack budget.
+An opt-in command can install a managed Atlas workflow into `AGENTS.md`, GitHub
+Copilot instructions, or `CLAUDE.md` so repository agents discover those tools
+without the user repeating the workflow in every task.
 
 ## Requirements
 
@@ -90,9 +93,12 @@ npm run check:vsix
 17. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
 18. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
-19. Open Agent mode, enable the `Kraken Atlas` MCP tools, and ask for workspace
+19. Run `Kraken Atlas: Install Agent Instructions`, select the instruction file
+    used by your coding agent, and review the managed block. Existing content
+    outside the block must remain unchanged.
+20. Open Agent mode, enable the `Kraken Atlas` MCP tools, and ask for workspace
     orientation. Confirm `get_workspace_orientation` is selected.
-20. Ask the agent to prepare a concrete change. Confirm `prepare_change` returns
+21. Ask the agent to prepare a concrete change. Confirm `prepare_change` returns
     either a bounded Context Pack or `needs_seed` with ranked exact identities.
 
 The Atlas database is stored under the VS Code workspace storage directory and

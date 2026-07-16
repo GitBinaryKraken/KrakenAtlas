@@ -16,6 +16,11 @@ import {
   renderWorkspaceOrientation
 } from "./atlas/render";
 import { NodeDecorationBatch } from "./atlas/contracts";
+import {
+  AgentInstructionTarget,
+  agentInstructionTargets,
+  updateAgentInstructions
+} from "./agentDiscovery/instructions";
 import { CartographerClient, resolveCartographerAssemblyPath } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
@@ -422,6 +427,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("krakenAtlas.exportDiagnostics", async () => {
       await runCommand(() => exportDiagnostics(context, client, output, workspaceRoots, atlasPath, version));
     }),
+    vscode.commands.registerCommand("krakenAtlas.installAgentInstructions", async () => {
+      await runCommand(() => installAgentInstructions());
+    }),
     vscode.commands.registerCommand("krakenAtlas.openPlanning", async () => {
       await runCommand(async () => {
         const uri = vscode.Uri.joinPath(context.extensionUri, "docs", "planning", "README.md");
@@ -539,6 +547,111 @@ async function runCommand(action: () => Promise<void>): Promise<void> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(`Kraken Atlas: ${message}`);
+  }
+}
+
+interface AgentInstructionPick extends vscode.QuickPickItem {
+  targets: readonly AgentInstructionTarget[];
+}
+
+async function installAgentInstructions(): Promise<void> {
+  if (!vscode.workspace.isTrusted) {
+    throw new Error("Installing agent instructions requires a trusted workspace.");
+  }
+
+  const workspaceFolder = await chooseInstructionWorkspaceFolder();
+  if (!workspaceFolder) {
+    return;
+  }
+
+  const picks: AgentInstructionPick[] = [
+    ...agentInstructionTargets.map(target => ({
+      label: target.label,
+      description: target.id === "agents" ? "Recommended" : undefined,
+      detail: target.description,
+      targets: [target]
+    })),
+    {
+      label: "All supported instruction files",
+      detail: "Install managed guidance for AGENTS.md, GitHub Copilot, and Claude",
+      targets: agentInstructionTargets
+    }
+  ];
+  const selected = await vscode.window.showQuickPick(picks, {
+    title: "Kraken Atlas: Install Agent Instructions",
+    placeHolder: "Choose which coding agents should discover Kraken Atlas",
+    ignoreFocusOut: true
+  });
+  if (!selected) {
+    return;
+  }
+
+  const plans: Array<{
+    target: AgentInstructionTarget;
+    uri: vscode.Uri;
+    update: ReturnType<typeof updateAgentInstructions>;
+  }> = [];
+  for (const target of selected.targets) {
+    const segments = target.relativePath.split("/");
+    const uri = vscode.Uri.joinPath(workspaceFolder.uri, ...segments);
+    const existing = await readOptionalWorkspaceText(uri);
+    const update = updateAgentInstructions(existing);
+    plans.push({ target, uri, update });
+  }
+
+  for (const plan of plans) {
+    if (plan.update.change !== "unchanged") {
+      const segments = plan.target.relativePath.split("/");
+      if (segments.length > 1) {
+        await vscode.workspace.fs.createDirectory(
+          vscode.Uri.joinPath(workspaceFolder.uri, ...segments.slice(0, -1))
+        );
+      }
+      await vscode.workspace.fs.writeFile(plan.uri, Buffer.from(plan.update.content, "utf8"));
+    }
+  }
+
+  const changed = plans.filter(plan => plan.update.change !== "unchanged");
+  const summary = changed.length === 0
+    ? "Kraken Atlas agent instructions are already current."
+    : `Kraken Atlas installed agent instructions in ${changed.map(plan => plan.target.relativePath).join(", ")}. ` +
+      "The next Atlas build will map them as governing repository instructions.";
+  const open = await vscode.window.showInformationMessage(summary, "Open Instructions");
+  if (open === "Open Instructions") {
+    const document = await vscode.workspace.openTextDocument((changed[0] ?? plans[0]).uri);
+    await vscode.window.showTextDocument(document, { preview: true });
+  }
+}
+
+async function chooseInstructionWorkspaceFolder(): Promise<vscode.WorkspaceFolder | undefined> {
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  if (folders.length === 0) {
+    throw new Error("Open a workspace folder before installing agent instructions.");
+  }
+  if (folders.length === 1) {
+    return folders[0];
+  }
+
+  const selected = await vscode.window.showQuickPick(
+    folders.map(folder => ({ label: folder.name, description: folder.uri.fsPath, folder })),
+    {
+      title: "Kraken Atlas: Select Instruction Scope",
+      placeHolder: "Choose the workspace folder that should receive the instructions",
+      ignoreFocusOut: true
+    }
+  );
+  return selected?.folder;
+}
+
+async function readOptionalWorkspaceText(uri: vscode.Uri): Promise<string | undefined> {
+  try {
+    const content = await vscode.workspace.fs.readFile(uri);
+    return Buffer.from(content).toString("utf8");
+  } catch (error) {
+    if (error instanceof vscode.FileSystemError && error.code === "FileNotFound") {
+      return undefined;
+    }
+    throw error;
   }
 }
 

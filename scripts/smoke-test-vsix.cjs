@@ -196,6 +196,35 @@ try {
       `Installed extension version ${installedManifest.version} does not match ${manifest.version}.`
     );
   }
+  if (!installedManifest.contributes?.commands?.some(
+    command => command.command === "krakenAtlas.installAgentInstructions"
+  )) {
+    throw new Error("Installed extension does not contribute the agent instruction installer.");
+  }
+
+  const agentInstructions = require(path.join(
+    extensionRoot,
+    "dist",
+    "agentDiscovery",
+    "instructions.js"
+  ));
+  const existingInstructions = "# Existing Rules\r\n\r\nKeep this text.\r\n";
+  const installedInstructions = agentInstructions.updateAgentInstructions(existingInstructions);
+  if (
+    installedInstructions.change !== "appended" ||
+    !installedInstructions.content.startsWith(existingInstructions) ||
+    !installedInstructions.content.includes("get_workspace_orientation") ||
+    !installedInstructions.content.includes("prepare_change")
+  ) {
+    throw new Error("Packaged agent instructions did not preserve and append the Atlas workflow.");
+  }
+  const repeatedInstructions = agentInstructions.updateAgentInstructions(installedInstructions.content);
+  if (
+    repeatedInstructions.change !== "unchanged" ||
+    repeatedInstructions.content !== installedInstructions.content
+  ) {
+    throw new Error("Packaged agent instruction updates are not idempotent.");
+  }
 
   const assembly = path.join(
     extensionRoot,

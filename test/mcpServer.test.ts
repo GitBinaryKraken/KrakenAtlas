@@ -148,6 +148,7 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     assert.equal(initialized.protocolVersion, "2025-11-25");
     assert.equal(initialized.serverInfo.name, "kraken-atlas");
     assert.equal(initialized.capabilities.tools.listChanged, false);
+    assert.match(initialized.instructions, /before broad source exploration/);
     assert.match(initialized.instructions, /prepare_change/);
     mcp.notify("notifications/initialized");
 

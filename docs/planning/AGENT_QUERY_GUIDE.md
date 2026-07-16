@@ -1,9 +1,22 @@
 # AI Agent Query Guide
 
-This guide describes the bounded query surface available in the Agent Tooling
-Beta. An agent should query Cartographer before recursively reading a workspace.
+This guide describes the bounded query surface available in the Agent Discovery
+Alpha. An agent should query Cartographer before recursively reading a workspace.
 Stable keys returned by one query are the exact identities used by later
 queries.
+
+## Agent Discovery
+
+The VS Code extension registers the Kraken Atlas MCP server automatically, but
+the user must enable its tools for the active Agent session. The MCP initialize
+response tells connected agents to use Atlas before broad source exploration.
+
+For durable repository-level discovery, run `Kraken Atlas: Install Agent
+Instructions`. It can install the same bounded workflow into `AGENTS.md`,
+`.github/copilot-instructions.md`, or `CLAUDE.md`. The installer owns only the
+content between its HTML comment markers, preserves all other instructions, and
+is safe to rerun. Those files do not configure MCP for clients outside VS Code;
+the client must still be connected to the Kraken Atlas server.
 
 ## Recommended Workflow
 

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.9.1 - 2026-07-15
+
+- Add an opt-in agent-instruction installer for `AGENTS.md`, GitHub Copilot, and
+  Claude, including deliberate multi-root workspace selection.
+- Preserve existing repository guidance through idempotent Kraken Atlas managed
+  blocks and reject malformed or duplicate markers before writing any selected
+  target.
+- Tell connected MCP agents to use Atlas before broad source exploration and
+  document the boundary between automatic MCP registration, tool enablement,
+  and repository-level agent discovery.
+
 ## 0.9.0 - 2026-07-15
 
 - Add content-fingerprint no-op builds that preserve the current generation and

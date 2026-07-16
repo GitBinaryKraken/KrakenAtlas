@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.9.0`
+Version `0.9.1`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,11 +17,14 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.9.0` Incremental Agent Loop Alpha builds on the Agent Tooling Beta. It
+The `0.9.1` Agent Discovery Alpha builds on the Incremental Agent Loop Alpha. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a
   bundled MCP stdio server registered automatically for the active workspace.
+- An opt-in repository instruction installer for `AGENTS.md`,
+  `.github/copilot-instructions.md`, and `CLAUDE.md`. Managed Atlas blocks are
+  idempotent and preserve all existing repository guidance outside the block.
 - An out-of-process .NET 10 Cartographer process using JSON-RPC 2.0.
 - Deterministic discovery of .NET solutions, C# projects, package.json projects,
   project references, and relevant workspace files.
@@ -90,11 +93,11 @@ contains:
 - Cross-process tests proving persistence, stable identity, and rollback to the
   previous generation after failed discovery.
 
-The Incremental Agent Loop Alpha covers a deliberately bounded static subset. EF
-owned entities, relationships, generated snapshot interpretation, endpoint and
-MVC filters, dynamic route/SQL construction, runtime dispatch, TypeScript/React
-semantics, documentation indexing, external package symbols, unsaved editor
-overlays, and file-level dependent rebinds remain planned.
+The Agent Discovery Alpha retains a deliberately bounded static-analysis subset.
+EF owned entities, relationships, generated snapshot interpretation, endpoint
+and MVC filters, dynamic route/SQL construction, runtime dispatch,
+TypeScript/React semantics, documentation indexing, external package symbols,
+unsaved editor overlays, and file-level dependent rebinds remain planned.
 
 ## Commands
 
@@ -115,6 +118,7 @@ overlays, and file-level dependent rebinds remain planned.
 - `Kraken Atlas: Apply Node Decorations from JSON`
 - `Kraken Atlas: Restart Cartographer`
 - `Kraken Atlas: Export Diagnostics`
+- `Kraken Atlas: Install Agent Instructions`
 - `Kraken Atlas: Open Architecture Plan`
 
 The diagnostic export contains environment and Atlas metadata such as local
@@ -160,6 +164,30 @@ dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Car
 
 AI agents should follow [the bounded query guide](docs/planning/AGENT_QUERY_GUIDE.md)
 instead of opening or reverse-engineering the SQLite schema directly.
+
+## Agent Discovery
+
+VS Code 1.105 or newer automatically discovers the bundled MCP server. After a
+user enables the `Kraken Atlas` tools in Agent mode, the client receives
+server-level workflow instructions and descriptions for all ten tools. MCP
+registration makes Atlas available, but a model still controls whether it calls
+an available tool.
+
+Run `Kraken Atlas: Install Agent Instructions` to make Atlas the repository's
+declared first source of code context. Select one or all of:
+
+- `AGENTS.md` for Codex and compatible repository agents.
+- `.github/copilot-instructions.md` for GitHub Copilot.
+- `CLAUDE.md` for Claude Code and compatible clients.
+
+The command is opt-in, supports multi-root workspaces, creates missing parent
+directories, and writes only between explicit Kraken Atlas managed markers. It
+preserves existing instructions, updates its managed block on repeat runs, and
+refuses incomplete or duplicate markers rather than overwriting ambiguous
+content. The next Atlas build maps the installed file as a governing repository
+instruction. Agents outside VS Code still need Kraken Atlas configured as an
+MCP server; an instruction file can direct tool use but cannot install or enable
+the server itself.
 
 ## MCP Agent Tools
 

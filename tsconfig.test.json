@@ -5,6 +5,7 @@
     "rootDir": "."
   },
   "include": [
+    "src/agentDiscovery/**/*.ts",
     "src/cartographer/**/*.ts",
     "src/foundation/**/*.ts",
     "test/**/*.ts"

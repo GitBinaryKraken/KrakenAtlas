@@ -2,7 +2,7 @@
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
   "description": "Builds a local SQLite Atlas and exposes token-budgeted .NET code context to AI agents through MCP.",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -62,6 +62,7 @@
     "onCommand:krakenAtlas.applyDecorations",
     "onCommand:krakenAtlas.restartCartographer",
     "onCommand:krakenAtlas.exportDiagnostics",
+    "onCommand:krakenAtlas.installAgentInstructions",
     "onCommand:krakenAtlas.openPlanning"
   ],
   "main": "./dist/extension.js",
@@ -169,6 +170,11 @@
         "command": "krakenAtlas.exportDiagnostics",
         "title": "Kraken Atlas: Export Diagnostics",
         "icon": "$(export)"
+      },
+      {
+        "command": "krakenAtlas.installAgentInstructions",
+        "title": "Kraken Atlas: Install Agent Instructions",
+        "icon": "$(sparkle)"
       },
       {
         "command": "krakenAtlas.openPlanning",

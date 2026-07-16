@@ -169,7 +169,7 @@ internal sealed class McpServer(
                     title = "Kraken Atlas Cartographer",
                     version = GetServiceVersion()
                 },
-                instructions = "Start with get_workspace_orientation. Build the Atlas if it is not_created. Before rebuilding a changed workspace, use project_git_changes to map live edits and assessments at risk. Use prepare_change for task-sized, token-budgeted context. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
+                instructions = "Use Kraken Atlas before broad source exploration. Start with get_workspace_orientation. Build the Atlas if it is not_created. Before rebuilding a changed workspace, use project_git_changes to map live edits and assessments at risk. Use prepare_change for task-sized, token-budgeted context. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
             });
             return;
         }

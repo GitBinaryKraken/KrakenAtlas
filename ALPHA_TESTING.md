@@ -135,6 +135,12 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 27. Repeat with an exact query or stable key, a 4,000-token budget, and source
     enabled. Verify all excerpts are code files, no excerpt exceeds its requested
     line limit, and `estimatedTokens <= tokenBudget`.
+28. In a disposable workspace, run `Kraken Atlas: Install Agent Instructions`
+    for `AGENTS.md`. Verify existing instructions remain unchanged outside the
+    managed block and a repeat run reports the instructions as current.
+29. Repeat for GitHub Copilot or Claude and verify the expected target path is
+    created. Rebuild the Atlas and confirm orientation reports the file as a
+    governing `agent_instructions` rule.
 
 Kraken Atlas performs static discovery and does not execute the application,
 instantiate EF Core contexts, run migrations, or connect to project databases.
