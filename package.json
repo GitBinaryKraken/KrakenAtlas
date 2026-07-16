@@ -2,7 +2,7 @@
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
   "description": "Builds a local SQLite Atlas and exposes token-budgeted .NET code context to AI agents through MCP.",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",

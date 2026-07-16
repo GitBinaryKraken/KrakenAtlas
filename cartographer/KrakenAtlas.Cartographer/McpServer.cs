@@ -411,6 +411,15 @@ internal sealed class McpServer(
     }
 
     private sealed record McpOptions(IReadOnlyList<string> WorkspaceRoots, string AtlasPath);
-    private sealed record McpToolCall(string Name, JsonElement Arguments);
+    private sealed record McpToolCall
+    {
+        public required string Name { get; init; }
+
+        public JsonElement Arguments { get; init; }
+
+        [JsonPropertyName("_meta")]
+        public JsonElement Metadata { get; init; }
+    }
+
     private sealed record DecorateNodesToolParams(NodeDecorationBatch Batch, bool? DryRun);
 }

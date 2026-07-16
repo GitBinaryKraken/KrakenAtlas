@@ -170,6 +170,25 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     assert.equal(listed.tools.find(tool => tool.name === "search_code")?.annotations.readOnlyHint, true);
     assert.equal(listed.tools.find(tool => tool.name === "decorate_nodes")?.annotations.readOnlyHint, false);
 
+    const orientation = await mcp.request<McpToolResult<{ atlasState: string }>>("tools/call", {
+      name: "get_workspace_orientation",
+      arguments: {},
+      _meta: {
+        progressToken: "codex-tool-call-1",
+        "client/requestId": "compatibility-regression"
+      }
+    });
+    assert.equal(orientation.isError, false);
+    assert.equal(orientation.structuredContent.atlasState, "not_created");
+
+    const invalidEnvelope = await mcp.request<McpToolResult<{ error: string }>>("tools/call", {
+      name: "get_atlas_summary",
+      arguments: {},
+      unexpected: true
+    });
+    assert.equal(invalidEnvelope.isError, true);
+    assert.match(invalidEnvelope.structuredContent.error, /could not be mapped/);
+
     const beforeBuild = await mcp.request<McpToolResult<TaskContextResult>>("tools/call", {
       name: "prepare_change",
       arguments: { task: "Change the GetMessage behavior" }

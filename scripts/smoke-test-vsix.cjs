@@ -570,6 +570,10 @@ try {
       method: "tools/call",
       params: {
         name: "prepare_change",
+        _meta: {
+          progressToken: "vsix-smoke-tool-call",
+          "client/requestId": "packaged-compatibility-regression"
+        },
         arguments: {
           task: "Add audit logging to the public Persona read",
           query: logicMethod.qualifiedName,

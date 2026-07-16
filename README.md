@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.9.2`
+Version `0.9.3`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.9.2` Agent Connection Alpha builds on the Agent Discovery Alpha. It
+The `0.9.3` Agent Connection Alpha builds on the Agent Discovery Alpha. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.9.3 - 2026-07-16
+
+- Accept the optional MCP `_meta` property on `tools/call` envelopes used by
+  Codex and other clients while preserving strict validation for unknown
+  envelope properties and tool-specific arguments.
+- Add a stdio integration regression covering metadata-bearing tool calls.
+
 ## 0.9.2 - 2026-07-16
 
 - Separate repository instructions from MCP client connection setup so agents
