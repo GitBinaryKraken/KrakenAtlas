@@ -90,6 +90,8 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             "relation.query",
                             "route.trace",
                             "change.surface",
+                            "framework.aspnet_core",
+                            "database.ef_core",
                             "assessment.read",
                             "assessment.write",
                             "agent.prepare_change"

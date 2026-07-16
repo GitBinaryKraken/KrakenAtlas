@@ -119,11 +119,13 @@ Exit gate:
 
 ## Phase 3: ASP.NET Core and Database Atlas
 
-Status: in progress. The first Persona Route slice covers attribute-routed
-controller actions, common DI registrations and lifetimes, statically recoverable
-HTTP request templates, Dapper operations, PostgreSQL objects, and complete
-endpoint-to-database traversal. Minimal APIs, middleware, EF Core, migration,
-broader SQL-provider, and runtime-resolution work remain.
+Status: in progress. Version 0.7.5 adds common Minimal APIs with static route-
+group prefixes, endpoint contracts and policies, ordered middleware, static EF
+Core contexts, sets, scalar model mappings, keys, indexes, data operations, and
+migration operations. The earlier Persona Route covers attribute controllers,
+DI, outbound HTTP, Dapper, PostgreSQL objects, and endpoint-to-database traversal.
+MVC/filter semantics, complete EF relationships and snapshots, broader SQL-
+provider support, and runtime resolution remain.
 
 Deliverables:
 

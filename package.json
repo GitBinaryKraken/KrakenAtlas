@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Builds a local SQLite Atlas of .NET code, routes, change surfaces, Context Packs, and durable agent assessments.",
-  "version": "0.7.0",
+  "description": "Builds a local SQLite Atlas of .NET, ASP.NET Core, EF Core, routes, Context Packs, and durable agent assessments.",
+  "version": "0.7.5",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",

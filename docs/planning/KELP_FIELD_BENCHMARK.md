@@ -139,6 +139,28 @@ budget. A fresh CLI process returned in 309 ms, including process startup:
 The full Kelp index for this run remained 11 projects, 672 files, 6,594 entities,
 and 16,190 relations and completed in 34.5 seconds.
 
+## Framework Surface Baseline
+
+On 2026-07-15, version 0.7.5 indexed the same 11-project, 672-file workspace in
+31.7 seconds and produced 6,738 entities and 16,763 relations. The added static
+framework surface correctly recovered:
+
+- `Kelp2025_WebUI.Data.ApplicationDbContext` with three source-declared mapped
+  sets and `KelpApi.Data.DataProtectionKeyContext` with its source-visible set.
+- `AdminTools.Data.AdminIdentityDbContext` even though it declares no local
+  `DbSet`, preserving the context as an architectural database boundary.
+- Callback-style fluent mappings for `public.personas` and
+  `public.account_settings` in `ApplicationDbContext.OnModelCreating`.
+- One unified `public.personas` database object carrying both Dapper/PostgreSQL
+  and EF Core evidence instead of duplicate physical-table nodes.
+- The grouped AdminTools Minimal API route `GET /admin-bridge/health` with its
+  effective static `MapGroup` prefix.
+- Source-ordered custom and built-in middleware in the Kelp API and WebUI hosts.
+
+This baseline does not claim complete Identity model reconstruction, generated
+string-based model-snapshot interpretation, relationship/owned-entity semantics,
+or runtime middleware and endpoint-filter composition.
+
 ## Gold Persona Route
 
 The initial semantic and full-stack acceptance Route is the public Persona read:
@@ -206,5 +228,5 @@ workspace, record index time, Atlas size, diagnostics, query latency, Route
 coverage, Context Pack recall, and unnecessary source tokens, then compare the
 result with the prior release.
 
-The PostgreSQL-heavy benchmark is also direct evidence for resolving the first
-SQL dialect decision before Phase 3 begins.
+The PostgreSQL-heavy benchmark remains direct evidence for the provider-specific
+SQL work still required during Phase 3.

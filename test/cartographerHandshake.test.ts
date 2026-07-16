@@ -144,6 +144,8 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       "relation.query",
       "route.trace",
       "change.surface",
+      "framework.aspnet_core",
+      "database.ef_core",
       "assessment.read",
       "assessment.write",
       "agent.prepare_change"

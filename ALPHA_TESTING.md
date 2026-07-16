@@ -1,4 +1,4 @@
-# Kraken Atlas Agent Memory Alpha Testing
+# Kraken Atlas Framework Surface Alpha Testing
 
 ## Purpose
 
@@ -16,11 +16,14 @@ declarations, overload signatures, visibility, partial locations, and
 generated/manual definition evidence, with a bounded symbol-search command.
 It also records exact internal calls, construction, member reads and writes, type
 use, inheritance, implementations, and overrides, and exposes a bounded,
-code-only usage query. The Persona Route slice also maps common DI registrations,
-attribute-routed ASP.NET Core controller actions, statically recoverable outbound
-HTTP requests, Dapper operations, and normalized PostgreSQL objects. General
-entity search, directional relation queries, and bounded forward Routes expose
-these facts through VS Code, JSON-RPC, and CLI.
+code-only usage query. The framework slice maps common DI registrations,
+attribute-routed controllers, Minimal APIs with static route-group prefixes,
+endpoint contracts and policies, ordered middleware, statically recoverable
+outbound HTTP requests, Dapper operations, and normalized PostgreSQL objects.
+It also maps static EF Core contexts, declared sets, scalar columns, primary
+keys, indexes, common data operations, and migration operations. General entity
+search, directional relation queries, and bounded forward Routes expose these
+facts through VS Code, JSON-RPC, and CLI.
 It also returns bounded direct/transitive neighbors, dependency direction,
 affected projects, attributed xUnit/NUnit/MSTest test cases, and focused build
 or test commands for an exact seed entity.
@@ -29,10 +32,10 @@ under an explicit output budget. A versioned JSON command records typed claims
 in a separate SQLite enrichment plane with exact selectors, evidence,
 provenance, confidence, idempotency, and dependency-based freshness.
 
-It does not yet provide Minimal API or middleware semantics, EF Core model and
-migration mapping, TypeScript/React semantics, impact analysis, MCP tools,
-source-body Context Pack slices, or documentation indexing. Please evaluate the
-capabilities that exist rather than the planned semantic surface.
+It does not yet provide full MVC/filter semantics, complete EF relationship or
+snapshot interpretation, TypeScript/React semantics, predictive impact analysis,
+MCP tools, source-body Context Pack slices, or documentation indexing. Please
+evaluate the capabilities that exist rather than the planned semantic surface.
 
 ## Distribution and License Status
 
@@ -79,16 +82,17 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
    dispatch classification, source symbol, project, and evidence location.
 8. Repeat with an interface method and verify both callers and concrete member
    implementations are returned without README or documentation mentions.
-9. Run `Kraken Atlas: Search Entities` for an HTTP route, a DI service name, and
-   a PostgreSQL table. Verify entity kinds, signatures, stable keys, and evidence.
+9. Run `Kraken Atlas: Search Entities` for a controller route, grouped Minimal
+   API route, DI service, middleware, EF context, migration, and database table.
+   Verify entity kinds, signatures, stable keys, and evidence.
 10. Run `Kraken Atlas: Show Relations` on an endpoint and verify the outbound
     `handled_by` and incoming `matches_endpoint` edges.
 11. Trace a Route from a UI/controller method to a database object. Add the
     intended interface method as a waypoint if another valid branch reaches the
     same target. Verify every hop has a file and source span.
-12. Check that the Route includes appropriate `calls`, `dispatches_to`,
-    `sends_http`, `matches_endpoint`, `handled_by`, `executes_sql`, and database
-    operation relations, without `contains` or documentation edges.
+12. Check that Routes include appropriate `calls`, `dispatches_to`, `sends_http`,
+    `matches_endpoint`, `handled_by`, `executes_sql` or `executes_ef`, and
+    database operation relations, without `contains` or documentation edges.
 13. Run `Kraken Atlas: Show Change Surface` for a service method. Verify direct
     dependencies and dependents, bounded transitive results, affected projects,
     related attributed tests, evidence, and focused verification commands.
@@ -128,8 +132,9 @@ Please include:
   repository rules.
 - Missing, duplicated, or incorrectly qualified C# declarations and signatures.
 - Missing or incorrect C# relation targets, dispatch kinds, or evidence spans.
-- Missing or incorrect effective controller routes, authorization labels, DI
-  lifetimes, HTTP matches, SQL operation kinds, or database object names.
+- Missing or incorrect controller/Minimal routes, route-group prefixes,
+  authorization policies, middleware order, DI lifetimes, HTTP matches, EF
+  mappings or operations, SQL operation kinds, or database object names.
 - Routes that choose the wrong branch, omit a handoff, include structural edges,
   exceed their bounds, or lack source evidence.
 - Change surfaces that omit proven direct neighbors, expand through unrelated
@@ -156,14 +161,22 @@ diagnostic export does not contain source bodies.
   workspace. External package symbols and unresolved/dynamic targets are omitted.
 - Usage queries remain incoming and code-only. General relation queries and
   Routes are available, while impact analysis remains planned.
-- Framework extraction currently covers attribute-routed controller actions,
-  common generic/factory DI registrations, and statically recoverable HTTP
-  requests. Minimal APIs, middleware ordering, filters, and dynamic runtime
-  resolution are not mapped.
-- Database extraction currently covers Dapper calls whose SQL can be recovered
-  from literals, interpolated strings, or local initializers. EF Core models,
-  migrations, ADO.NET, stored procedure definitions, SQL bodies, and dynamic SQL
-  are not mapped.
+- Framework extraction covers attribute-routed controller actions, common
+  Minimal API `Map*` calls and static `MapGroup` prefixes, declared endpoint
+  contracts and policies, source-ordered middleware, common DI registrations,
+  and statically recoverable HTTP requests. MVC filters, endpoint-filter
+  behavior, convention routes, dynamically constructed routes, and runtime
+  resolution are not yet mapped.
+- EF Core extraction covers context and declared-set discovery, source entity
+  scalar properties, table/column conventions and attributes, common fluent
+  mappings, primary keys, indexes, common data operations, and migration
+  operations. Owned entities, relationships, foreign-key semantics, many-to-
+  many joins, string-based model snapshots, runtime conventions, and complete
+  migration column reconstruction remain planned.
+- Embedded SQL extraction remains bounded to recognized Dapper and migration
+  calls with recoverable strings. ADO.NET, stored-procedure definitions,
+  provider-specific SQL parsing, SQL bodies in query output, and dynamic SQL are
+  not mapped.
 - Route tracing is forward-only, shortest-path, bounded to 16 hops, and returns
   one route. Ordered stable-key waypoints disambiguate known feature branches.
 - Change surfaces are static bidirectional graph projections, not predictions

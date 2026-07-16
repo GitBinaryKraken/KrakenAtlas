@@ -19,4 +19,11 @@ public sealed class PersonaData(string connectionString) : IPersonaData
         await using var connection = new NpgsqlConnection(connectionString);
         return await connection.QuerySingleOrDefaultAsync<PersonaDto>(sql, new { sid });
     }
+
+    public async Task<int> CountMappedPersonasAsync()
+    {
+        const string sql = "SELECT COUNT(*) FROM app.persona_records";
+        await using var connection = new NpgsqlConnection(connectionString);
+        return await connection.QuerySingleAsync<int>(sql);
+    }
 }

@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.7.0`
+Version `0.7.5`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.7.0` Agent Memory Alpha builds on the Walking Cartographer foundation. It
+The `0.7.5` Framework Surface Alpha builds on the Agent Memory foundation. It
 contains:
 
 - A thin VS Code workspace extension and matching command-line surface.
@@ -42,12 +42,22 @@ contains:
   outbound requests, database operations, and database objects.
 - Attribute-routed ASP.NET Core controller endpoints with HTTP method, effective
   route template, authorization classification, handler, and source evidence.
+- Minimal API `MapGet`/`MapPost`/`MapPut`/`MapPatch`/`MapDelete` endpoints,
+  including statically recoverable `MapGroup` prefixes, handlers, request and
+  response contracts, authorization policies, and source evidence.
+- Ordered ASP.NET Core middleware entities for common `Use*` calls and
+  source-defined `UseMiddleware<T>` components.
 - Common .NET dependency-injection registrations with lifetime, service,
   implementation, and exact interface-member dispatch edges.
 - Statically recoverable `HttpClient` requests matched to compatible controller
   endpoints, including request and response-contract relations.
 - Dapper SQL operations mapped to normalized PostgreSQL objects without storing
   SQL bodies as query results.
+- Static EF Core contexts and declared sets, entity-to-table and property-to-
+  column mappings, scalar nullability, primary keys, indexes, data operations,
+  and migration operations derived from attributes and fluent configuration.
+- Unified database-object identity when EF Core and embedded PostgreSQL/Dapper
+  SQL reference the same qualified table.
 - Bounded directional relation queries and forward Routes across code,
   framework, and database domains, with ordered waypoints and evidence on every
   hop.
@@ -68,10 +78,11 @@ contains:
 - Cross-process tests proving persistence, stable identity, and rollback to the
   previous generation after failed discovery.
 
-The Agent Memory Alpha covers a deliberately bounded static subset. Minimal
-APIs, middleware ordering, EF Core models and migrations, dynamic URLs, runtime
-dispatch, TypeScript/React semantics, MCP tools, source slicing, documentation
-indexing, and external package symbols remain planned.
+The Framework Surface Alpha covers a deliberately bounded static subset. EF
+owned entities, relationships, generated snapshot interpretation, endpoint and
+MVC filters, dynamic route/SQL construction, runtime dispatch, TypeScript/React
+semantics, MCP tools, source slicing, documentation indexing, and external
+package symbols remain planned.
 
 ## Commands
 

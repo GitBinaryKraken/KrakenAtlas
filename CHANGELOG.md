@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.7.5 - 2026-07-15
+
+- Add Minimal API endpoint extraction for the common `Map*` methods, including
+  static `MapGroup` prefixes, handler calls, request/response contracts, and
+  `RequireAuthorization` policy entities.
+- Add source-ordered ASP.NET Core middleware entities and `precedes` relations
+  for common `Use*` methods and source-defined `UseMiddleware<T>` components.
+- Add static EF Core context and `DbSet` discovery, table/column mapping from
+  conventions, data annotations, and fluent `Entity<T>` builder callbacks.
+- Add primary-key and index entities plus EF query, insert, update, and delete
+  operations connected to mapped entities and database objects.
+- Add static EF migration entities and common table, column, index, foreign-key,
+  and migration-SQL operations without running migrations or application code.
+- Unify exact qualified database objects referenced by EF Core and Dapper or
+  embedded PostgreSQL SQL so agents receive one evidence-rich table node.
+- Extend the deterministic feature-flow fixture with read and write Minimal API
+  to EF Routes, middleware ordering, grouped routes, model metadata, and a
+  migration. Validate Kelp at 11 projects, 672 files, 6,738 entities, and 16,763
+  relations in 31.7 seconds.
+
 ## 0.7.0 - 2026-07-15
 
 - Add the token-budgeted `prepare_change` workflow, combining a ranked static

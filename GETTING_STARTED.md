@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.7.0` is the Agent Memory Alpha of the complete rewrite. It
+Kraken Atlas `0.7.5` is the Framework Surface Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -8,8 +8,10 @@ structural map from a versioned SQLite Atlas. The first semantic slice also
 indexes compiler-bound C# declarations, signatures, exact source locations,
 internal calls, construction, member access, type use, inheritance,
 implementations, and overrides. It also maps common DI registrations,
-attribute-routed controller endpoints, outbound HTTP requests, Dapper database
-operations, and PostgreSQL objects into bounded cross-domain Routes.
+attribute-routed controllers, grouped Minimal APIs, middleware order, endpoint
+contracts and policies, outbound HTTP requests, Dapper operations, and static EF
+Core contexts, model objects, data operations, and migrations into bounded
+cross-domain Routes.
 It can project a bounded change surface from any exact entity, including direct
 and transitive dependencies, affected projects, related attributed tests, and
 focused build/test commands.

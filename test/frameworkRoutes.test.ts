@@ -15,7 +15,7 @@ import {
   RouteQueryResult
 } from "../src/atlas/contracts";
 
-test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, and PostgreSQL", () => {
+test("maps controller, Minimal API, middleware, Dapper, and EF Core feature routes", () => {
   const assembly = path.resolve(
     process.cwd(),
     "cartographer",
@@ -88,10 +88,70 @@ test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, an
       "test_case",
       "FeatureFlow.Tests.PersonaServiceTests.GetPublicPersona_returns_record()"
     );
+    const minimalEndpoint = findEntity(
+      "/minimal/personas",
+      "http_endpoint",
+      "GET /minimal/personas/{sid}"
+    );
+    const efContext = findEntity(
+      "PersonaDbContext",
+      "ef_db_context",
+      "FeatureFlow.DataAccess.PersonaDbContext"
+    );
+    const efTable = findEntity(
+      "app.persona_records",
+      "database_object",
+      "app.persona_records"
+    );
+    const efOperation = findEntity(
+      "EF Core reads app.persona_records",
+      "database_operation",
+      "EF Core reads app.persona_records"
+    );
+    const writeEndpoint = findEntity(
+      "POST /minimal/personas",
+      "http_endpoint",
+      "POST /minimal/personas"
+    );
+    const efInsert = findEntity(
+      "EF Core inserts app.persona_records",
+      "database_operation",
+      "EF Core inserts app.persona_records"
+    );
+    const migration = findEntity(
+      "CreatePersonaRecords",
+      "migration",
+      "FeatureFlow.DataAccess.Migrations.CreatePersonaRecords"
+    );
+    const groupedEndpoint = findEntity(
+      "/v2/diagnostics/health",
+      "http_endpoint",
+      "GET /v2/diagnostics/health"
+    );
     assert.equal(endpoint.signature, "GET /Persona | anonymous");
     assert.match(registration.signature ?? "", /^scoped /);
     assert.equal(databaseObject.firstLocation?.relativePath, "DataAccess/PersonaData.cs");
     assert.match(testCase.signature ?? "", /^xunit test /);
+    assert.match(minimalEndpoint.signature ?? "", /minimal \| policy Persona\.Read/);
+    assert.match(writeEndpoint.signature ?? "", /minimal \| policy Persona\.Write/);
+    assert.equal(efContext.signature, "EF Core DbContext | sets 1");
+    assert.match(efTable.signature ?? "", /PostgreSQL table app\.persona_records/);
+    assert.match(efTable.signature ?? "", /EF Core table app\.persona_records/);
+    assert.match(migration.signature ?? "", /^EF Core migration/);
+    assert.match(groupedEndpoint.signature ?? "", /minimal/);
+    const unifiedTableSearch = invoke<AtlasEntitySearchResult>(
+      "search",
+      "--query",
+      "app.persona_records",
+      "--kind",
+      "database_object",
+      "--limit",
+      "20"
+    );
+    assert.equal(
+      unifiedTableSearch.matches.filter(match => match.qualifiedName === "app.persona_records").length,
+      1
+    );
 
     const endpointRelations = invoke<RelationQueryResult>(
       "relations",
@@ -151,6 +211,134 @@ test("maps a complete .NET feature route across DI, HTTP, API, logic, Dapper, an
     ]);
     assert.ok(route.steps.every(step => step.relation.kind !== "contains"));
     assert.ok(route.steps.every(step => !step.relation.evidence.relativePath.endsWith("README.md")));
+
+    const minimalRelations = invoke<RelationQueryResult>(
+      "relations",
+      "--stable-key",
+      minimalEndpoint.stableKey,
+      "--direction",
+      "both",
+      "--limit",
+      "50"
+    );
+    assert.ok(minimalRelations.relations.some(relation =>
+      relation.kind === "requires_policy" && relation.target.qualifiedName === "Persona.Read"));
+    assert.ok(minimalRelations.relations.some(relation =>
+      relation.kind === "returns_response"
+      && relation.target.qualifiedName === "FeatureFlow.DataAccess.PersonaRecord"));
+    assert.ok(minimalRelations.relations.some(relation =>
+      relation.kind === "resolves_parameter"
+      && relation.target.qualifiedName === "FeatureFlow.DataAccess.PersonaEfStore"));
+
+    const efRoute = invoke<RouteQueryResult>(
+      "route",
+      "--source-key",
+      minimalEndpoint.stableKey,
+      "--via-key",
+      efOperation.stableKey,
+      "--target-key",
+      efTable.stableKey,
+      "--max-depth",
+      "10",
+      "--max-visited",
+      "1000"
+    );
+    assert.equal(efRoute.found, true);
+    assert.deepEqual(efRoute.steps.map(step => step.relation.kind), [
+      "handled_by",
+      "calls",
+      "executes_ef",
+      "reads"
+    ]);
+    assert.deepEqual(efRoute.steps.map(step => step.relation.domain), [
+      "framework",
+      "code",
+      "database",
+      "database"
+    ]);
+
+    const writeRelations = invoke<RelationQueryResult>(
+      "relations",
+      "--stable-key",
+      writeEndpoint.stableKey,
+      "--direction",
+      "both",
+      "--limit",
+      "50"
+    );
+    assert.ok(writeRelations.relations.some(relation =>
+      relation.kind === "binds_request"
+      && relation.target.qualifiedName === "FeatureFlow.DataAccess.PersonaRecord"));
+    assert.ok(writeRelations.relations.some(relation =>
+      relation.kind === "returns_response"
+      && relation.target.qualifiedName === "FeatureFlow.DataAccess.PersonaRecord"));
+    const writeRoute = invoke<RouteQueryResult>(
+      "route",
+      "--source-key",
+      writeEndpoint.stableKey,
+      "--via-key",
+      efInsert.stableKey,
+      "--target-key",
+      efTable.stableKey,
+      "--max-depth",
+      "10",
+      "--max-visited",
+      "1000"
+    );
+    assert.equal(writeRoute.found, true);
+    assert.deepEqual(writeRoute.steps.map(step => step.relation.kind), [
+      "handled_by",
+      "calls",
+      "executes_ef",
+      "inserts"
+    ]);
+
+    const tableRelations = invoke<RelationQueryResult>(
+      "relations",
+      "--stable-key",
+      efTable.stableKey,
+      "--direction",
+      "both",
+      "--limit",
+      "100"
+    );
+    assert.ok(tableRelations.relations.some(relation => relation.kind === "has_column"));
+    assert.ok(tableRelations.relations.some(relation => relation.kind === "has_primary_key"));
+    assert.ok(tableRelations.relations.some(relation => relation.kind === "has_index"));
+    assert.ok(tableRelations.relations.some(relation =>
+      relation.kind === "migrates" && relation.source.stableKey === migration.stableKey));
+    assert.ok(tableRelations.relations.some(relation =>
+      relation.kind === "maps_set" && relation.source.stableKey === efContext.stableKey));
+
+    const exceptionMiddleware = findEntity(
+      "ExceptionHandler",
+      "middleware",
+      "ExceptionHandler"
+    );
+    const authenticationMiddleware = findEntity(
+      "Authentication",
+      "middleware",
+      "Authentication"
+    );
+    const authorizationMiddleware = findEntity(
+      "Authorization",
+      "middleware",
+      "Authorization"
+    );
+    assert.match(exceptionMiddleware.signature ?? "", /order:1/);
+    assert.match(authenticationMiddleware.signature ?? "", /order:2/);
+    assert.match(authorizationMiddleware.signature ?? "", /order:3/);
+    const middlewareRelations = invoke<RelationQueryResult>(
+      "relations",
+      "--stable-key",
+      exceptionMiddleware.stableKey,
+      "--direction",
+      "outgoing",
+      "--limit",
+      "20"
+    );
+    assert.ok(middlewareRelations.relations.some(relation =>
+      relation.kind === "precedes" && relation.target.stableKey === authenticationMiddleware.stableKey));
 
     const bounded = invoke<RouteQueryResult>(
       "route",

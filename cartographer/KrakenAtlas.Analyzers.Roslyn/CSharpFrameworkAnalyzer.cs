@@ -29,6 +29,7 @@ internal static partial class CSharpFrameworkAnalyzer
             .ToHashSet(StringComparer.Ordinal);
         var endpoints = new List<HttpEndpointFact>();
         var requests = new List<HttpRequestFact>();
+        var middleware = new List<MiddlewareFact>();
 
         foreach (var entry in symbolHandles)
         {
@@ -44,6 +45,7 @@ internal static partial class CSharpFrameworkAnalyzer
                 method,
                 methodEntity,
                 symbols,
+                projectKeysByAssembly,
                 endpoints,
                 AddRelation);
             CollectTestCase(
@@ -69,7 +71,7 @@ internal static partial class CSharpFrameworkAnalyzer
 
                 var root = await syntaxTree.GetRootAsync(cancellationToken);
                 var semanticModel = analysis.Compilation.GetSemanticModel(syntaxTree);
-                foreach (var invocationSyntax in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                foreach (var invocationSyntax in root.DescendantNodes().OfType<InvocationExpressionSyntax>().Reverse())
                 {
                     if (semanticModel.GetOperation(invocationSyntax, cancellationToken) is not IInvocationOperation invocation)
                     {
@@ -84,6 +86,41 @@ internal static partial class CSharpFrameworkAnalyzer
                         invocation,
                         symbols,
                         projectKeysByAssembly,
+                        AddRelation,
+                        cancellationToken);
+                    CollectMinimalApiEndpoint(
+                        workspaceKey,
+                        analysis.Project,
+                        sourceFile,
+                        semanticModel,
+                        invocationSyntax,
+                        invocation,
+                        symbols,
+                        projectKeysByAssembly,
+                        endpoints,
+                        AddRelation,
+                        cancellationToken);
+                    CollectMinimalApiMetadata(
+                        workspaceKey,
+                        analysis.Project,
+                        sourceFile,
+                        semanticModel,
+                        invocationSyntax,
+                        invocation,
+                        symbols,
+                        projectKeysByAssembly,
+                        AddRelation,
+                        cancellationToken);
+                    CollectMiddleware(
+                        workspaceKey,
+                        analysis.Project,
+                        sourceFile,
+                        semanticModel,
+                        invocationSyntax,
+                        invocation,
+                        symbols,
+                        projectKeysByAssembly,
+                        middleware,
                         AddRelation,
                         cancellationToken);
                     CollectHttpRequest(
@@ -112,6 +149,17 @@ internal static partial class CSharpFrameworkAnalyzer
                 }
             }
         }
+
+        ConnectMiddlewarePipeline(middleware, symbols, AddRelation);
+        await CollectEfCoreAsync(
+            workspaceKey,
+            projectAnalyses,
+            filesByPath,
+            symbols,
+            symbolHandles,
+            projectKeysByAssembly,
+            AddRelation,
+            cancellationToken);
 
         foreach (var request in requests)
         {
@@ -144,6 +192,7 @@ internal static partial class CSharpFrameworkAnalyzer
         IMethodSymbol method,
         DiscoveredCodeSymbol methodEntity,
         Dictionary<string, DiscoveredCodeSymbol> symbols,
+        IReadOnlyDictionary<string, string> projectKeysByAssembly,
         ICollection<HttpEndpointFact> endpoints,
         Action<DiscoveredCodeRelation> addRelation)
     {
@@ -200,6 +249,23 @@ internal static partial class CSharpFrameworkAnalyzer
                 evidence,
                 "framework",
                 authorization));
+            CollectEndpointContracts(
+                workspaceKey,
+                methodEntity.ProjectKey,
+                entityKey,
+                method,
+                evidence,
+                symbols,
+                projectKeysByAssembly,
+                addRelation);
+            CollectAuthorizationPolicies(
+                workspaceKey,
+                methodEntity.ProjectKey,
+                entityKey,
+                method.GetAttributes().Concat(method.ContainingType.GetAttributes()),
+                evidence,
+                symbols,
+                addRelation);
         }
     }
 

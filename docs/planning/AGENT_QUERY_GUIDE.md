@@ -1,6 +1,6 @@
 # AI Agent Query Guide
 
-This guide describes the bounded query surface available in the Agent Memory
+This guide describes the bounded query surface available in the Framework Surface
 Alpha. An agent should query Cartographer before recursively reading a workspace.
 Stable keys returned by one query are the exact identities used by later
 queries.

@@ -190,12 +190,12 @@ try {
   }
 
   const firstBuild = cartographer(assembly, "build");
-  if (firstBuild.generation !== 1 || firstBuild.counts?.projects !== 7 || firstBuild.counts?.files !== 19) {
+  if (firstBuild.generation !== 1 || firstBuild.counts?.projects !== 7 || firstBuild.counts?.files !== 21) {
     throw new Error(`Unexpected first Atlas build result: ${JSON.stringify(firstBuild)}`);
   }
 
   const reopened = cartographer(assembly, "summary");
-  if (reopened.generation !== 1 || reopened.counts?.projects !== 7 || reopened.counts?.files !== 19) {
+  if (reopened.generation !== 1 || reopened.counts?.projects !== 7 || reopened.counts?.files !== 21) {
     throw new Error(`Atlas did not reopen correctly: ${JSON.stringify(reopened)}`);
   }
 
@@ -290,6 +290,45 @@ try {
     JSON.stringify(route.steps?.map(step => step.relation.kind)) !== JSON.stringify(expectedKinds)
   ) {
     throw new Error(`Packaged Persona Route was incomplete: ${JSON.stringify(route)}`);
+  }
+
+  const minimalEndpoint = searchEntity(
+    "GET /minimal/personas",
+    "http_endpoint",
+    "GET /minimal/personas/{sid}"
+  );
+  const efOperation = searchEntity(
+    "EF Core reads app.persona_records",
+    "database_operation",
+    "EF Core reads app.persona_records"
+  );
+  const efTable = searchEntity(
+    "app.persona_records",
+    "database_object",
+    "app.persona_records"
+  );
+  const frameworkRoute = cartographer(
+    assembly,
+    "route",
+    "--source-key",
+    minimalEndpoint.stableKey,
+    "--via-key",
+    efOperation.stableKey,
+    "--target-key",
+    efTable.stableKey,
+    "--max-depth",
+    "10",
+    "--max-visited",
+    "1000"
+  );
+  const expectedFrameworkKinds = ["handled_by", "calls", "executes_ef", "reads"];
+  if (
+    frameworkRoute.found !== true ||
+    frameworkRoute.graphTruncated !== false ||
+    JSON.stringify(frameworkRoute.steps?.map(step => step.relation.kind))
+      !== JSON.stringify(expectedFrameworkKinds)
+  ) {
+    throw new Error(`Packaged Minimal API to EF Route was incomplete: ${JSON.stringify(frameworkRoute)}`);
   }
 
   const logicMethod = searchEntity(
@@ -425,7 +464,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route, persisted and reused a current agent assessment in a budgeted Context Pack across two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and Minimal API-to-EF Route, persisted and reused a current agent assessment in a budgeted Context Pack across two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {
