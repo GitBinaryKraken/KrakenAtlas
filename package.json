@@ -1,8 +1,8 @@
 {
   "name": "kraken-atlas",
   "displayName": "Kraken Atlas",
-  "description": "Builds a local SQLite Atlas of .NET, ASP.NET Core, EF Core, routes, Context Packs, and durable agent assessments.",
-  "version": "0.7.5",
+  "description": "Builds a local SQLite Atlas and exposes token-budgeted .NET code context to AI agents through MCP.",
+  "version": "0.8.0",
   "icon": "images/icon.png",
   "galleryBanner": {
     "color": "#06172f",
@@ -15,7 +15,7 @@
     "url": "https://github.com/GitBinaryKraken/KrakenAtlas.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.105.0"
   },
   "extensionKind": [
     "workspace"
@@ -77,6 +77,12 @@
     "package.json"
   ],
   "contributes": {
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "krakenAtlas.cartographer",
+        "label": "Kraken Atlas"
+      }
+    ],
     "commands": [
       {
         "command": "krakenAtlas.showStatus",
@@ -185,7 +191,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.105.0",
     "@vscode/vsce": "^3.9.2",
     "ajv": "^8.20.0",
     "typescript": "^5.4.5"

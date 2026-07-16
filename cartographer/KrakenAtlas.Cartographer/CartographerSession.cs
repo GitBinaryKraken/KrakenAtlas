@@ -7,7 +7,7 @@ using KrakenAtlas.Workspace;
 
 namespace KrakenAtlas.Cartographer;
 
-internal sealed class CartographerSession
+internal sealed partial class CartographerSession
 {
     private readonly WorkspaceDiscovery discovery = new();
     private readonly CSharpDeclarationAnalyzer csharpDeclarationAnalyzer = new();
@@ -263,25 +263,37 @@ internal sealed class CartographerSession
             workspaceKey, batch, forceDryRun, cancellationToken);
     }
 
-    public Task<PreparedChangeResult> PrepareChangeAsync(
+    public async Task<PreparedChangeResult> PrepareChangeAsync(
         PrepareChangeParams parameters,
         CancellationToken cancellationToken)
     {
         var activeRepository = RequireRepository();
+        var tokenBudget = parameters.TokenBudget ?? 4000;
         if (workspaceKey is null)
         {
-            return Task.FromResult(PreparedChangeResult.NotCreated(
-                parameters.Task, parameters.TokenBudget ?? 4000));
+            return PreparedChangeResult.NotCreated(parameters.Task, tokenBudget);
         }
-        return activeRepository.PrepareChangeAsync(
+
+        var includeSource = parameters.IncludeSource ?? false;
+        var coreBudget = includeSource
+            ? Math.Max(800, tokenBudget * 65 / 100)
+            : tokenBudget;
+        var result = await activeRepository.PrepareChangeAsync(
             workspaceKey,
             parameters.Task,
             parameters.StableKey,
             parameters.Id,
-            parameters.TokenBudget ?? 4000,
+            coreBudget,
             parameters.MaxDepth ?? 3,
             parameters.IncludeProposed ?? false,
             cancellationToken);
+        result = result with { TokenBudget = tokenBudget };
+        return includeSource && result.AtlasState == "current"
+            ? await AttachSourceSlicesAsync(
+                result,
+                parameters.SourceLineLimit ?? 24,
+                cancellationToken)
+            : result;
     }
 
     private AtlasRepository RequireRepository() => repository

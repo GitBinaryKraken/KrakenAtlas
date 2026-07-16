@@ -161,6 +161,29 @@ This baseline does not claim complete Identity model reconstruction, generated
 string-based model-snapshot interpretation, relationship/owned-entity semantics,
 or runtime middleware and endpoint-filter composition.
 
+## Agent Tooling Baseline
+
+On 2026-07-15, version 0.8.0 indexed the 11-project, 672-file workspace into a
+fresh temporary Atlas in 34.5 seconds, producing the same 6,738 entities and
+16,763 relations as 0.7.5. This confirms that adding agent adapters did not alter
+canonical framework facts.
+
+Task-first resolution was deliberately conservative on the real workspace:
+
+- `Add authorization and audit logging to the Persona API read` returned
+  `needs_seed` with ranked Persona, middleware, and database-operation
+  candidates instead of selecting a duplicate basename.
+- `Add validation to user login` with query `Login` returned `needs_seed` across
+  the primary, 2FA, and recovery-code login models.
+- Adding exact query `KelpApi.Controllers.PersonaController` resolved `auto` with
+  a 4,000-token Context Pack.
+
+That exact pack emitted 6 ranked items, 4 nonoverlapping source excerpts of at
+most 16 lines, 3 affected projects, and focused build commands. It used 2,945 of
+4,000 estimated tokens. Two overlapping excerpts from the controller were
+explicitly omitted, avoiding repeated local context while preserving their
+evidence locations.
+
 ## Gold Persona Route
 
 The initial semantic and full-stack acceptance Route is the public Persona read:

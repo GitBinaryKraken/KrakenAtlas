@@ -63,8 +63,8 @@ documentation only under an explicit policy and report its token cost separately
 ### D-011: Clients provide the Atlas storage path
 
 The VS Code extension uses its per-workspace `storageUri` and passes the database
-path during Cartographer initialization. CLI and future MCP clients pass an
-explicit Atlas path. Cartographer alone owns migrations, transactions, and
+path during Cartographer initialization. CLI and MCP clients pass an explicit
+Atlas path. Cartographer alone owns migrations, transactions, and
 queries; the repository never contains the generated SQLite database.
 
 ### D-012: Workspace orientation is canonical Atlas data

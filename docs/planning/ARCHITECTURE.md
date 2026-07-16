@@ -29,8 +29,9 @@ directly and analyzers do not write SQLite directly.
   source tree in local, SSH, WSL, container, and Codespaces environments.
 - **Protocol:** JSON-RPC 2.0 with content-length framing over standard I/O for
   extension-to-Cartographer communication.
-- **Agent surfaces:** native VS Code Language Model Tools and an MCP server mode,
-  both adapting the same internal query services.
+- **Agent surfaces:** a bundled MCP stdio server registered by VS Code and CLI
+  commands over the same internal query services. Native VS Code Language Model
+  Tools remain optional because they would duplicate this surface.
 - **TypeScript analyzer:** a bundled Node worker using the project's TypeScript
   version when compatible, with a bundled fallback.
 
@@ -193,7 +194,7 @@ select facts only, assessments only, or a labeled combination under an explicit
 assessment policy.
 
 The write boundary is the schema-validated `decorate_nodes` application
-operation. CLI, JSON-RPC, future MCP, and VS Code adapters pass the same versioned
+operation. CLI, JSON-RPC, MCP, and VS Code adapters pass the same versioned
 batch to it. The service pins writes to an expected Atlas generation, resolves
 stable node selectors, captures dependencies, and commits the analysis session
 and claims transactionally.

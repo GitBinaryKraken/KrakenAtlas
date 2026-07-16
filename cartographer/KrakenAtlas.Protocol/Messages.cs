@@ -82,4 +82,18 @@ public sealed record PrepareChangeParams(
     long? Id,
     int? TokenBudget,
     int? MaxDepth,
-    bool? IncludeProposed);
+    bool? IncludeProposed,
+    bool? IncludeSource = null,
+    int? SourceLineLimit = null);
+
+public sealed record PrepareTaskParams(
+    string Task,
+    string? Query,
+    string? StableKey,
+    long? Id,
+    int? TokenBudget,
+    int? MaxDepth,
+    bool? IncludeProposed,
+    bool? IncludeSource,
+    int? SourceLineLimit,
+    int? CandidateLimit);

@@ -15,7 +15,7 @@ import {
   renderWorkspaceOrientation
 } from "./atlas/render";
 import { NodeDecorationBatch } from "./atlas/contracts";
-import { CartographerClient } from "./cartographer/client";
+import { CartographerClient, resolveCartographerAssemblyPath } from "./cartographer/client";
 import { createDiagnosticReport } from "./diagnostics/report";
 import { renderFoundationStatus } from "./foundation/status";
 import { createDotnetRuntimeRequirementError, inspectDotnetRuntime } from "./runtime/dotnetRuntime";
@@ -35,6 +35,39 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   activeClient = client;
   const version = String(context.extension.packageJSON.version ?? "unknown");
+  const mcpArguments = workspaceRoots.flatMap(root => ["--workspace", root]);
+  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider(
+    "krakenAtlas.cartographer",
+    {
+      provideMcpServerDefinitions: () => {
+        if (workspaceRoots.length === 0) {
+          return [];
+        }
+        const definition = new vscode.McpStdioServerDefinition(
+          "Kraken Atlas",
+          "dotnet",
+          [
+            resolveCartographerAssemblyPath(context.extensionPath),
+            "--mcp",
+            ...mcpArguments,
+            "--atlas",
+            atlasPath
+          ],
+          {},
+          version
+        );
+        definition.cwd = vscode.Uri.file(context.extensionPath);
+        return [definition];
+      },
+      resolveMcpServerDefinition: async (server) => {
+        const runtime = await inspectDotnetRuntime();
+        if (!runtime.available) {
+          throw createDotnetRuntimeRequirementError(runtime);
+        }
+        return server;
+      }
+    }
+  ));
 
   context.subscriptions.push(
     client,

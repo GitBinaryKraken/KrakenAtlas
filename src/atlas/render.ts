@@ -299,6 +299,7 @@ export function renderPreparedChange(result: PreparedChangeResult): string {
     `Stable key: ${result.seed.stableKey}`,
     `Generation: ${result.generation ?? "unknown"}`,
     `Budget: ${result.estimatedTokens}/${result.tokenBudget} estimated tokens | truncated ${result.truncated}`,
+    `Source slices: ${result.sourceSlicesIncluded} included | ${result.omittedSourceSlices} omitted`,
     "",
     "Ranked Context"
   ];
@@ -327,8 +328,11 @@ export function renderPreparedChange(result: PreparedChangeResult): string {
       lines.push(`- ${command.kind} | ${command.commandText}`);
     }
   }
-  if (result.omittedItems > 0 || result.omittedAssessments > 0) {
-    lines.push("", `Omitted by budget: ${result.omittedItems} context items, ${result.omittedAssessments} assessments`);
+  if (result.omittedItems > 0 || result.omittedAssessments > 0 || result.omittedSourceSlices > 0) {
+    lines.push(
+      "",
+      `Omitted by budget: ${result.omittedItems} context items, ${result.omittedAssessments} assessments, ${result.omittedSourceSlices} source slices`
+    );
   }
   return lines.join("\n");
 }

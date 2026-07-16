@@ -319,6 +319,16 @@ export interface PreparedChangeItem {
   relationKind?: string;
   project?: ChangeSurfaceProject;
   evidence?: EntityLocationDetail;
+  source?: PreparedSourceSlice;
+}
+
+export interface PreparedSourceSlice {
+  relativePath: string;
+  startLine: number;
+  endLine: number;
+  language: string;
+  content: string;
+  truncated: boolean;
 }
 
 export interface PreparedChangeResult {
@@ -339,6 +349,25 @@ export interface PreparedChangeResult {
   verificationCommands: WorkspaceCommandDetail[];
   omittedItems: number;
   omittedAssessments: number;
+  sourceSlicesIncluded: number;
+  omittedSourceSlices: number;
+}
+
+export interface TaskSeedCandidate {
+  entity: AtlasEntitySearchMatch;
+  score: number;
+  matchedTerms: string[];
+  exactNameMatch: boolean;
+}
+
+export interface TaskContextResult {
+  atlasState: "not_created" | "entity_not_found" | "current";
+  generation?: number;
+  task: string;
+  resolution: "not_created" | "exact" | "auto" | "needs_seed" | "no_match";
+  queryTerms: string[];
+  candidates: TaskSeedCandidate[];
+  contextPack?: PreparedChangeResult;
 }
 
 export interface OrientationEvidence {

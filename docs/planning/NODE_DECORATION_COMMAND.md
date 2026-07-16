@@ -12,9 +12,8 @@ The authoritative version 1.0 payload is the Draft 2020-12 JSON Schema at
 An illustrative payload is checked in at
 [`contracts/node-decoration-batch.example.json`](contracts/node-decoration-batch.example.json).
 
-Version 0.7 implements this Phase 2 contract through CLI, JSON-RPC, and the
-trusted-workspace VS Code adapter. MCP remains an adapter target over the same
-operation.
+Version 0.8 exposes this Phase 2 contract through CLI, JSON-RPC, the
+trusted-workspace VS Code adapter, and MCP over the same operation.
 
 ## One Operation, Multiple Adapters
 

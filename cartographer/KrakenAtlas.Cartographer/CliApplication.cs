@@ -93,7 +93,22 @@ internal static class CliApplication
                         options.Id,
                         options.TokenBudget,
                         options.MaxDepth,
-                        options.IncludeProposed),
+                        options.IncludeProposed,
+                        options.IncludeSource,
+                        options.SourceLineLimit),
+                    cancellationToken),
+                "prepare-task" => await session.PrepareTaskAsync(
+                    new PrepareTaskParams(
+                        options.Task!,
+                        options.Query,
+                        options.StableKey,
+                        options.Id,
+                        options.TokenBudget,
+                        options.MaxDepth,
+                        options.IncludeProposed,
+                        options.IncludeSource,
+                        options.SourceLineLimit,
+                        options.Limit),
                     cancellationToken),
                 "decorate-nodes" => await DecorateNodesAsync(session, options, cancellationToken),
                 _ => throw new InvalidOperationException($"Unknown command: {options.Command}")
@@ -115,10 +130,10 @@ internal static class CliApplication
         if (arguments.Count == 0 || arguments[0] is not (
             "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
             or "usages" or "relations" or "route" or "surface" or "assessments"
-            or "prepare" or "decorate-nodes"))
+            or "prepare" or "prepare-task" or "decorate-nodes"))
         {
             throw new ArgumentException(
-                "A build, summary, orientation, entity, symbols, search, usages, relations, route, surface, assessments, prepare, or decorate-nodes command is required.");
+                "A build, summary, orientation, entity, symbols, search, usages, relations, route, surface, assessments, prepare, prepare-task, or decorate-nodes command is required.");
         }
 
         var roots = new List<string>();
@@ -140,8 +155,10 @@ internal static class CliApplication
         int? maxEntities = null;
         string? task = null;
         int? tokenBudget = null;
+        int? sourceLineLimit = null;
         string? inputPath = null;
         var dryRun = false;
+        var includeSource = false;
         var includeProposed = false;
         var includeStale = false;
         var includeHistory = false;
@@ -161,6 +178,9 @@ internal static class CliApplication
                     continue;
                 case "--include-history":
                     includeHistory = true;
+                    continue;
+                case "--include-source":
+                    includeSource = true;
                     continue;
             }
             if (index + 1 >= arguments.Count)
@@ -227,6 +247,9 @@ internal static class CliApplication
                 case "--token-budget" when int.TryParse(value, out var parsedTokenBudget):
                     tokenBudget = parsedTokenBudget;
                     break;
+                case "--source-line-limit" when int.TryParse(value, out var parsedSourceLineLimit):
+                    sourceLineLimit = parsedSourceLineLimit;
+                    break;
                 case "--input":
                     inputPath = value;
                     break;
@@ -275,6 +298,10 @@ internal static class CliApplication
         {
             throw new ArgumentException("prepare requires --task and --stable-key or --id.");
         }
+        if (arguments[0] == "prepare-task" && string.IsNullOrWhiteSpace(task))
+        {
+            throw new ArgumentException("prepare-task requires --task.");
+        }
         if (arguments[0] == "decorate-nodes" && string.IsNullOrWhiteSpace(inputPath))
         {
             throw new ArgumentException("decorate-nodes requires --input <file|->.");
@@ -290,8 +317,8 @@ internal static class CliApplication
         return new CliOptions(
             arguments[0], roots, Path.GetFullPath(atlasPath), stableKey, id, query, limit,
             kinds, domains, direction, sourceStableKey, sourceId, targetStableKey, targetId,
-            viaStableKeys, maxDepth, maxVisited, maxEntities, task, tokenBudget, inputPath,
-            dryRun, includeProposed, includeStale, includeHistory);
+            viaStableKeys, maxDepth, maxVisited, maxEntities, task, tokenBudget, sourceLineLimit,
+            inputPath, dryRun, includeSource, includeProposed, includeStale, includeHistory);
     }
 
     private static async Task<DecorateNodesResult> DecorateNodesAsync(
@@ -312,14 +339,15 @@ internal static class CliApplication
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface|assessments|prepare|decorate-nodes> "
+        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface|assessments|prepare|prepare-task|decorate-nodes> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>] [--query <text>] "
         + "[--direction <incoming|outgoing|both>] [--domain <domain>] [--kind <relation-kind>] "
         + "[--source-key <key> | --source-id <number>] [--target-key <key> | --target-id <number>] "
         + "[--via-key <stable-key>] "
         + "[--max-depth <number>] [--max-visited <10-20000>] [--max-entities <10-1000>] [--limit <number>] "
-        + "[--task <text>] [--token-budget <800-32000>] [--input <file|->] [--dry-run] "
+        + "[--task <text>] [--token-budget <800-32000>] [--include-source] [--source-line-limit <8-120>] "
+        + "[--input <file|->] [--dry-run] "
         + "[--include-proposed] [--include-stale] [--include-history]";
 
     private sealed record CliOptions(
@@ -343,8 +371,10 @@ internal static class CliApplication
         int? MaxEntities,
         string? Task,
         int? TokenBudget,
+        int? SourceLineLimit,
         string? InputPath,
         bool DryRun,
+        bool IncludeSource,
         bool IncludeProposed,
         bool IncludeStale,
         bool IncludeHistory);

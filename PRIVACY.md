@@ -35,17 +35,30 @@ The local Atlas may contain:
   captured dependency fingerprints, and assessment history.
 - SQLite operational metadata required for persistence and migrations.
 
-The current Atlas and prepared-change Context Packs do not store or emit source
-file bodies. They store source locations, declaration metadata, relation
-metadata, and agent-provided structured conclusions. Decoration payloads must
-not contain raw prompts, private reasoning, chain-of-thought, transcripts,
-secrets, or source bodies. A later source-slicing phase must update this document
-before external testing.
+The SQLite Atlas does not store source file bodies. By default, map queries
+return source locations, declaration metadata, relation metadata, and
+agent-provided structured conclusions. A caller may explicitly request bounded
+source excerpts in a prepared-change Context Pack. Excerpts are read on demand,
+returned to that local CLI, JSON-RPC, or MCP client, counted inside the requested
+token budget, and are not written back to SQLite.
+
+Source excerpt reads are restricted to indexed files under the active workspace
+roots and to recognized code extensions: C#, Razor, JavaScript, TypeScript, and
+SQL. Generated, oversized, binary, and non-code files are excluded. The default
+limit is 24 lines per selected item and the accepted range is 8 through 120.
+Agents and users should still inspect excerpts before passing them to any model
+or service whose data policy they do not control.
+
+Decoration payloads must not contain raw prompts, private reasoning,
+chain-of-thought, transcripts, secrets, or source bodies.
 
 ## Network and Telemetry
 
 Kraken Atlas does not transmit Atlas data, source data, paths, diagnostics, or
 usage events. It does not contact a Kraken Atlas service because none exists.
+The bundled MCP server is a local stdio child process. The AI client invoking an
+MCP tool may transmit returned results according to that client's own provider
+and privacy settings; that transmission is outside Kraken Atlas.
 
 VS Code, installed extensions, the .NET runtime, package managers, operating
 system services, and repositories may have their own network or telemetry

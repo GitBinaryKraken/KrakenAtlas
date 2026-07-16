@@ -13,7 +13,9 @@ test("preserves the published identity and exposes the bounded semantic command 
     contributes: {
       commands: Array<{ command: string }>;
       languageModelTools?: unknown[];
+      mcpServerDefinitionProviders?: Array<{ id: string; label: string }>;
     };
+    engines: { vscode: string };
   };
 
   assert.equal(manifest.name, "kraken-atlas");
@@ -39,6 +41,11 @@ test("preserves the published identity and exposes the bounded semantic command 
     "krakenAtlas.openPlanning"
   ]);
   assert.equal(manifest.contributes.languageModelTools, undefined);
+  assert.deepEqual(manifest.contributes.mcpServerDefinitionProviders, [{
+    id: "krakenAtlas.cartographer",
+    label: "Kraken Atlas"
+  }]);
+  assert.equal(manifest.engines.vscode, "^1.105.0");
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.exportDiagnostics"));
   assert.ok(manifest.files.includes("ALPHA_TESTING.md"));
   assert.ok(manifest.files.includes("PRIVACY.md"));

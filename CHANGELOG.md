@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.8.0 - 2026-07-15
+
+- Add a bundled MCP stdio server with current protocol negotiation, structured
+  tool results, and nine focused Atlas tools.
+- Register the Cartographer MCP server from the VS Code extension for each
+  trusted local workspace without requiring a separate `mcp.json`.
+- Add task-first seed resolution with ranked candidates and explicit
+  `needs_seed`/`no_match` outcomes instead of fuzzy automatic selection.
+- Add token-budgeted source excerpts for prepared Context Packs, restricted to
+  indexed code files under active workspace roots with configurable line bounds.
+- Add `prepare-task` CLI and `prepare_task` JSON-RPC surfaces over the same
+  contracts used by MCP.
+- Extend deterministic fixture and packaged-VSIX smoke tests through MCP tool
+  discovery, task resolution, source slicing, and token-budget enforcement.
+- Raise the minimum VS Code version to 1.105 for MCP provider support.
+
 ## 0.7.5 - 2026-07-15
 
 - Add Minimal API endpoint extraction for the common `Map*` methods, including

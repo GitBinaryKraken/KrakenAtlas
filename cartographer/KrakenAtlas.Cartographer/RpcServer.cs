@@ -94,7 +94,10 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                             "database.ef_core",
                             "assessment.read",
                             "assessment.write",
-                            "agent.prepare_change"
+                            "agent.prepare_change",
+                            "agent.prepare_task",
+                            "agent.source_slices",
+                            "agent.mcp"
                         ])),
                     false);
             }
@@ -200,6 +203,13 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                         request.Id,
                         await session.PrepareChangeAsync(
                             DeserializeParams<PrepareChangeParams>(request.Params),
+                            cancellationToken)),
+                    false),
+                "prepare_task" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.PrepareTaskAsync(
+                            DeserializeParams<PrepareTaskParams>(request.Params),
                             cancellationToken)),
                     false),
                 _ => (

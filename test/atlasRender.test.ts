@@ -369,7 +369,9 @@ test("renders prepared changes and durable assessment results", () => {
     affectedProjects: [],
     verificationCommands: [],
     omittedItems: 0,
-    omittedAssessments: 0
+    omittedAssessments: 0,
+    sourceSlicesIncluded: 0,
+    omittedSourceSlices: 0
   });
   assert.match(prepared, /Budget: 842\/2000 estimated tokens/);
   assert.match(prepared, /100 \| seed \| Logic\.PersonaService/);

@@ -1,10 +1,11 @@
-# Kraken Atlas Framework Surface Alpha Testing
+# Kraken Atlas Agent Tooling Beta Testing
 
 ## Purpose
 
 This alpha validates the durable Cartographer foundation, complete static .NET
 feature Routes, evidence-backed change surfaces, token-budgeted prepared-change
-Context Packs, and durable agent assessments in real VS Code environments. It
+Context Packs, MCP agent tools, bounded source excerpts, and durable agent
+assessments in real VS Code environments. It
 is intentionally narrower than the planned product.
 
 The preview currently discovers solutions, .NET and package.json projects,
@@ -31,10 +32,13 @@ The Agent Memory slice combines those facts with current accepted assessments
 under an explicit output budget. A versioned JSON command records typed claims
 in a separate SQLite enrichment plane with exact selectors, evidence,
 provenance, confidence, idempotency, and dependency-based freshness.
+The extension registers the same local Cartographer services through MCP. Agents
+can begin with task text, receive explicit seed candidates when resolution is
+ambiguous, and request code-only source excerpts inside a fixed token budget.
 
 It does not yet provide full MVC/filter semantics, complete EF relationship or
 snapshot interpretation, TypeScript/React semantics, predictive impact analysis,
-MCP tools, source-body Context Pack slices, or documentation indexing. Please
+incremental indexing, Git change projection, or documentation indexing. Please
 evaluate the capabilities that exist rather than the planned semantic surface.
 
 ## Distribution and License Status
@@ -46,7 +50,7 @@ must be selected before broader public distribution.
 
 ## Requirements
 
-- VS Code 1.90 or newer on a desktop workspace.
+- VS Code 1.105 or newer on a desktop workspace.
 - The .NET 10 runtime (`Microsoft.NETCore.App 10.x`) available through `dotnet`
   on `PATH`.
 - A trusted local workspace. Virtual and untrusted workspaces are not supported.
@@ -116,6 +120,14 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 21. Close and reopen VS Code, then show the summary and assessments again.
 22. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
+23. In Agent mode, enable the `Kraken Atlas` tools and request workspace
+    orientation. Verify the agent can discover all nine MCP tools.
+24. Ask for a concrete feature change without supplying a stable key. Verify
+    `prepare_change` returns either `auto`, `needs_seed` with ranked candidates,
+    or `no_match`, never an unexplained fuzzy choice.
+25. Repeat with an exact query or stable key, a 4,000-token budget, and source
+    enabled. Verify all excerpts are code files, no excerpt exceeds its requested
+    line limit, and `estimatedTokens <= tokenBudget`.
 
 Kraken Atlas performs static discovery and does not execute the application,
 instantiate EF Core contexts, run migrations, or connect to project databases.
@@ -141,7 +153,8 @@ Please include:
   shared types, misclassify dependency direction, miss attributed tests, or
   suggest irrelevant projects and commands.
 - Prepared packs that exceed their token budget, omit the seed, fail to select a
-  related test, mix stale claims into normal results, or lose assessment labels.
+  related test, mix stale claims into normal results, lose assessment labels,
+  choose an ambiguous seed, or exceed source line bounds.
 - Decoration batches that partially apply, accept fuzzy selectors, duplicate an
   idempotent operation, overwrite canonical facts, or fail to become stale after
   an evidenced file changes.
@@ -151,8 +164,8 @@ Please include:
 - Whether restart, VS Code reload, and a second build succeeded.
 - The exported diagnostic report after reviewing its paths.
 
-Do not attach proprietary source files or database contents. The standard
-diagnostic export does not contain source bodies.
+Do not attach proprietary source files or database contents. MCP Context Packs
+may contain requested source excerpts; the standard diagnostic export does not.
 
 ## Known Limitations
 
@@ -187,8 +200,8 @@ diagnostic export does not contain source bodies.
   attributes, and MSTest test-method attributes. Dynamic/custom test discovery
   and per-test runner filters remain planned.
 - Prepared-change token counts are deterministic JSON-size estimates, not model-
-  tokenizer counts. Packs contain identities, relations, evidence locations,
-  projects, commands, and assessments, but no source bodies.
+  tokenizer counts. Requested source slices are restricted to recognized code
+  files and included in that estimate; they are not persisted in SQLite.
 - Assessment dependency capture is conservative: a change to an evidenced file
   can stale every claim depending on an entity in that file. Persisted Route
   evidence and explicit documentation fingerprints await their dedicated stores.
@@ -197,7 +210,8 @@ diagnostic export does not contain source bodies.
 - Symbol search matches name and qualified-name fragments and returns at most 100
   results.
 - The VSIX is framework-dependent and requires an installed .NET 10 runtime.
-- MCP exposure and native VS Code language-model tools remain planned work.
+- MCP is available through the extension provider; native VS Code language-model
+  tools remain optional future work because they would duplicate the MCP surface.
 - Workspace storage is local to the VS Code profile and workspace identity.
 
 ## Uninstall and Local Data

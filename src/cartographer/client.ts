@@ -42,6 +42,18 @@ export interface CartographerSessionInfo {
   capabilities: string[];
 }
 
+export function resolveCartographerAssemblyPath(extensionRoot: string): string {
+  const candidates = [
+    path.join(extensionRoot, "cartographer", "KrakenAtlas.Cartographer", "publish", "KrakenAtlas.Cartographer.dll"),
+    path.join(extensionRoot, "cartographer", "KrakenAtlas.Cartographer", "bin", "Release", "net10.0", "KrakenAtlas.Cartographer.dll")
+  ];
+  const match = candidates.find((candidate) => fs.existsSync(candidate));
+  if (!match) {
+    throw new Error("Cartographer is not built. Run `npm run publish:cartographer` and retry.");
+  }
+  return match;
+}
+
 const shutdownResponseTimeoutMs = 2_000;
 const shutdownExitTimeoutMs = 2_000;
 const forcedExitTimeoutMs = 2_000;
@@ -281,7 +293,7 @@ export class CartographerClient {
       throw createDotnetRuntimeRequirementError(runtime);
     }
 
-    const assemblyPath = this.resolveAssemblyPath();
+    const assemblyPath = resolveCartographerAssemblyPath(this.extensionRoot);
     fs.mkdirSync(path.dirname(this.atlasPath), { recursive: true });
     this.log(`Starting Cartographer: dotnet ${assemblyPath}`);
 
@@ -322,18 +334,6 @@ export class CartographerClient {
       this.releaseProcess(child, new Error("Cartographer initialization failed."));
       throw error;
     }
-  }
-
-  private resolveAssemblyPath(): string {
-    const candidates = [
-      path.join(this.extensionRoot, "cartographer", "KrakenAtlas.Cartographer", "publish", "KrakenAtlas.Cartographer.dll"),
-      path.join(this.extensionRoot, "cartographer", "KrakenAtlas.Cartographer", "bin", "Release", "net10.0", "KrakenAtlas.Cartographer.dll")
-    ];
-    const match = candidates.find((candidate) => fs.existsSync(candidate));
-    if (!match) {
-      throw new Error("Cartographer is not built. Run `npm run publish:cartographer` and retry.");
-    }
-    return match;
   }
 
   private request<T = unknown>(method: string, params: unknown = {}): Promise<T> {

@@ -535,7 +535,16 @@ public sealed record PreparedChangeItem(
     string? RelationDomain,
     string? RelationKind,
     ChangeSurfaceProject? Project,
-    EntityLocationDetail? Evidence);
+    EntityLocationDetail? Evidence,
+    PreparedSourceSlice? Source = null);
+
+public sealed record PreparedSourceSlice(
+    string RelativePath,
+    int StartLine,
+    int EndLine,
+    string Language,
+    string Content,
+    bool Truncated);
 
 public sealed record PreparedChangeResult(
     string AtlasState,
@@ -554,7 +563,9 @@ public sealed record PreparedChangeResult(
     IReadOnlyList<ChangeSurfaceProject> AffectedProjects,
     IReadOnlyList<WorkspaceCommandDetail> VerificationCommands,
     int OmittedItems,
-    int OmittedAssessments)
+    int OmittedAssessments,
+    int SourceSlicesIncluded = 0,
+    int OmittedSourceSlices = 0)
 {
     public static PreparedChangeResult NotCreated(string task, int tokenBudget) => new(
         "not_created", null, task, tokenBudget, 0, false, false, false, null, null,
@@ -566,6 +577,25 @@ public sealed record PreparedChangeResult(
         int tokenBudget) => new(
             "entity_not_found", generation, task, tokenBudget, 0, false, false, false,
             null, null, [], [], [], [], [], 0, 0);
+}
+
+public sealed record TaskSeedCandidate(
+    AtlasEntitySearchMatch Entity,
+    int Score,
+    IReadOnlyList<string> MatchedTerms,
+    bool ExactNameMatch);
+
+public sealed record TaskContextResult(
+    string AtlasState,
+    long? Generation,
+    string Task,
+    string Resolution,
+    IReadOnlyList<string> QueryTerms,
+    IReadOnlyList<TaskSeedCandidate> Candidates,
+    PreparedChangeResult? ContextPack)
+{
+    public static TaskContextResult NotCreated(string task) => new(
+        "not_created", null, task, "not_created", [], [], null);
 }
 
 public sealed record OrientationEvidence(

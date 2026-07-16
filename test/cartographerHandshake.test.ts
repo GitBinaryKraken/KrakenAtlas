@@ -148,7 +148,10 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
       "database.ef_core",
       "assessment.read",
       "assessment.write",
-      "agent.prepare_change"
+      "agent.prepare_change",
+      "agent.prepare_task",
+      "agent.source_slices",
+      "agent.mcp"
     ]);
     return cartographer;
   };

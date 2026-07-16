@@ -104,6 +104,25 @@ function cartographer(assembly, command, ...extra) {
   return JSON.parse(output);
 }
 
+function mcp(assembly, messages) {
+  const result = spawnSync("dotnet", [
+    assembly,
+    "--mcp",
+    "--workspace",
+    workspaceRoot,
+    "--atlas",
+    atlasPath
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    input: `${messages.map(message => JSON.stringify(message)).join("\n")}\n`
+  });
+  if (result.status !== 0) {
+    throw new Error(`Packaged MCP server failed: ${result.stderr || result.stdout}`);
+  }
+  return result.stdout.split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line));
+}
+
 function findInstalledExtensionRoot() {
   for (const entry of fs.readdirSync(extensionsDirectory, { withFileTypes: true })) {
     if (!entry.isDirectory()) {
@@ -207,6 +226,9 @@ try {
     !orientation.coverage?.includedSources?.includes("dotnet_projects")
   ) {
     throw new Error(`Packaged workspace orientation was incomplete: ${JSON.stringify(orientation)}`);
+  }
+  if (installedManifest.contributes?.mcpServerDefinitionProviders?.[0]?.id !== "krakenAtlas.cartographer") {
+    throw new Error("Installed extension does not contribute the Kraken Atlas MCP provider.");
   }
 
   const searchEntity = (query, kind, qualifiedName) => {
@@ -440,6 +462,46 @@ try {
     );
   }
 
+  const mcpResponses = mcp(assembly, [
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-11-25",
+        capabilities: {},
+        clientInfo: { name: "vsix-smoke", version: "1.0.0" }
+      }
+    },
+    { jsonrpc: "2.0", method: "notifications/initialized", params: {} },
+    { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+    {
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: {
+        name: "prepare_change",
+        arguments: {
+          task: "Add audit logging to the public Persona read",
+          query: logicMethod.qualifiedName,
+          tokenBudget: 4000,
+          includeSource: true,
+          sourceLineLimit: 12
+        }
+      }
+    }
+  ]);
+  const mcpTools = mcpResponses.find(response => response.id === 2)?.result?.tools;
+  const mcpContext = mcpResponses.find(response => response.id === 3)?.result?.structuredContent;
+  if (
+    !mcpTools?.some(tool => tool.name === "prepare_change") ||
+    mcpContext?.resolution !== "auto" ||
+    mcpContext.contextPack?.sourceSlicesIncluded < 1 ||
+    mcpContext.contextPack?.estimatedTokens > mcpContext.contextPack?.tokenBudget
+  ) {
+    throw new Error(`Packaged MCP workflow was incomplete: ${JSON.stringify(mcpResponses)}`);
+  }
+
   const secondBuild = cartographer(assembly, "build");
   if (secondBuild.generation !== 2) {
     throw new Error(`Cartographer restart build did not advance the generation: ${JSON.stringify(secondBuild)}`);
@@ -464,7 +526,7 @@ try {
   }
 
   console.log(
-    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and Minimal API-to-EF Route, persisted and reused a current agent assessment in a budgeted Context Pack across two Atlas generations, then uninstalled it.`
+    `VSIX smoke test passed: installed ${extensionId}@${manifest.version}, traced the packaged 11-hop Persona Route and Minimal API-to-EF Route, exercised the MCP task Context Pack with bounded source, persisted and reused a current agent assessment across two Atlas generations, then uninstalled it.`
   );
 } finally {
   if (installed) {

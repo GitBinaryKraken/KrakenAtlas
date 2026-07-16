@@ -70,10 +70,11 @@ overrides, durable persistence, bounded symbol search, and code-only usage queri
 are implemented. Bounded cross-domain entity search, directional relation
 queries, and forward Routes with ordered waypoints are also implemented. The
 first bounded change-surface and related-test query is implemented with project
-ownership and focused verification commands. A metadata-only, token-budgeted
-prepared-change Context Pack and the versioned assessment ledger are implemented
-through CLI, JSON-RPC, and VS Code. General semantic diff impact, source slicing,
-unresolved targets, MCP, and native language-model tools remain.
+ownership and focused verification commands. Task-first, token-budgeted Context
+Packs, bounded code excerpts, the versioned assessment ledger, and a nine-tool
+MCP server are implemented through CLI, JSON-RPC, and VS Code. General semantic
+diff impact, unresolved targets, richer conflict selection, and native
+language-model-tool duplication remain.
 
 Deliverables:
 
@@ -82,9 +83,9 @@ Deliverables:
 - Stable symbol keys and explicit ambiguous or unresolved targets.
 - Symbol search, code-only usage queries, neighbors, execution/dependency Routes,
   and impact queries.
-- First Context Pack builder with ranked metadata and token budgets; bounded
-  source slicing remains.
-- Native VS Code agent tools and MCP mode over the same query services.
+- Context Pack builder with ranked metadata, task-first seed resolution, token
+  budgets, and bounded source slicing.
+- MCP mode over the same query services, registered by the VS Code extension.
 - Bounded `get_entity_context` responses spanning semantic, feature, behavior,
   contract, effect, failure, lifecycle, test, and assessment dimensions.
 - Versioned analysis sessions and the first assessment ledger for feature
@@ -102,8 +103,10 @@ Deliverables:
 
 Implemented in 0.7: analysis sessions, typed claims, evidence-derived
 dependencies, dry-run/apply/replay, current/stale queries, prepared-change reuse,
-and source-change invalidation. Assessment-owned group materialization, richer
-conflict selection, source slices, MCP, and native agent tools remain.
+and source-change invalidation. Implemented in 0.8: MCP tools, task-first seed
+resolution, bounded source slices, and packaged agent-workflow verification.
+Assessment-owned group materialization, richer conflict selection, semantic diff
+impact, incremental indexing, and Git change projection remain.
 
 Exit gate:
 

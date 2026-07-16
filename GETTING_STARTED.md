@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.7.5` is the Framework Surface Alpha of the complete rewrite. It
+Kraken Atlas `0.8.0` is the Agent Tooling Beta of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -20,10 +20,13 @@ accepted assessments into an explicit token budget. Agents can record typed,
 evidence-backed knowledge through the versioned node-decoration JSON contract;
 claims remain separate from canonical facts and become stale when captured
 dependencies change.
+The extension also registers a local MCP server for the active workspace. Its
+task-first `prepare_change` tool can resolve a likely seed or return explicit
+candidate stable keys, then emit bounded source excerpts inside the pack budget.
 
 ## Requirements
 
-- VS Code 1.90 or newer.
+- VS Code 1.105 or newer.
 - Node.js and npm for extension development.
 - .NET 10 runtime for the current development VSIX.
 - .NET 10 SDK for building the Cartographer.
@@ -80,6 +83,10 @@ npm run check:vsix
 17. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
 18. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
+19. Open Agent mode, enable the `Kraken Atlas` MCP tools, and ask for workspace
+    orientation. Confirm `get_workspace_orientation` is selected.
+20. Ask the agent to prepare a concrete change. Confirm `prepare_change` returns
+    either a bounded Context Pack or `needs_seed` with ranked exact identities.
 
 The Atlas database is stored under the VS Code workspace storage directory and
 is not written into the source repository.

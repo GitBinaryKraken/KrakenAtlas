@@ -12,7 +12,8 @@ import {
   DecorateNodesResult,
   PreparedChangeResult,
   RelationQueryResult,
-  RouteQueryResult
+  RouteQueryResult,
+  TaskContextResult
 } from "../src/atlas/contracts";
 
 test("maps controller, Minimal API, middleware, Dapper, and EF Core feature routes", () => {
@@ -492,6 +493,26 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       ["add_membership", "classify_role"]
     );
     assert.ok(prepared.verificationCommands.some(command => command.kind === "test"));
+
+    const taskContext = invoke<TaskContextResult>(
+      "prepare-task",
+      "--task",
+      "Add audit logging to the public Persona read",
+      "--query",
+      logicMethod.qualifiedName,
+      "--token-budget",
+      "4000",
+      "--include-source",
+      "--source-line-limit",
+      "12"
+    );
+    assert.equal(taskContext.resolution, "auto");
+    assert.ok(taskContext.contextPack);
+    assert.ok(taskContext.contextPack.estimatedTokens <= taskContext.contextPack.tokenBudget);
+    assert.ok(taskContext.contextPack.sourceSlicesIncluded >= 1);
+    assert.ok(taskContext.contextPack.items.some(item =>
+      item.source?.relativePath === "Logic/PersonaService.cs"
+      && item.source.endLine - item.source.startLine + 1 <= 12));
 
     fs.appendFileSync(path.join(workspaceRoot, "Logic", "PersonaService.cs"), "\n// Staleness fixture change.\n");
     const rebuilt = invoke<BuildAtlasResult>("build");
