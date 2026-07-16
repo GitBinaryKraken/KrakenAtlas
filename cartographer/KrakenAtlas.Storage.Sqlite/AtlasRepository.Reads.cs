@@ -97,7 +97,7 @@ public sealed partial class AtlasRepository
         await using var command = connection.CreateCommand();
         command.CommandText =
             """
-            SELECT analyzer, capability, status, duration_ms, diagnostic
+            SELECT analyzer, analyzer_version, capability, status, duration_ms, diagnostic
             FROM analyzer_runs
             WHERE workspace_id = $workspaceId AND generation_id = $generation
             ORDER BY analyzer;
@@ -112,8 +112,9 @@ public sealed partial class AtlasRepository
                 reader.GetString(0),
                 reader.GetString(1),
                 reader.GetString(2),
-                reader.GetInt64(3),
-                reader.IsDBNull(4) ? null : reader.GetString(4)));
+                reader.GetString(3),
+                reader.GetInt64(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5)));
         }
         return runs;
     }

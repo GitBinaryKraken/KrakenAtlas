@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
   agentInstructionTargets,
+  hasManagedAgentInstructions,
   managedInstructionsEnd,
   managedInstructionsStart,
   updateAgentInstructions
@@ -24,9 +25,13 @@ test("creates bounded Atlas instructions without teaching direct SQLite access",
   const update = updateAgentInstructions(undefined);
 
   assert.equal(update.change, "created");
+  assert.match(update.content, /get_atlas_health/);
   assert.match(update.content, /get_workspace_orientation/);
   assert.match(update.content, /project_git_changes/);
+  assert.match(update.content, /no_repository/);
   assert.match(update.content, /prepare_change/);
+  assert.match(update.content, /Do not use it for Atlas install/);
+  assert.match(update.content, /machine-local and path-bound/);
   assert.match(update.content, /Do not inspect or query the Atlas SQLite database directly/);
   assert.match(update.content, /Set Up AI Agent/);
   assert.doesNotMatch(update.content, /\.codex\/config\.toml/);
@@ -63,6 +68,8 @@ test("updates only the managed block and is idempotent", () => {
     change: "unchanged",
     content: updated.content
   });
+  assert.equal(hasManagedAgentInstructions(updated.content), true);
+  assert.equal(hasManagedAgentInstructions("# Unmanaged instructions"), false);
 });
 
 test("rejects incomplete or duplicate managed blocks", () => {

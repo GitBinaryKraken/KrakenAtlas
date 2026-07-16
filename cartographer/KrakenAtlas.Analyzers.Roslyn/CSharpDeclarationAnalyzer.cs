@@ -12,8 +12,8 @@ namespace KrakenAtlas.Analyzers.Roslyn;
 
 public sealed class CSharpDeclarationAnalyzer
 {
-    public const string AnalyzerName = "roslyn";
-    public const string AnalyzerVersion = "0.9.0";
+    public const string AnalyzerName = AtlasAnalyzerVersions.RoslynName;
+    public const string AnalyzerVersion = AtlasAnalyzerVersions.RoslynVersion;
     public const string Capability = "csharp.routes";
 
     private static readonly object RegistrationLock = new();

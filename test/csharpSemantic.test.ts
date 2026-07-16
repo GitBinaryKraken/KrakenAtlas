@@ -41,6 +41,7 @@ test("Roslyn indexes exact declarations, overloads, partial types, and generated
 
     const summary = invoke<AtlasSummary>("summary");
     const roslyn = summary.analyzerRuns.find(run => run.analyzer === "roslyn");
+    assert.equal(roslyn?.analyzerVersion, "0.9.5");
     assert.equal(roslyn?.capability, "csharp.routes");
     assert.equal(roslyn?.status, "succeeded");
 

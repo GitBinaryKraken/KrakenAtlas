@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const packagePath = path.join(root, "package.json");
 const lockPath = path.join(root, "package-lock.json");
 const projectPath = path.join(root, "cartographer", "KrakenAtlas.Cartographer", "KrakenAtlas.Cartographer.csproj");
+const analyzerVersionsPath = path.join(root, "cartographer", "KrakenAtlas.Core", "AtlasAnalyzerVersions.cs");
 const readJson = (file) => JSON.parse(fs.readFileSync(file, "utf8"));
 const writeJson = (file, value) => fs.writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 const manifest = readJson(packagePath);
@@ -46,6 +47,10 @@ writeJson(lockPath, lock);
 
 const project = fs.readFileSync(projectPath, "utf8").replace(/<Version>[^<]+<\/Version>/, `<Version>${next}</Version>`);
 fs.writeFileSync(projectPath, project, "utf8");
+
+const analyzerVersions = fs.readFileSync(analyzerVersionsPath, "utf8")
+  .replace(/public const string ReleaseVersion = "[^"]+";/, `public const string ReleaseVersion = "${next}";`);
+fs.writeFileSync(analyzerVersionsPath, analyzerVersions, "utf8");
 
 for (const relativePath of ["README.md", "GETTING_STARTED.md"]) {
   const file = path.join(root, relativePath);

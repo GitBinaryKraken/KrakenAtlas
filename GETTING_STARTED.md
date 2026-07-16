@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.9.4` is the Agent Connection Alpha of the complete rewrite. It
+Kraken Atlas `0.9.5` is the Health and Upgrade Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that
@@ -34,6 +34,10 @@ An opt-in setup command installs both the appropriate managed instruction file
 and, when the selected agent does not consume VS Code's native MCP provider, a
 client connection adapter. Direct adapters are included for Codex and Claude;
 other MCP-capable agents can use the generic copied stdio configuration.
+The health query tells both users and agents whether a build is required,
+whether indexed analyzer versions match the installed extension, whether source
+inputs changed, whether Git projection applies, and which coverage remains
+partial.
 
 ## Requirements
 
@@ -64,46 +68,47 @@ npm run check:vsix
 
 1. Open the repository in VS Code.
 2. Press `F5` to launch an Extension Development Host.
-3. Run `Kraken Atlas: Build Atlas`.
-4. Run `Kraken Atlas: Show Atlas Summary` and inspect the discovered projects.
-5. Run `Kraken Atlas: Show Workspace Orientation` and inspect project roles,
+3. Run `Kraken Atlas: Show Health`, then build when it reports `buildRequired`.
+4. Run `Kraken Atlas: Build Atlas` when required.
+5. Run `Kraken Atlas: Show Atlas Summary` and inspect the discovered projects.
+6. Run `Kraken Atlas: Show Workspace Orientation` and inspect project roles,
    build dimensions, commands, and governing rules.
-6. Run `Kraken Atlas: Lookup Entity` with a project, facet, command, rule, or
+7. Run `Kraken Atlas: Lookup Entity` with a project, facet, command, rule, or
    build-dimension stable key or numeric ID.
-7. Run `Kraken Atlas: Search C# Symbols` with a type or member name and inspect
+8. Run `Kraken Atlas: Search C# Symbols` with a type or member name and inspect
    the exact qualified names, signatures, projects, and definition locations.
-8. Copy a returned C# symbol stable key and run `Kraken Atlas: Find C# Usages`
+9. Copy a returned C# symbol stable key and run `Kraken Atlas: Find C# Usages`
    to inspect exact incoming code relations and evidence spans.
-9. Run `Kraken Atlas: Search Entities` for an endpoint route, service
+10. Run `Kraken Atlas: Search Entities` for an endpoint route, service
    registration, or database table and keep the returned stable keys.
-10. Run `Kraken Atlas: Show Relations` for one result and choose an incoming,
+11. Run `Kraken Atlas: Show Relations` for one result and choose an incoming,
     outgoing, or bidirectional view.
-11. Run `Kraken Atlas: Trace Route` with source and target stable keys. Supply
+12. Run `Kraken Atlas: Trace Route` with source and target stable keys. Supply
     comma-separated waypoint stable keys when several valid feature branches
     reach the same target.
-12. Run `Kraken Atlas: Show Change Surface` with a method, endpoint, contract,
+13. Run `Kraken Atlas: Show Change Surface` with a method, endpoint, contract,
     or database-object stable key. Inspect dependency direction, related tests,
     affected projects, and verification commands.
-13. Run `Kraken Atlas: Prepare Change Context Pack` for the same entity and a
+14. Run `Kraken Atlas: Prepare Change Context Pack` for the same entity and a
     concrete task. Confirm the estimated output respects the selected budget.
-14. Run `Kraken Atlas: Apply Node Decorations from JSON` with a schema-valid
+15. Run `Kraken Atlas: Apply Node Decorations from JSON` with a schema-valid
     batch. Review the dry-run result before confirming the atomic write.
-15. Run `Kraken Atlas: Show Node Assessments` and verify status, freshness,
+16. Run `Kraken Atlas: Show Node Assessments` and verify status, freshness,
     author, confidence, evidence, and claim identity.
-16. Run `Kraken Atlas: Restart Cartographer`, then show the assessments again.
-17. Run `Kraken Atlas: Export Diagnostics` and review the source-free JSON.
-18. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
+17. Run `Kraken Atlas: Restart Cartographer`, then show the assessments again.
+18. Run `Kraken Atlas: Export Diagnostics` and review the source-free health JSON.
+19. Run `Kraken Atlas: Open Architecture Plan` to inspect the implementation
    roadmap.
-19. Run `Kraken Atlas: Set Up AI Agent`, select the agent actually used in this
+20. Run `Kraken Atlas: Set Up AI Agent`, select the agent actually used in this
     workspace, and review the managed instruction and connection files. Existing
     content outside Atlas-owned entries must remain unchanged.
-20. Reload VS Code or restart the selected agent when prompted. For an
+21. Reload VS Code or restart the selected agent when prompted. For an
     unsupported client, paste the copied generic configuration into that
     client's MCP settings first.
-21. Open the agent, enable or trust the `Kraken Atlas` MCP tools when prompted,
-    and ask for workspace orientation. Confirm `get_workspace_orientation` is
-    selected.
-22. Ask the agent to prepare a concrete change. Confirm `prepare_change` returns
+22. Open the agent, enable or trust the `Kraken Atlas` MCP tools when prompted,
+    and ask it to check Atlas health. Confirm `get_atlas_health` is selected,
+    followed by a build when required and `get_workspace_orientation`.
+23. Ask the agent to prepare a concrete code change. Confirm `prepare_change` returns
     either a bounded Context Pack or `needs_seed` with ranked exact identities.
 
 The Atlas database is stored under the VS Code workspace storage directory and

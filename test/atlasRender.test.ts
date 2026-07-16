@@ -2,6 +2,7 @@ import { strict as assert } from "node:assert";
 import test from "node:test";
 import {
   renderAtlasSummary,
+  renderAtlasHealth,
   renderAssessments,
   renderChangeSurface,
   renderCodeUsages,
@@ -15,6 +16,44 @@ import {
   renderSymbolSearch,
   renderWorkspaceOrientation
 } from "../src/atlas/render";
+
+test("renders Atlas health with non-git and rebuild guidance", () => {
+  const output = renderAtlasHealth({
+    atlasState: "requires_rebuild",
+    generation: 3,
+    buildRequired: true,
+    sourceState: "changed",
+    workspaceRoots: ["/sample"],
+    analyzers: [{
+      analyzer: "roslyn",
+      expectedVersion: "0.9.5",
+      indexedVersions: ["0.9.4"],
+      current: false
+    }],
+    git: {
+      status: "no_repository",
+      repositoryRoots: [],
+      guidance: "Skip project_git_changes until a workspace root is inside a Git repository."
+    },
+    connection: {
+      mode: "path_bound_stdio",
+      pathBound: true,
+      refreshBehavior: "Refresh on activation."
+    },
+    coverage: {
+      status: "partial",
+      includedSources: ["dotnet_projects"],
+      pendingSources: ["ci_workflows"]
+    },
+    reasons: [{ code: "analyzer_version_changed", message: "Roslyn changed." }],
+    recommendedActions: ["Call build_atlas before relying on map queries."]
+  }, "0.9.5");
+
+  assert.match(output, /Health: requires_rebuild/);
+  assert.match(output, /Git: no_repository/);
+  assert.match(output, /expected 0\.9\.5, indexed 0\.9\.4/);
+  assert.match(output, /Call build_atlas/);
+});
 
 test("renders a bounded project map from an Atlas summary", () => {
   const output = renderAtlasSummary({

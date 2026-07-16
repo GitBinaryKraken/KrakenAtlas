@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import {
   AtlasSummary,
+  AtlasHealthResult,
   AtlasEntitySearchResult,
   AssessmentQueryResult,
   BuildAtlasResult,
@@ -129,6 +130,11 @@ export class CartographerClient {
   async getEntity(stableKey?: string, id?: number): Promise<EntityDetail | undefined> {
     await this.ensureStarted();
     return this.request<EntityDetail | undefined>("get_entity", { stableKey, id });
+  }
+
+  async getAtlasHealth(): Promise<AtlasHealthResult> {
+    await this.ensureStarted();
+    return this.request<AtlasHealthResult>("atlas/health");
   }
 
   async searchSymbols(query: string, limit = 25): Promise<SymbolSearchResult> {

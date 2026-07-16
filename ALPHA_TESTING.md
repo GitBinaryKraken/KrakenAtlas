@@ -12,7 +12,9 @@ The preview currently discovers solutions, .NET and package.json projects,
 project references, relevant workspace files, project roles, build dimensions,
 supported commands, structured conventions, and governing instruction files. It
 persists that structural map in SQLite and offers status, summary, orientation,
-exact-entity, restart, and diagnostic commands. It also uses Roslyn to index C#
+exact-entity, restart, health, and diagnostic commands. Health reports whether
+the Atlas must be rebuilt after source or analyzer changes, whether Git
+projection applies, and which indexing sources remain pending. It also uses Roslyn to index C#
 declarations, overload signatures, visibility, partial locations, and
 generated/manual definition evidence, with a bounded symbol-search command.
 It also records exact internal calls, construction, member reads and writes, type
@@ -68,8 +70,10 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 
 ## Suggested Test Pass
 
-1. Run `Kraken Atlas: Show Status`.
-2. Run `Kraken Atlas: Build Atlas` and record the duration and reported project
+1. Run `Kraken Atlas: Show Health`, then `Kraken Atlas: Show Status`. Confirm
+   health explains whether a build is required, Git is available, analyzer
+   versions are current, and coverage is partial or complete.
+2. Run `Kraken Atlas: Build Atlas` when health requires it and record the duration and reported project
    and file counts.
 3. Run `Kraken Atlas: Show Atlas Summary` and compare its project list with the
    solutions and projects you expect.
@@ -111,9 +115,11 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 17. Run `Kraken Atlas: Show Node Assessments`. Verify canonical facts are not
     presented as agent claims and each claim has status, freshness, confidence,
     agent identity, exact evidence, and a stable claim ID.
-18. Change one evidenced source file and run `Kraken Atlas: Project Git Changes`
-    before rebuilding. Verify the file maps to current entities and the saved
-    claim appears under assessments at risk.
+18. In a Git workspace, change one evidenced source file and run `Kraken Atlas:
+    Project Git Changes` before rebuilding. Verify the file maps to current
+    entities and the saved claim appears under assessments at risk. In a
+    non-repository folder, verify health reports `no_repository` and explicitly
+    says to skip change projection instead.
 19. Rebuild, then query with `--include-stale`.
     The dependent assessment must be stale and absent from normal prepared packs.
 20. Run `Kraken Atlas: Restart Cartographer`, then show the summary again. The
@@ -127,8 +133,8 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
 24. Run `Kraken Atlas: Export Diagnostics`, review the JSON, and attach it to any
    issue where its local paths are acceptable to share.
 25. In Agent mode, enable the `Kraken Atlas` tools and request workspace
-    orientation. Verify the agent can discover all ten MCP tools, including
-    `project_git_changes`.
+    health. Verify the agent can discover all eleven MCP tools, begins with
+    `get_atlas_health`, and follows with orientation after any required build.
 26. Ask for a concrete feature change without supplying a stable key. Verify
     `prepare_change` returns either `auto`, `needs_seed` with ranked candidates,
     or `no_match`, never an unexplained fuzzy choice.
@@ -148,6 +154,12 @@ In VS Code, run `Developer: Reload Window`, then open the workspace being tested
     installed without a redundant workspace MCP file. Rebuild the Atlas and
     confirm orientation reports every installed instruction file as a governing
     `agent_instructions` rule.
+32. Upgrade or reinstall the VSIX in that disposable workspace. Confirm existing
+    Atlas-managed instruction blocks and Codex/Claude connection entries refresh
+    on trusted activation while surrounding user content remains unchanged.
+33. Open a folder that is deliberately not a Git repository. Confirm the normal
+    health, build, summary, orientation, search, relation, Route, and Context Pack
+    tools remain usable without repeated Git calls.
 
 Kraken Atlas performs static discovery and does not execute the application,
 instantiate EF Core contexts, run migrations, or connect to project databases.
@@ -233,6 +245,9 @@ may contain requested source excerpts; the standard diagnostic export does not.
 - MCP is available through the extension provider; native VS Code language-model
   tools remain optional future work because they would duplicate the MCP surface.
 - Workspace storage is local to the VS Code profile and workspace identity.
+- Direct Codex and Claude stdio descriptors contain local extension, workspace,
+  and Atlas paths. Atlas refreshes managed entries on trusted activation, but a
+  client already running during an upgrade or folder move may need a restart.
 
 ## Uninstall and Local Data
 

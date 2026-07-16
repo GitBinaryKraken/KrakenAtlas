@@ -8,6 +8,7 @@ import * as path from "node:path";
 import test from "node:test";
 import {
   AtlasSummary,
+  AtlasHealthResult,
   BuildAtlasResult,
   CodeUsageResult,
   EntityDetail,
@@ -141,6 +142,7 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     assert.equal(initialized.serviceVersion, expectedVersion);
     assert.deepEqual(initialized.capabilities, [
       "foundation.status",
+      "atlas.health",
       "atlas.build",
       "atlas.summary",
       "workspace.orientation",
@@ -190,6 +192,10 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     const firstSummary = await cartographer.request<AtlasSummary>("get_atlas_summary");
     assert.equal(firstSummary.atlasState, "current");
     assert.equal(firstSummary.projects.length, 2);
+    assert.ok(firstSummary.analyzerRuns.every(run => run.analyzerVersion === expectedVersion));
+    const currentHealth = await cartographer.request<AtlasHealthResult>("atlas/health");
+    assert.equal(currentHealth.atlasState, "current");
+    assert.equal(currentHealth.git.status, "repository");
     const app = firstSummary.projects.find(project => project.name === "App");
     assert.ok(app);
     assert.equal(app.projectKind, "application");
@@ -246,6 +252,10 @@ test("Cartographer persists an atomic workspace Atlas across process restarts", 
     assert.equal(secondBuild.indexing.reusedProjects, 2);
 
     fs.appendFileSync(path.join(workspaceRoot, "src", "App", "Program.cs"), "\n// incremental index probe\n");
+    const changedHealth = await cartographer.request<AtlasHealthResult>("atlas/health");
+    assert.equal(changedHealth.atlasState, "requires_rebuild");
+    assert.equal(changedHealth.sourceState, "changed");
+    assert.ok(changedHealth.reasons.some(reason => reason.code === "workspace_sources_changed"));
     const incrementalBuild = await cartographer.request<BuildAtlasResult>("atlas/build");
     assert.equal(incrementalBuild.generation, 2);
     assert.equal(incrementalBuild.indexing.mode, "incremental");

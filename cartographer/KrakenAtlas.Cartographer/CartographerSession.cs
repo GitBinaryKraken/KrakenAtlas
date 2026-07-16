@@ -85,20 +85,31 @@ internal sealed partial class CartographerSession
         return result with { DurationMs = stopwatch.ElapsedMilliseconds };
     }
 
-    public Task<AtlasSummary> GetAtlasSummaryAsync(CancellationToken cancellationToken)
+    public async Task<AtlasSummary> GetAtlasSummaryAsync(CancellationToken cancellationToken)
     {
         var activeRepository = RequireRepository();
-        return workspaceKey is null
-            ? Task.FromResult(AtlasSummary.NotCreated())
-            : activeRepository.GetSummaryAsync(workspaceKey, cancellationToken);
+        if (workspaceKey is null)
+        {
+            return AtlasSummary.NotCreated();
+        }
+        var summary = await activeRepository.GetSummaryAsync(workspaceKey, cancellationToken);
+        return AnalyzerRunsAreCurrent(summary)
+            ? summary
+            : summary with { AtlasState = "requires_rebuild" };
     }
 
-    public Task<WorkspaceOrientation> GetWorkspaceOrientationAsync(CancellationToken cancellationToken)
+    public async Task<WorkspaceOrientation> GetWorkspaceOrientationAsync(CancellationToken cancellationToken)
     {
         var activeRepository = RequireRepository();
-        return workspaceKey is null
-            ? Task.FromResult(WorkspaceOrientation.NotCreated())
-            : activeRepository.GetWorkspaceOrientationAsync(workspaceKey, cancellationToken);
+        if (workspaceKey is null)
+        {
+            return WorkspaceOrientation.NotCreated();
+        }
+        var orientation = await activeRepository.GetWorkspaceOrientationAsync(workspaceKey, cancellationToken);
+        var summary = await activeRepository.GetSummaryAsync(workspaceKey, cancellationToken);
+        return AnalyzerRunsAreCurrent(summary)
+            ? orientation
+            : orientation with { AtlasState = "requires_rebuild" };
     }
 
     public Task<EntityDetail?> GetEntityAsync(

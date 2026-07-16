@@ -113,6 +113,9 @@ Implemented in 0.9.4: project-aware multi-term tactical search, queryable ASP.NE
 startup calls and attributes, generated-output filtering, framework-prioritized
 surface traversal, and task-ranked representative Context Packs validated on the
 Kelp API host.
+Implemented in 0.9.5: explicit Atlas health, analyzer-version upgrade
+invalidation, non-Git workflow guidance, machine-local connection diagnostics,
+and automatic refresh of Atlas-managed agent setup.
 Assessment-owned group materialization, richer conflict selection, and semantic
 change classification remain.
 

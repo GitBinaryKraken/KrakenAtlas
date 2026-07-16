@@ -9,6 +9,9 @@ namespace KrakenAtlas.Workspace;
 
 public sealed class WorkspaceDiscovery
 {
+    public const string AnalyzerName = AtlasAnalyzerVersions.WorkspaceDiscoveryName;
+    public const string AnalyzerVersion = AtlasAnalyzerVersions.WorkspaceDiscoveryVersion;
+
     private static readonly HashSet<string> ExcludedDirectories = new(StringComparer.OrdinalIgnoreCase)
     {
         ".git", ".hg", ".svn", ".vs", ".idea", ".kraken-atlas", "bin", "obj",
@@ -124,7 +127,9 @@ public sealed class WorkspaceDiscovery
         var orderedFiles = files.OrderBy(file => file.StableKey, StringComparer.Ordinal).ToArray();
         var fingerprint = HashText(string.Join(
             "\n",
-            orderedFiles.Select(file => $"{file.StableKey}:{file.ContentHash}")));
+            orderedFiles
+                .Select(file => $"{file.StableKey}:{file.ContentHash}")
+                .Prepend($"{AnalyzerName}:{AnalyzerVersion}")));
         var orientation = WorkspaceOrientationDiscovery.Discover(
             workspaceKey,
             solutions,

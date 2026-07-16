@@ -16,6 +16,8 @@ published Kraken Atlas identity.
 - [Delivery roadmap](ROADMAP.md)
 - [Benchmark plan](BENCHMARKS.md)
 - [Kelp field benchmark](KELP_FIELD_BENCHMARK.md)
+- [Tactical retrieval field feedback](ALPHA_FEEDBACK_TACTICAL_RETRIEVAL.md)
+- [Health and non-Git field feedback](ALPHA_FEEDBACK_HEALTH_AND_NON_GIT.md)
 - [Decision log](DECISIONS.md)
 
 Where the imported history referred to CodeMap, Kraken Atlas is now the delivery

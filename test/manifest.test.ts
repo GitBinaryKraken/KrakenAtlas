@@ -21,8 +21,13 @@ test("preserves the published identity and exposes the bounded semantic command 
   assert.equal(manifest.name, "kraken-atlas");
   assert.equal(manifest.publisher, "BinaryKraken");
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
+  const analyzerVersions = fs.readFileSync(path.resolve(
+    process.cwd(), "cartographer", "KrakenAtlas.Core", "AtlasAnalyzerVersions.cs"
+  ), "utf8");
+  assert.match(analyzerVersions, new RegExp(`ReleaseVersion = "${manifest.version.replace(/\./g, "\\.")}"`));
   assert.deepEqual(manifest.contributes.commands.map((item) => item.command), [
     "krakenAtlas.showStatus",
+    "krakenAtlas.showHealth",
     "krakenAtlas.buildAtlas",
     "krakenAtlas.showAtlasSummary",
     "krakenAtlas.showWorkspaceOrientation",
@@ -51,6 +56,7 @@ test("preserves the published identity and exposes the bounded semantic command 
   assert.equal(manifest.engines.vscode, "^1.105.0");
   assert.ok(manifest.activationEvents.includes("onStartupFinished"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.exportDiagnostics"));
+  assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.showHealth"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.installAgentInstructions"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.setupAgent"));
   assert.ok(manifest.activationEvents.includes("onCommand:krakenAtlas.copyMcpConfiguration"));

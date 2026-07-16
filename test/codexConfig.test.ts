@@ -35,6 +35,7 @@ test("creates a project-scoped Codex MCP configuration for the bundled Cartograp
   assert.match(update.content, /"--mcp"/);
   assert.equal((update.content.match(/"--workspace"/g) ?? []).length, 2);
   assert.match(update.content, /default_tools_approval_mode = "writes"/);
+  assert.match(update.content, /machine-local block is path-bound/);
   assert.match(update.content, /C:\\\\Users\\\\Example/);
 });
 

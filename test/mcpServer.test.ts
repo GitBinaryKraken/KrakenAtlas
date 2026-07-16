@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
-import { BuildAtlasResult, TaskContextResult } from "../src/atlas/contracts";
+import { AtlasHealthResult, BuildAtlasResult, TaskContextResult } from "../src/atlas/contracts";
 
 interface McpResponse<T> {
   jsonrpc: "2.0";
@@ -149,6 +149,8 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     assert.equal(initialized.serverInfo.name, "kraken-atlas");
     assert.equal(initialized.capabilities.tools.listChanged, false);
     assert.match(initialized.instructions, /before broad source exploration/);
+    assert.match(initialized.instructions, /get_atlas_health/);
+    assert.match(initialized.instructions, /no_repository/);
     assert.match(initialized.instructions, /prepare_change/);
     mcp.notify("notifications/initialized");
 
@@ -156,6 +158,7 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
       tools: Array<{ name: string; annotations: { readOnlyHint: boolean } }>;
     }>("tools/list");
     assert.deepEqual(listed.tools.map(tool => tool.name), [
+      "get_atlas_health",
       "build_atlas",
       "get_atlas_summary",
       "get_workspace_orientation",
@@ -169,6 +172,14 @@ test("MCP exposes task-first, token-budgeted Atlas tools over stdio", async () =
     ]);
     assert.equal(listed.tools.find(tool => tool.name === "search_code")?.annotations.readOnlyHint, true);
     assert.equal(listed.tools.find(tool => tool.name === "decorate_nodes")?.annotations.readOnlyHint, false);
+
+    const health = await mcp.request<McpToolResult<AtlasHealthResult>>("tools/call", {
+      name: "get_atlas_health",
+      arguments: {}
+    });
+    assert.equal(health.isError, false);
+    assert.equal(health.structuredContent.atlasState, "not_created");
+    assert.equal(health.structuredContent.buildRequired, true);
 
     const orientation = await mcp.request<McpToolResult<{ atlasState: string }>>("tools/call", {
       name: "get_workspace_orientation",

@@ -32,6 +32,7 @@ internal static class CliApplication
 
             object? result = options.Command switch
             {
+                "health" => await session.GetAtlasHealthAsync(cancellationToken),
                 "build" => await session.BuildAtlasAsync(cancellationToken),
                 "summary" => await session.GetAtlasSummaryAsync(cancellationToken),
                 "orientation" => await session.GetWorkspaceOrientationAsync(cancellationToken),
@@ -137,12 +138,12 @@ internal static class CliApplication
     private static CliOptions Parse(IReadOnlyList<string> arguments)
     {
         if (arguments.Count == 0 || arguments[0] is not (
-            "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
+            "health" or "build" or "summary" or "orientation" or "entity" or "symbols" or "search"
             or "usages" or "relations" or "route" or "surface" or "assessments"
             or "git-changes" or "prepare" or "prepare-task" or "decorate-nodes"))
         {
             throw new ArgumentException(
-                "A build, summary, orientation, entity, symbols, search, usages, relations, route, surface, git-changes, assessments, prepare, prepare-task, or decorate-nodes command is required.");
+                "A health, build, summary, orientation, entity, symbols, search, usages, relations, route, surface, git-changes, assessments, prepare, prepare-task, or decorate-nodes command is required.");
         }
 
         var roots = new List<string>();
@@ -365,7 +366,7 @@ internal static class CliApplication
     }
 
     private const string Usage =
-        "Usage: KrakenAtlas.Cartographer <build|summary|orientation|entity|symbols|search|usages|relations|route|surface|git-changes|assessments|prepare|prepare-task|decorate-nodes> "
+        "Usage: KrakenAtlas.Cartographer <health|build|summary|orientation|entity|symbols|search|usages|relations|route|surface|git-changes|assessments|prepare|prepare-task|decorate-nodes> "
         + "--workspace <path> [--workspace <path>] --atlas <path> "
         + "[--stable-key <key> | --id <number>] [--query <text>] "
         + "[--direction <incoming|outgoing|both>] [--domain <domain>] [--kind <relation-kind>] "

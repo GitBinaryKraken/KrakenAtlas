@@ -169,7 +169,7 @@ internal sealed class McpServer(
                     title = "Kraken Atlas Cartographer",
                     version = GetServiceVersion()
                 },
-                instructions = "Use Kraken Atlas before broad source exploration. Start with get_workspace_orientation. Build the Atlas if it is not_created. Before rebuilding a changed workspace, use project_git_changes to map live edits and assessments at risk. Use prepare_change for task-sized, token-budgeted context. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
+                instructions = "Use Kraken Atlas before broad source exploration. Start with get_atlas_health, build when buildRequired is true, then use get_workspace_orientation. If health reports Git no_repository, skip project_git_changes. Use prepare_change only for concrete coding changes, not install or workspace-health review. Stable keys are canonical identities. Read durable assessments separately and write only reusable conclusions with decorate_nodes."
             });
             return;
         }
@@ -214,6 +214,7 @@ internal sealed class McpServer(
                 : call.Arguments;
             object? value = call.Name switch
             {
+                "get_atlas_health" => await session.GetAtlasHealthAsync(cancellationToken),
                 "build_atlas" => await session.BuildAtlasAsync(cancellationToken),
                 "get_atlas_summary" => await session.GetAtlasSummaryAsync(cancellationToken),
                 "get_workspace_orientation" => await session.GetWorkspaceOrientationAsync(cancellationToken),
@@ -255,9 +256,14 @@ internal sealed class McpServer(
     private static object[] CreateToolDefinitions() =>
     [
         Tool(
+            "get_atlas_health",
+            "Get Atlas Health",
+            "Diagnose Atlas freshness, analyzer compatibility, source changes, Git availability, connection portability, and known orientation coverage. Start here for normal sessions and use this instead of prepare_change for install or workspace-health review.",
+            """{"type":"object","properties":{},"additionalProperties":false}"""),
+        Tool(
             "build_atlas",
             "Build Atlas",
-            "Index the current workspace into the local SQLite Atlas. Call when summary or orientation reports atlasState not_created or after source changes that must be reflected in map queries.",
+            "Index the current workspace into the local SQLite Atlas. Call when get_atlas_health reports buildRequired true.",
             """{"type":"object","properties":{},"additionalProperties":false}""",
             readOnly: false),
         Tool(
@@ -288,12 +294,12 @@ internal sealed class McpServer(
         Tool(
             "project_git_changes",
             "Project Git Changes",
-            "Project working-tree or commit-range changes onto mapped files, symbols, dependent behavior, tests, projects, verification commands, and durable assessments whose evidence is now at risk.",
+            "Project working-tree or commit-range changes onto mapped files, symbols, dependent behavior, tests, projects, verification commands, and durable assessments whose evidence is now at risk. Skip when get_atlas_health reports Git no_repository.",
             """{"type":"object","properties":{"mode":{"type":"string","enum":["working_tree","range"],"default":"working_tree"},"baseRef":{"type":"string"},"targetRef":{"type":"string","default":"HEAD"},"maxDepth":{"type":"integer","minimum":1,"maximum":8,"default":2},"maxEntities":{"type":"integer","minimum":10,"maximum":1000,"default":100},"maxFiles":{"type":"integer","minimum":1,"maximum":1000,"default":100}},"additionalProperties":false}"""),
         Tool(
             "prepare_change",
             "Prepare Change Context",
-            "Resolve a coding task to a likely seed and return a token-budgeted Context Pack with related symbols, tests, projects, assessments, verification commands, and optional bounded source excerpts. If resolution is needs_seed, call again with a candidate stableKey.",
+            "Resolve a concrete coding-change task to a likely seed and return a token-budgeted Context Pack with related symbols, tests, projects, assessments, verification commands, and optional bounded source excerpts. Do not use for Atlas install, setup, or workspace-health reviews. If resolution is needs_seed, call again with a candidate stableKey.",
             """{"type":"object","properties":{"task":{"type":"string","minLength":1,"maxLength":2000},"query":{"type":"string"},"stableKey":{"type":"string"},"id":{"type":"integer"},"tokenBudget":{"type":"integer","minimum":800,"maximum":32000,"default":4000},"maxDepth":{"type":"integer","minimum":1,"maximum":8,"default":3},"includeProposed":{"type":"boolean","default":false},"includeSource":{"type":"boolean","default":true},"sourceLineLimit":{"type":"integer","minimum":8,"maximum":120,"default":24},"candidateLimit":{"type":"integer","minimum":1,"maximum":20,"default":8}},"required":["task"],"additionalProperties":false}"""),
         Tool(
             "get_assessments",

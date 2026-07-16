@@ -20,6 +20,7 @@ export interface ProjectSummary {
 
 export interface AnalyzerRunSummary {
   analyzer: string;
+  analyzerVersion: string;
   capability: string;
   status: string;
   durationMs: number;
@@ -27,7 +28,7 @@ export interface AnalyzerRunSummary {
 }
 
 export interface AtlasSummary {
-  atlasState: "not_created" | "current";
+  atlasState: "not_created" | "requires_rebuild" | "current";
   generation?: number;
   workspaceKey?: string;
   workspaceName?: string;
@@ -35,6 +36,44 @@ export interface AtlasSummary {
   counts: AtlasCounts;
   projects: ProjectSummary[];
   analyzerRuns: AnalyzerRunSummary[];
+}
+
+export interface AtlasAnalyzerCompatibility {
+  analyzer: string;
+  expectedVersion: string;
+  indexedVersions: string[];
+  current: boolean;
+}
+
+export interface AtlasGitHealth {
+  status: "repository" | "no_repository";
+  repositoryRoots: string[];
+  guidance: string;
+}
+
+export interface AtlasConnectionHealth {
+  mode: "path_bound_stdio";
+  pathBound: boolean;
+  refreshBehavior: string;
+}
+
+export interface AtlasHealthReason {
+  code: string;
+  message: string;
+}
+
+export interface AtlasHealthResult {
+  atlasState: "not_created" | "requires_rebuild" | "current";
+  generation?: number;
+  buildRequired: boolean;
+  sourceState: "not_indexed" | "unknown" | "current" | "changed" | "workspace_unavailable";
+  workspaceRoots: string[];
+  analyzers: AtlasAnalyzerCompatibility[];
+  git: AtlasGitHealth;
+  connection: AtlasConnectionHealth;
+  coverage: WorkspaceOrientationCoverage;
+  reasons: AtlasHealthReason[];
+  recommendedActions: string[];
 }
 
 export interface BuildAtlasResult {

@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.9.4`
+Version `0.9.5`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.9.4` Tactical Retrieval Alpha builds on the Agent Connection Alpha. It
+The `0.9.5` Health and Upgrade Alpha builds on the Tactical Retrieval Alpha. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a
@@ -28,6 +28,9 @@ contains:
   instructions and client connection adapter without changing Cartographer's
   agent-neutral core.
 - An out-of-process .NET 10 Cartographer process using JSON-RPC 2.0.
+- A queryable health surface that detects missing or stale Atlas generations,
+  analyzer-version changes, workspace-input changes, Git availability,
+  path-bound agent connections, and known indexing coverage gaps.
 - Deterministic discovery of .NET solutions, C# projects, package.json projects,
   project references, and relevant workspace files.
 - Queryable workspace orientation with multi-valued project roles, target and
@@ -87,7 +90,7 @@ contains:
 - Workspace discovery filters ordinary generated, package-cache, publish, test-
   result, and build-output directories, including suffixed `bin_*` and `obj_*`
   folders used by local development workflows.
-- Ten MCP tools for Atlas build, summary, orientation, entity search, relation
+- Eleven MCP tools for health, Atlas build, summary, orientation, entity search, relation
   queries, Route tracing, Git change projection, task Context Packs, assessment
   reads, and durable node decoration. Read-only tools are explicitly annotated.
 - Bounded Git working-tree and commit-range projection onto mapped files,
@@ -112,6 +115,7 @@ unsaved editor overlays, and file-level dependent rebinds remain planned.
 ## Commands
 
 - `Kraken Atlas: Show Status`
+- `Kraken Atlas: Show Health`
 - `Kraken Atlas: Build Atlas`
 - `Kraken Atlas: Show Atlas Summary`
 - `Kraken Atlas: Show Workspace Orientation`
@@ -133,7 +137,7 @@ unsaved editor overlays, and file-level dependent rebinds remain planned.
 - `Kraken Atlas: Open Architecture Plan`
 
 The diagnostic export contains environment and Atlas metadata such as local
-paths, versions, counts, timings, capabilities, and errors. It does not include
+paths, versions, health reasons, counts, timings, capabilities, and errors. It does not include
 source file bodies or project and entity inventories. Review the JSON before
 sharing it because local paths can still be sensitive.
 
@@ -155,6 +159,7 @@ redistribution rights.
 ## Cartographer CLI
 
 ```powershell
+dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll health --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll build --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll summary --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
 dotnet cartographer/KrakenAtlas.Cartographer/bin/Release/net10.0/KrakenAtlas.Cartographer.dll orientation --workspace E:\Projects\MyApp --atlas E:\Atlas\my-app.sqlite3
@@ -199,8 +204,9 @@ agent extension; the generic descriptor is the fallback for any MCP-compatible
 client whose configuration Atlas does not yet adapt directly.
 
 Setup is opt-in and supports multi-root workspaces. Instruction updates own only
-the explicit Atlas HTML-comment block. Codex and Claude connection updates own
-only their marked Atlas server entry and refresh it after extension upgrades.
+the explicit Atlas HTML-comment block. On trusted activation, Atlas refreshes
+existing managed instruction blocks and the marked Codex and Claude server
+entries after extension upgrades or workspace moves.
 Generated connection files contain local absolute paths and should be treated as
 machine-local configuration unless a team deliberately replaces them with a
 portable launcher. Restart the selected agent after its connection changes.
@@ -213,10 +219,11 @@ repository rules.
 ## MCP Agent Tools
 
 VS Code 1.105 or newer discovers the bundled `Kraken Atlas` MCP server from the
-extension. An agent should begin with `get_workspace_orientation`, call
-`build_atlas` when the Atlas is absent, use `project_git_changes` before a
-rebuild to understand live edits and assessment risk, then use `prepare_change`
-for a concrete task. `prepare_change` can start with task text or a search hint;
+extension. An agent should begin with `get_atlas_health`, call `build_atlas`
+when `buildRequired` is true, then use `get_workspace_orientation`. It should
+call `project_git_changes` before a rebuild only when health reports a Git
+repository. `prepare_change` is for a concrete coding task, not an Atlas install
+or workspace-health review. It can start with task text or a search hint;
 if the seed is ambiguous it returns `needs_seed` and ranked stable-key
 candidates.
 

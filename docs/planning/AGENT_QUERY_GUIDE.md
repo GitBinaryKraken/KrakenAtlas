@@ -19,6 +19,10 @@ bounded workflow into `AGENTS.md`, `.github/copilot-instructions.md`, or
 `CLAUDE.md`; it can also update `.codex/config.toml`, update `.mcp.json`, or copy
 a generic `mcpServers` JSON object. Existing instructions and unrelated MCP
 servers are preserved.
+On trusted extension activation, Atlas refreshes any existing Atlas-managed
+instruction blocks and direct Codex or Claude connection entries. These files
+remain machine-local and path-bound; restart a client that loaded its
+configuration before the refresh completed.
 
 Instruction files and MCP connection files solve different problems. The first
 teaches tool-use policy; the second exposes the tools. If an agent can read the
@@ -27,30 +31,36 @@ loaded and must be configured or restarted.
 
 ## Recommended Workflow
 
-1. Run `summary` and `orientation` to learn workspace shape, project roles,
+1. Run `health`. Build or rebuild when `buildRequired` is true. Treat its
+   analyzer-version, source-state, Git, connection, and coverage fields as the
+   authority for the rest of the workflow.
+2. Run `summary` and `orientation` to learn workspace shape, project roles,
    dependencies, target frameworks, commands, and governing rules.
-2. Run `search` to resolve code, framework, or database entities by name,
+3. Run `search` to resolve code, framework, or database entities by name,
    qualified name, signature, route, or object name.
-3. Run `entity` for exact identity, locations, and relation counts.
-4. Run `usages` for incoming compiler-bound C# usages only.
-5. Run `relations` for bounded incoming, outgoing, or bidirectional neighbors
+4. Run `entity` for exact identity, locations, and relation counts.
+5. Run `usages` for incoming compiler-bound C# usages only.
+6. Run `relations` for bounded incoming, outgoing, or bidirectional neighbors
    across the `code`, `framework`, and `database` domains.
-6. Run `route` between exact entities. Add ordered `--via-key` values when the
+7. Run `route` between exact entities. Add ordered `--via-key` values when the
    requested feature must pass through a particular contract or boundary.
-7. Run `surface` before editing to retrieve direct/transitive neighbors, affected
+8. Run `surface` before editing to retrieve direct/transitive neighbors, affected
    projects, attributed tests, and focused build/test commands.
-8. Run `git-changes --mode working_tree` before rebuilding an edited workspace.
+9. When health reports `git.status: repository`, run `git-changes --mode
+   working_tree` before rebuilding an edited workspace.
    This projects live changes onto current Atlas identities and identifies saved
    assessments whose evidence is at risk. Use range mode for branch or review
-   comparisons.
-9. Run `prepare-task` with a concrete task and token budget. Add `--query` when
+   comparisons. Skip this step when health reports `no_repository`.
+10. Run `prepare-task` only for a concrete coding change, with a task and token
+   budget. Do not use it for Atlas install, setup, or workspace-health reviews.
+   Add `--query` when
    task vocabulary does not closely match a symbol. If resolution is
    `needs_seed`, repeat with one returned stable key.
-10. Request `--include-source` only when the ranked identities and evidence spans
+11. Request `--include-source` only when the ranked identities and evidence spans
    are insufficient. Keep `--source-line-limit` small.
-11. After learning a reusable noncanonical conclusion, submit a schema-valid
+12. After learning a reusable noncanonical conclusion, submit a schema-valid
    `decorate-nodes --dry-run` batch, then apply it with the same operation ID.
-12. Read only the files and spans returned as evidence, then request broader
+13. Read only the files and spans returned as evidence, then request broader
    source context only when the map reports a gap or ambiguity.
 
 ## CLI Examples
@@ -58,6 +68,9 @@ loaded and must be configured or restarted.
 All commands require at least one `--workspace` and one `--atlas` argument.
 
 ```powershell
+# Check upgrade compatibility, source freshness, Git applicability, and coverage.
+cartographer health
+
 # Resolve all Atlas entity kinds. Repeat --kind to restrict kinds.
 cartographer search --query "GET /Persona" --kind http_endpoint --limit 25
 cartographer search --query "public.personas" --kind database_object --limit 25
@@ -110,6 +123,7 @@ The out-of-process Cartographer exposes the same operations through
 content-length framed JSON-RPC 2.0:
 
 - `get_atlas_summary`: no query parameters.
+- `get_atlas_health`: no query parameters.
 - `get_workspace_orientation`: no query parameters.
 - `get_entity`: `{ "stableKey": "..." }` or `{ "id": 42 }`.
 - `search_symbols`: `{ "query": "PersonaService", "limit": 25 }`.
@@ -162,6 +176,7 @@ The VS Code extension registers a local `Kraken Atlas` MCP stdio server with the
 active workspace roots and private Atlas path. The available tools are:
 
 - `build_atlas`
+- `get_atlas_health`
 - `get_atlas_summary`
 - `get_workspace_orientation`
 - `search_code`
@@ -172,8 +187,9 @@ active workspace roots and private Atlas path. The available tools are:
 - `get_assessments`
 - `decorate_nodes`
 
-Begin with orientation, build when `atlasState` is `not_created`, project live
-Git changes before rebuilding, and prefer `prepare_change` for feature work. It returns `resolution: auto` with a Context
+Begin with health, build when `buildRequired` is true, then request orientation.
+Project live Git changes before rebuilding only when health reports a repository,
+and use `prepare_change` only for concrete code changes. It returns `resolution: auto` with a Context
 Pack only when one seed is sufficiently distinct. `needs_seed` returns ranked
 candidates and requires an exact follow-up. `no_match` means task vocabulary did
 not resolve inside current mapped metadata; use `search_code` or source search.

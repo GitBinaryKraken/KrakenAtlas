@@ -1,5 +1,6 @@
 import {
   AtlasEntitySearchResult,
+  AtlasHealthResult,
   AtlasSummary,
   AssessmentQueryResult,
   ChangeSurfaceItem,
@@ -14,6 +15,38 @@ import {
   SymbolSearchResult,
   WorkspaceOrientation
 } from "./contracts";
+
+export function renderAtlasHealth(health: AtlasHealthResult, extensionVersion: string): string {
+  const lines = [
+    `Kraken Atlas ${extensionVersion}`,
+    `Health: ${health.atlasState}`,
+    `Generation: ${health.generation ?? "none"}`,
+    `Build required: ${health.buildRequired ? "yes" : "no"}`,
+    `Source state: ${health.sourceState}`,
+    `Git: ${health.git.status}`,
+    `Orientation coverage: ${health.coverage.status}`,
+    `Connection: ${health.connection.mode}${health.connection.pathBound ? " (path-bound)" : ""}`,
+    "",
+    "Analyzers"
+  ];
+  for (const analyzer of health.analyzers) {
+    const indexed = analyzer.indexedVersions.length > 0
+      ? analyzer.indexedVersions.join(", ")
+      : "missing";
+    lines.push(`- ${analyzer.analyzer}: expected ${analyzer.expectedVersion}, indexed ${indexed}, ${analyzer.current ? "current" : "rebuild required"}`);
+  }
+  if (health.reasons.length > 0) {
+    lines.push("", "Reasons");
+    for (const reason of health.reasons) {
+      lines.push(`- ${reason.code}: ${reason.message}`);
+    }
+  }
+  lines.push("", "Recommended actions");
+  for (const action of health.recommendedActions) {
+    lines.push(`- ${action}`);
+  }
+  return lines.join("\n");
+}
 
 export function renderAtlasSummary(summary: AtlasSummary, extensionVersion: string): string {
   if (summary.atlasState === "not_created") {
@@ -38,6 +71,10 @@ export function renderAtlasSummary(summary: AtlasSummary, extensionVersion: stri
     "",
     "Projects"
   ];
+
+  if (summary.atlasState === "requires_rebuild") {
+    lines.splice(2, 0, "Atlas: requires_rebuild", "Run Kraken Atlas: Show Health, then rebuild before relying on map queries.", "");
+  }
 
   for (const project of summary.projects) {
     const target = project.targetFrameworks ? ` | ${project.targetFrameworks}` : "";
@@ -453,6 +490,7 @@ export function renderWorkspaceOrientation(
     "",
     "Projects"
   ];
+
   for (const project of orientation.projects) {
     const facets = project.facets.map(facet => facet.facet).join(", ") || project.projectKind;
     lines.push(`- ${project.relativePath} | ${project.language} | ${facets}`);

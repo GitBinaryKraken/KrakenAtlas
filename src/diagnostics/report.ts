@@ -1,4 +1,4 @@
-import type { AtlasCounts, AtlasSummary } from "../atlas/contracts";
+import type { AtlasCounts, AtlasHealthResult, AtlasSummary } from "../atlas/contracts";
 import type { CartographerSessionInfo } from "../cartographer/client";
 import type { FoundationStatus } from "../foundation/status";
 import type { DotnetRuntimeInspection } from "../runtime/dotnetRuntime";
@@ -18,6 +18,7 @@ export interface DiagnosticReportInput {
   session?: CartographerSessionInfo;
   foundation?: FoundationStatus;
   summary?: AtlasSummary;
+  health?: AtlasHealthResult;
   cartographerError?: string;
 }
 
@@ -59,11 +60,13 @@ export interface DiagnosticReport {
     counts: AtlasCounts;
     analyzerRuns: Array<{
       analyzer: string;
+      analyzerVersion: string;
       capability: string;
       status: string;
       durationMs: number;
       diagnostic?: string;
     }>;
+    health?: AtlasHealthResult;
   };
   privacy: {
     containsLocalPaths: true;
@@ -121,7 +124,8 @@ export function createDiagnosticReport(input: DiagnosticReportInput): Diagnostic
       generation: input.summary?.generation,
       workspaceKey: input.summary?.workspaceKey,
       counts: input.summary ? { ...input.summary.counts } : { ...emptyCounts },
-      analyzerRuns: (input.summary?.analyzerRuns ?? []).map((run) => ({ ...run }))
+      analyzerRuns: (input.summary?.analyzerRuns ?? []).map((run) => ({ ...run })),
+      health: input.health
     },
     privacy: {
       containsLocalPaths: true,

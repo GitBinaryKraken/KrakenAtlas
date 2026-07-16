@@ -41,6 +41,21 @@ classification fixes for database evidence from Dapper/Npgsql/SqlClient packages
 and hosted workers registered inside an ASP.NET Core host. Automatic recognition
 of `KelpApiConnector` as an HTTP client/adapter remains framework-analyzer work.
 
+## Upgrade Health Baseline
+
+On 2026-07-16, Cartographer 0.9.5 opened a pre-upgrade schema-v4 Kelp Atlas. The
+stored generation contained 2 solutions, 11 projects, 664 files, 6,785 entities,
+17,172 relations, and 10 project dependencies. Health did not present those
+facts as current: it reported workspace-discovery `1.1.0` and Roslyn `0.9.0`
+against expected `0.9.5`, `sourceState: changed`, and `buildRequired: true`.
+
+The compatibility rebuild used incremental mode, reanalyzed all 8 C# projects,
+and completed in 34.25 seconds. The resulting generation retained the same graph
+counts and reported both analyzers at 0.9.5, current source inputs, and no build
+requirement. Because the Kelp test folder deliberately had no Git root, health
+also returned `no_repository` with explicit guidance to skip Git projection.
+See [the originating field-feedback record](ALPHA_FEEDBACK_HEALTH_AND_NON_GIT.md).
+
 ## C# Declaration Baseline
 
 On 2026-07-15, the first Roslyn declaration slice indexed the same workspace in

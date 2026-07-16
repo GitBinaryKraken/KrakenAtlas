@@ -175,6 +175,7 @@ public sealed record ProjectSummary(
 
 public sealed record AnalyzerRunSummary(
     string Analyzer,
+    string AnalyzerVersion,
     string Capability,
     string Status,
     long DurationMs,
@@ -278,6 +279,37 @@ public sealed record SymbolSearchResult(
         false,
         []);
 }
+
+public sealed record AtlasAnalyzerCompatibility(
+    string Analyzer,
+    string ExpectedVersion,
+    IReadOnlyList<string> IndexedVersions,
+    bool Current);
+
+public sealed record AtlasGitHealth(
+    string Status,
+    IReadOnlyList<string> RepositoryRoots,
+    string Guidance);
+
+public sealed record AtlasConnectionHealth(
+    string Mode,
+    bool PathBound,
+    string RefreshBehavior);
+
+public sealed record AtlasHealthReason(string Code, string Message);
+
+public sealed record AtlasHealthResult(
+    string AtlasState,
+    long? Generation,
+    bool BuildRequired,
+    string SourceState,
+    IReadOnlyList<string> WorkspaceRoots,
+    IReadOnlyList<AtlasAnalyzerCompatibility> Analyzers,
+    AtlasGitHealth Git,
+    AtlasConnectionHealth Connection,
+    WorkspaceOrientationCoverage Coverage,
+    IReadOnlyList<AtlasHealthReason> Reasons,
+    IReadOnlyList<string> RecommendedActions);
 
 public sealed record AtlasEntitySearchMatch(
     long Id,

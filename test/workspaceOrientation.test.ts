@@ -6,6 +6,7 @@ import * as path from "node:path";
 import test from "node:test";
 import {
   AtlasEntitySearchResult,
+  AtlasHealthResult,
   BuildAtlasResult,
   EntityDetail,
   WorkspaceOrientation
@@ -23,7 +24,8 @@ test("workspace orientation maps mixed project roles, commands, dimensions, and 
   );
   const temporaryRoot = fs.mkdtempSync(path.join(os.tmpdir(), "kraken-atlas-orientation-"));
   const atlasPath = path.join(temporaryRoot, "atlas.sqlite3");
-  const workspaceRoot = path.resolve(process.cwd(), "test-fixtures", "workspace-orientation");
+  const workspaceRoot = path.join(temporaryRoot, "workspace");
+  const fixtureRoot = path.resolve(process.cwd(), "test-fixtures", "workspace-orientation");
 
   const invoke = (command: string, ...extra: string[]) => JSON.parse(execFileSync("dotnet", [
     assembly,
@@ -36,9 +38,26 @@ test("workspace orientation maps mixed project roles, commands, dimensions, and 
   ], { encoding: "utf8" }));
 
   try {
+    fs.cpSync(fixtureRoot, workspaceRoot, { recursive: true });
+    const initialHealth = invoke("health") as AtlasHealthResult;
+    assert.equal(initialHealth.atlasState, "not_created");
+    assert.equal(initialHealth.buildRequired, true);
+    assert.equal(initialHealth.git.status, "no_repository");
+    assert.match(initialHealth.git.guidance, /Skip project_git_changes/);
+    assert.ok(initialHealth.coverage.pendingSources.includes("ci_workflows"));
+
     const build = invoke("build") as BuildAtlasResult;
     assert.equal(build.counts.projects, 5);
     assert.equal(build.counts.files, 17);
+
+    const health = invoke("health") as AtlasHealthResult;
+    assert.equal(health.atlasState, "current");
+    assert.equal(health.buildRequired, false);
+    assert.equal(health.sourceState, "current");
+    assert.equal(health.git.status, "no_repository");
+    assert.ok(health.analyzers.every(analyzer => analyzer.current));
+    assert.ok(health.recommendedActions.some(action =>
+      action.includes("install or workspace-health review")));
 
     const hostedService = invoke(
       "search",

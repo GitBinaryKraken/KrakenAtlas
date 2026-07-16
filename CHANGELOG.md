@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 0.9.5 - 2026-07-16
+
+- Add `get_atlas_health` across MCP, JSON-RPC, CLI, and VS Code with explicit
+  build requirements, source freshness, analyzer compatibility, Git
+  applicability, path-bound connection behavior, and coverage gaps.
+- Version workspace-discovery and Roslyn inputs with the extension release so an
+  upgrade cannot silently treat an older semantic generation as current.
+- Mark summary, orientation, and foundation status `requires_rebuild` when
+  indexed analyzer versions no longer match the installed Cartographer.
+- Teach agents to start with health, skip Git projection in non-repository
+  workspaces, and reserve `prepare_change` for concrete coding work.
+- Refresh existing Atlas-managed agent instructions and Codex/Claude connection
+  entries on trusted extension activation after upgrades or workspace moves.
+- Include health evidence in source-free diagnostic exports and add non-Git plus
+  stale-upgrade regressions.
+
 ## 0.9.4 - 2026-07-16
 
 - Make cross-domain search tokenize natural-language and multi-concept queries,

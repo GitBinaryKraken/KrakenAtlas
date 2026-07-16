@@ -56,16 +56,49 @@ test("diagnostic reports include operational metadata without project or source 
       }],
       analyzerRuns: [{
         analyzer: "workspace-discovery",
+        analyzerVersion: "0.9.5",
         capability: "workspace.structure",
         status: "complete",
         durationMs: 139
       }]
+    },
+    health: {
+      atlasState: "current",
+      generation: 3,
+      buildRequired: false,
+      sourceState: "current",
+      workspaceRoots: ["E:\\Projects\\SecretWorkspace"],
+      analyzers: [{
+        analyzer: "roslyn",
+        expectedVersion: "0.9.5",
+        indexedVersions: ["0.9.5"],
+        current: true
+      }],
+      git: {
+        status: "no_repository",
+        repositoryRoots: [],
+        guidance: "Skip project_git_changes until a workspace root is inside a Git repository."
+      },
+      connection: {
+        mode: "path_bound_stdio",
+        pathBound: true,
+        refreshBehavior: "Managed entries refresh on trusted extension activation."
+      },
+      coverage: {
+        status: "partial",
+        includedSources: ["MSBuild project files"],
+        pendingSources: ["CI workflows"]
+      },
+      reasons: [{ code: "coverage_partial", message: "Coverage is partial." }],
+      recommendedActions: ["Use prepare_change only for concrete coding changes."]
     }
   });
 
   const json = JSON.stringify(report);
   assert.equal(report.atlas.counts.projects, 8);
   assert.equal(report.atlas.analyzerRuns[0].durationMs, 139);
+  assert.equal(report.atlas.health?.git.status, "no_repository");
+  assert.equal(report.atlas.health?.buildRequired, false);
   assert.equal(report.privacy.containsSourceBodies, false);
   assert.equal(report.privacy.telemetrySentByKrakenAtlas, false);
   assert.match(json, /SecretWorkspace/);

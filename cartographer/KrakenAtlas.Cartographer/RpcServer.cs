@@ -80,6 +80,7 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
                         GetServiceVersion(),
                         [
                             "foundation.status",
+                            "atlas.health",
                             "atlas.build",
                             "atlas.summary",
                             "workspace.orientation",
@@ -116,6 +117,11 @@ internal sealed class RpcServer(Stream input, Stream output, TextWriter error)
 
             return request.Method switch
             {
+                "atlas/health" => (
+                    JsonRpcResponse.Success(
+                        request.Id,
+                        await session.GetAtlasHealthAsync(cancellationToken)),
+                    false),
                 "foundation/status" => (
                     JsonRpcResponse.Success(
                         request.Id,

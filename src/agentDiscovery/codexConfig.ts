@@ -59,7 +59,7 @@ export function updateCodexMcpConfiguration(
 
 function renderCodexMcpBlock(launch: McpLaunchDefinition): string {
   return `${managedCodexMcpStart}
-# Managed by Kraken Atlas. The extension refreshes this block after upgrades.
+# Managed by Kraken Atlas. This machine-local block is path-bound; the trusted extension refreshes it on activation after upgrades or workspace moves.
 [mcp_servers.kraken_atlas]
 command = ${toTomlString(launch.command)}
 args = [${launch.args.map(toTomlString).join(", ")}]

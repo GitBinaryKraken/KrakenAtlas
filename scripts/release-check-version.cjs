@@ -8,6 +8,7 @@ const readJson = (relative) => JSON.parse(fs.readFileSync(path.join(root, relati
 const manifest = readJson("package.json");
 const lock = readJson("package-lock.json");
 const project = fs.readFileSync(path.join(root, "cartographer", "KrakenAtlas.Cartographer", "KrakenAtlas.Cartographer.csproj"), "utf8");
+const analyzerVersions = fs.readFileSync(path.join(root, "cartographer", "KrakenAtlas.Core", "AtlasAnalyzerVersions.cs"), "utf8");
 const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
 const errors = [];
 
@@ -19,6 +20,9 @@ if (lock.version !== manifest.version || lock.packages?.[""]?.version !== manife
 }
 if (!project.includes(`<Version>${manifest.version}</Version>`)) {
   errors.push("Cartographer project version does not match package.json.");
+}
+if (!analyzerVersions.includes(`ReleaseVersion = "${manifest.version}"`)) {
+  errors.push("Analyzer release version does not match package.json.");
 }
 if (!readme.includes(`Version \`${manifest.version}\``)) {
   errors.push("README does not name the current version.");

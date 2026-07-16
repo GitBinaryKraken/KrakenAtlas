@@ -2,6 +2,7 @@ import * as os from "node:os";
 import * as vscode from "vscode";
 import {
   renderAtlasSummary,
+  renderAtlasHealth,
   renderAssessments,
   renderCodeUsages,
   renderChangeSurface,
@@ -24,6 +25,7 @@ import {
 import {
   AgentInstructionTarget,
   agentInstructionTargets,
+  hasManagedAgentInstructions,
   updateAgentInstructions
 } from "./agentDiscovery/instructions";
 import {
@@ -43,7 +45,7 @@ import { createDotnetRuntimeRequirementError, inspectDotnetRuntime } from "./run
 
 let activeClient: CartographerClient | undefined;
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel("Kraken Atlas");
   const workspaceRoots = vscode.workspace.workspaceFolders?.map(folder => folder.uri.fsPath) ?? [];
   const storageRoot = context.storageUri ?? vscode.Uri.joinPath(context.globalStorageUri, "no-workspace");
@@ -99,6 +101,14 @@ export function activate(context: vscode.ExtensionContext): void {
     output,
     vscode.commands.registerCommand("krakenAtlas.showStatus", async () => {
       await runCommand(() => showStatus(client, output, version));
+    }),
+    vscode.commands.registerCommand("krakenAtlas.showHealth", async () => {
+      await runCommand(async () => {
+        const health = await client.getAtlasHealth();
+        output.clear();
+        output.appendLine(renderAtlasHealth(health, version));
+        output.show(true);
+      });
     }),
     vscode.commands.registerCommand("krakenAtlas.buildAtlas", async () => {
       await runCommand(async () => {
@@ -468,7 +478,7 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   if (mcpLaunch) {
-    void refreshManagedAgentMcpConfigurations(mcpLaunch, output);
+    await refreshManagedAgentConfiguration(mcpLaunch, output);
   }
 }
 
@@ -490,14 +500,16 @@ async function exportDiagnostics(
   let session;
   let foundation;
   let summary;
+  let health;
   let cartographerError: string | undefined;
 
   if (runtime.available) {
     try {
       session = await client.getSessionInfo();
-      [foundation, summary] = await Promise.all([
+      [foundation, summary, health] = await Promise.all([
         client.getFoundationStatus(),
-        client.getAtlasSummary()
+        client.getAtlasSummary(),
+        client.getAtlasHealth()
       ]);
     } catch (error) {
       cartographerError = error instanceof Error ? error.message : String(error);
@@ -520,6 +532,7 @@ async function exportDiagnostics(
     session,
     foundation,
     summary,
+    health,
     cartographerError
   });
   const fileName = `kraken-atlas-diagnostics-${report.generatedUtc.replace(/[:.]/g, "-")}.json`;
@@ -732,7 +745,7 @@ async function setupAiAgent(mcpLaunch: McpLaunchDefinition): Promise<void> {
   }
 }
 
-async function refreshManagedAgentMcpConfigurations(
+async function refreshManagedAgentConfiguration(
   launch: McpLaunchDefinition,
   output: vscode.OutputChannel
 ): Promise<void> {
@@ -741,6 +754,15 @@ async function refreshManagedAgentMcpConfigurations(
   }
 
   for (const folder of vscode.workspace.workspaceFolders ?? []) {
+    for (const target of agentInstructionTargets) {
+      await refreshManagedConfiguration(
+        vscode.Uri.joinPath(folder.uri, ...target.relativePath.split("/")),
+        `${target.label} instructions`,
+        hasManagedAgentInstructions,
+        updateAgentInstructions,
+        output
+      );
+    }
     await refreshManagedMcpConfiguration(
       vscode.Uri.joinPath(folder.uri, ...codexConfigRelativePath.split("/")),
       "Codex",
@@ -765,6 +787,16 @@ async function refreshManagedMcpConfiguration(
   updateConfiguration: (content: string) => AgentSetupPlan["update"],
   output: vscode.OutputChannel
 ): Promise<void> {
+  await refreshManagedConfiguration(uri, `${clientName} MCP configuration`, isManaged, updateConfiguration, output);
+}
+
+async function refreshManagedConfiguration(
+  uri: vscode.Uri,
+  label: string,
+  isManaged: (content: string) => boolean,
+  updateConfiguration: (content: string) => AgentSetupPlan["update"],
+  output: vscode.OutputChannel
+): Promise<void> {
   const existing = await readOptionalWorkspaceText(uri);
   if (!existing || !isManaged(existing)) {
     return;
@@ -773,11 +805,11 @@ async function refreshManagedMcpConfiguration(
     const update = updateConfiguration(existing);
     if (update.change !== "unchanged") {
       await vscode.workspace.fs.writeFile(uri, Buffer.from(update.content, "utf8"));
-      output.appendLine(`Refreshed managed ${clientName} MCP configuration: ${uri.fsPath}`);
+      output.appendLine(`Refreshed managed ${label}: ${uri.fsPath}`);
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    output.appendLine(`Could not refresh managed ${clientName} MCP configuration at ${uri.fsPath}: ${message}`);
+    output.appendLine(`Could not refresh managed ${label} at ${uri.fsPath}: ${message}`);
   }
 }
 
