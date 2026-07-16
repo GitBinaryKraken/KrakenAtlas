@@ -109,6 +109,10 @@ resolution, bounded source slices, and packaged agent-workflow verification.
 Implemented in 0.9: unchanged-build short circuiting, compressed per-project
 Roslyn cache, changed-project plus transitive-dependent invalidation, working-tree
 and commit-range projection, and pre-rebuild assessment-risk reporting.
+Implemented in 0.9.4: project-aware multi-term tactical search, queryable ASP.NET
+startup calls and attributes, generated-output filtering, framework-prioritized
+surface traversal, and task-ranked representative Context Packs validated on the
+Kelp API host.
 Assessment-owned group materialization, richer conflict selection, and semantic
 change classification remain.
 

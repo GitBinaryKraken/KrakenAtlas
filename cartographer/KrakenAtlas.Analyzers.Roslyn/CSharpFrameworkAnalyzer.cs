@@ -30,6 +30,7 @@ internal static partial class CSharpFrameworkAnalyzer
         var endpoints = new List<HttpEndpointFact>();
         var requests = new List<HttpRequestFact>();
         var middleware = new List<MiddlewareFact>();
+        var hostSurface = new List<AspNetHostFact>();
 
         foreach (var entry in symbolHandles)
         {
@@ -77,6 +78,18 @@ internal static partial class CSharpFrameworkAnalyzer
                     {
                         continue;
                     }
+                    CollectAspNetHostCall(
+                        workspaceKey,
+                        analysis.Project,
+                        sourceFile,
+                        semanticModel,
+                        invocationSyntax,
+                        invocation,
+                        symbols,
+                        projectKeysByAssembly,
+                        hostSurface,
+                        AddRelation,
+                        cancellationToken);
                     CollectServiceRegistration(
                         workspaceKey,
                         analysis.Project,
@@ -151,6 +164,7 @@ internal static partial class CSharpFrameworkAnalyzer
         }
 
         ConnectMiddlewarePipeline(middleware, symbols, AddRelation);
+        ConnectAspNetHostSurface(hostSurface, symbols, AddRelation);
         await CollectEfCoreAsync(
             workspaceKey,
             projectAnalyses,
@@ -267,6 +281,14 @@ internal static partial class CSharpFrameworkAnalyzer
                             ? "authorized"
                             : "unspecified";
             var evidence = methodEntity.Locations.First();
+            var attributeDetails = method.GetAttributes()
+                .Concat(method.ContainingType.GetAttributes())
+                .Select(attribute => attribute.AttributeClass?.Name)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.Ordinal)
+                .Cast<string>()
+                .OrderBy(name => name, StringComparer.Ordinal)
+                .ToArray();
             var entityKey = CreateSyntheticKey(
                 "http_endpoint",
                 $"{workspaceKey}|{methodKey}|{verb}|{route}");
@@ -276,7 +298,7 @@ internal static partial class CSharpFrameworkAnalyzer
                 "http_endpoint",
                 $"{verb} {route}",
                 $"{verb} {route}",
-                $"{verb} {route} | {authorization}",
+                string.Join(" | ", new[] { $"{verb} {route}", authorization }.Concat(attributeDetails)),
                 "not_applicable",
                 methodKey,
                 [evidence],

@@ -4,7 +4,12 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import test from "node:test";
-import { BuildAtlasResult, EntityDetail, WorkspaceOrientation } from "../src/atlas/contracts";
+import {
+  AtlasEntitySearchResult,
+  BuildAtlasResult,
+  EntityDetail,
+  WorkspaceOrientation
+} from "../src/atlas/contracts";
 
 test("workspace orientation maps mixed project roles, commands, dimensions, and governing rules", () => {
   const assembly = path.resolve(
@@ -34,6 +39,20 @@ test("workspace orientation maps mixed project roles, commands, dimensions, and 
     const build = invoke("build") as BuildAtlasResult;
     assert.equal(build.counts.projects, 5);
     assert.equal(build.counts.files, 17);
+
+    const hostedService = invoke(
+      "search",
+      "--query",
+      "Web AddHostedService CacheRefreshWorker",
+      "--kind",
+      "service_registration",
+      "--limit",
+      "10"
+    ) as AtlasEntitySearchResult;
+    assert.ok(hostedService.matches.some(match =>
+      match.name === "AddHostedService<CacheRefreshWorker>"
+      && match.projectName === "Web"
+      && match.firstLocation?.relativePath === "apps/Web/Program.cs"));
 
     const orientation = invoke("orientation") as WorkspaceOrientation;
     assert.equal(orientation.atlasState, "current");

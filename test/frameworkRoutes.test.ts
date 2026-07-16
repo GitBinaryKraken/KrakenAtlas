@@ -54,6 +54,14 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       recursive: true,
       filter: source => !source.split(path.sep).some(part => part === "bin" || part === "obj")
     });
+    for (const outputDirectory of ["obj_temp", "bin_temp", "publish", ".next"]) {
+      const outputPath = path.join(workspaceRoot, "Api", outputDirectory);
+      fs.mkdirSync(outputPath, { recursive: true });
+      fs.writeFileSync(
+        path.join(outputPath, "ShouldNotBeIndexed.cs"),
+        "internal sealed class ShouldNotBeIndexed {}\n"
+      );
+    }
     execFileSync("dotnet", ["restore", path.join(workspaceRoot, "FeatureFlow.slnx")], {
       encoding: "utf8"
     });
@@ -79,6 +87,16 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       "FeatureFlow.Connector.IPersonaConnector.GetPublicPersonaAsync(string, System.Threading.CancellationToken)"
     );
     const endpoint = findEntity("GET /Persona", "http_endpoint", "GET /Persona");
+    const controllerServices = findEntity(
+      "AddControllers",
+      "framework_registration",
+      "Api startup AddControllers"
+    );
+    const controllerMapping = findEntity(
+      "MapControllers",
+      "endpoint_mapping",
+      "Api startup MapControllers"
+    );
     const request = findEntity("GET /Persona?url", "http_request", "GET /Persona?url={sid}");
     const databaseObject = findEntity("public.personas", "database_object", "public.personas");
     const registration = findEntity(
@@ -136,7 +154,10 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       "http_endpoint",
       "GET /v2/diagnostics/health"
     );
-    assert.equal(endpoint.signature, "GET /Persona | anonymous");
+    assert.match(endpoint.signature ?? "", /^GET \/Persona \| anonymous/);
+    assert.match(endpoint.signature ?? "", /ApiControllerAttribute/);
+    assert.match(endpoint.signature ?? "", /HttpGetAttribute/);
+    assert.match(endpoint.signature ?? "", /RouteAttribute/);
     assert.match(registration.signature ?? "", /^scoped /);
     assert.equal(databaseObject.firstLocation?.relativePath, "DataAccess/PersonaData.cs");
     assert.match(testCase.signature ?? "", /^xunit test /);
@@ -160,6 +181,22 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       unifiedTableSearch.matches.filter(match => match.qualifiedName === "app.persona_records").length,
       1
     );
+    const tacticalSearch = invoke<AtlasEntitySearchResult>(
+      "search",
+      "--query",
+      "Api MapControllers AddControllers HttpGet Program.cs",
+      "--limit",
+      "50"
+    );
+    assert.ok(tacticalSearch.matches.some(match => match.stableKey === controllerServices.stableKey));
+    assert.ok(tacticalSearch.matches.some(match => match.stableKey === controllerMapping.stableKey));
+    assert.ok(tacticalSearch.matches.some(match => match.stableKey === endpoint.stableKey));
+    assert.ok(tacticalSearch.matches.some(match =>
+      match.kind === "file" && match.qualifiedName === "Api/Program.cs"));
+    const excludedOutputSearch = invoke<AtlasEntitySearchResult>(
+      "search", "--query", "ShouldNotBeIndexed", "--limit", "20"
+    );
+    assert.deepEqual(excludedOutputSearch.matches, []);
 
     const endpointRelations = invoke<RelationQueryResult>(
       "relations",
@@ -174,6 +211,20 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
       relation.kind === "handled_by" && relation.target.qualifiedName.startsWith("FeatureFlow.Api.PersonaController.Get")));
     assert.ok(endpointRelations.relations.some(relation =>
       relation.kind === "matches_endpoint" && relation.source.stableKey === request.stableKey));
+    const mappingRelations = invoke<RelationQueryResult>(
+      "relations",
+      "--stable-key",
+      controllerMapping.stableKey,
+      "--direction",
+      "both",
+      "--limit",
+      "50"
+    );
+    assert.ok(mappingRelations.relations.some(relation =>
+      relation.kind === "activates_endpoint" && relation.target.stableKey === endpoint.stableKey));
+    assert.ok(mappingRelations.relations.some(relation =>
+      relation.kind === "enables_endpoint_mapping"
+      && relation.source.stableKey === controllerServices.stableKey));
 
     const route = invoke<RouteQueryResult>(
       "route",
@@ -520,6 +571,62 @@ test("maps controller, Minimal API, middleware, Dapper, and EF Core feature rout
     assert.ok(taskContext.contextPack.items.some(item =>
       item.source?.relativePath === "Logic/PersonaService.cs"
       && item.source.endLine - item.source.startLine + 1 <= 12));
+
+    const controllerNamespace = findEntity(
+      "FeatureFlow.Api",
+      "namespace",
+      "FeatureFlow.Api"
+    );
+    const apiContext = invoke<TaskContextResult>(
+      "prepare-task",
+      "--task",
+      "Find where Api registers controllers and exposes HTTP endpoints",
+      "--stable-key",
+      controllerNamespace.stableKey,
+      "--token-budget",
+      "5000",
+      "--max-depth",
+      "4",
+      "--include-source",
+      "--source-line-limit",
+      "12"
+    );
+    assert.equal(apiContext.resolution, "exact");
+    assert.ok(apiContext.contextPack?.items.some(item =>
+      item.entity.qualifiedName === "FeatureFlow.Api.PersonaController"));
+    assert.ok(apiContext.contextPack?.items.some(item => item.entity.stableKey === endpoint.stableKey));
+    assert.ok(apiContext.contextPack?.items.some(item => item.entity.stableKey === controllerMapping.stableKey));
+
+    const autoApiContext = invoke<TaskContextResult>(
+      "prepare-task",
+      "--task",
+      "Find where Api registers services and exposes HTTP endpoints so I can understand the change surface",
+      "--query",
+      "Api service registration HTTP endpoints controllers Program.cs",
+      "--token-budget",
+      "5000",
+      "--max-depth",
+      "4",
+      "--include-source",
+      "--source-line-limit",
+      "12"
+    );
+    assert.equal(
+      autoApiContext.resolution,
+      "auto",
+      JSON.stringify(autoApiContext.candidates, null, 2)
+    );
+    assert.ok(autoApiContext.contextPack?.items.some(item =>
+      item.entity.stableKey === controllerServices.stableKey));
+    assert.ok(autoApiContext.contextPack?.items.some(item =>
+      item.entity.stableKey === controllerMapping.stableKey));
+    assert.ok(autoApiContext.contextPack?.items.some(item =>
+      item.entity.stableKey === endpoint.stableKey));
+    assert.ok(autoApiContext.contextPack?.items.some(item =>
+      item.source?.relativePath === "Api/Program.cs"));
+    assert.ok(autoApiContext.contextPack?.items.some(item =>
+      item.entity.stableKey === endpoint.stableKey
+      && item.source?.relativePath === "Api/PersonaController.cs"));
 
     fs.appendFileSync(path.join(workspaceRoot, "Logic", "PersonaService.cs"), "\n// Staleness fixture change.\n");
     const gitChanges = invoke<GitChangeProjectionResult>(

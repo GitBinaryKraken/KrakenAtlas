@@ -23,6 +23,7 @@ public sealed partial class AtlasRepository
         int tokenBudget = 4000,
         int maxDepth = 3,
         bool includeProposed = false,
+        IReadOnlyList<string>? focusTerms = null,
         CancellationToken cancellationToken = default)
     {
         ValidateIdentity(stableKey, id, "Prepare-change seed");
@@ -57,6 +58,7 @@ public sealed partial class AtlasRepository
         {
             return PreparedChangeResult.EntityNotFound(surface.Generation ?? 0, task, tokenBudget);
         }
+        var normalizedFocusTerms = NormalizeFocusTerms(focusTerms, surface.SeedProject?.Name);
 
         var seedDetail = await GetEntityAsync(
             workspaceKey, surface.Seed.StableKey, null, cancellationToken);
@@ -73,15 +75,20 @@ public sealed partial class AtlasRepository
             seedDetail?.Locations.FirstOrDefault()));
         foreach (var item in surface.Direct)
         {
-            AddSurfaceCandidate(candidates, item, "direct", 90);
+            AddSurfaceCandidate(candidates, item, "direct", 90, normalizedFocusTerms);
         }
         foreach (var item in surface.RelatedTests)
         {
-            AddSurfaceCandidate(candidates, item, "related_test", 95);
+            AddSurfaceCandidate(candidates, item, "related_test", 95, normalizedFocusTerms);
         }
         foreach (var item in surface.Transitive)
         {
-            AddSurfaceCandidate(candidates, item, "transitive", Math.Max(40, 75 - item.Depth * 5));
+            AddSurfaceCandidate(
+                candidates,
+                item,
+                "transitive",
+                Math.Max(40, 75 - item.Depth * 5),
+                normalizedFocusTerms);
         }
         var rankedCandidates = candidates.Values
             .OrderByDescending(item => item.Score)
@@ -105,18 +112,21 @@ public sealed partial class AtlasRepository
 
         var projects = surface.AffectedProjects.ToList();
         var commands = surface.VerificationCommands.ToList();
-        var selectedItems = SelectWithinBudget(
-            rankedCandidates,
-            Math.Max(300, tokenBudget * 55 / 100),
-            item => EstimateTokens(item));
-        if (selectedItems.All(item => item.Relevance != "seed"))
-        {
-            selectedItems.Insert(0, rankedCandidates.Single(item => item.Relevance == "seed"));
-        }
+        var assessmentBudget = Math.Max(150, tokenBudget * 20 / 100);
         var selectedAssessments = SelectWithinBudget(
             rankedAssessments,
-            Math.Max(150, tokenBudget * 25 / 100),
+            assessmentBudget,
             assessment => EstimateTokens(assessment));
+        var usedAssessmentBudget = selectedAssessments.Sum(assessment => EstimateTokens(assessment));
+        var itemBudget = Math.Max(
+            300,
+            tokenBudget * 70 / 100 + Math.Max(0, assessmentBudget - usedAssessmentBudget));
+        var selectedItems = SelectItemsWithinBudget(
+            rankedCandidates,
+            itemBudget,
+            item => EstimateTokens(item));
+        selectedItems.RemoveAll(item => item.Relevance == "seed");
+        selectedItems.Insert(0, rankedCandidates.Single(item => item.Relevance == "seed"));
 
         var omittedItems = rankedCandidates.Length - selectedItems.Count;
         var omittedAssessments = rankedAssessments.Length - selectedAssessments.Count;
@@ -176,16 +186,67 @@ public sealed partial class AtlasRepository
         IDictionary<string, PreparedChangeItem> candidates,
         ChangeSurfaceItem item,
         string relevance,
-        int score) => AddCandidate(candidates, new PreparedChangeItem(
+        int score,
+        IReadOnlyList<string> focusTerms) => AddCandidate(candidates, new PreparedChangeItem(
             item.Entity,
             relevance,
-            score,
+            score + ScoreFocusMatch(item, focusTerms),
             item.Depth,
             item.PathDirection,
             item.ViaRelation.Domain,
             item.ViaRelation.Kind,
             item.Project,
             item.ViaRelation.Evidence));
+
+    private static string[] NormalizeFocusTerms(
+        IReadOnlyList<string>? focusTerms,
+        string? seedProjectName) => (focusTerms ?? [])
+            .Select(term => term.Trim())
+            .Where(term => term.Length >= 3
+                && !term.Equals(seedProjectName, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToArray();
+
+    private static int ScoreFocusMatch(
+        ChangeSurfaceItem item,
+        IReadOnlyList<string> focusTerms)
+    {
+        var score = 0;
+        foreach (var rawTerm in focusTerms)
+        {
+            var term = rawTerm.EndsWith('s') && rawTerm.Length > 4
+                ? rawTerm[..^1]
+                : rawTerm;
+            if (item.Entity.Name.Equals(rawTerm, StringComparison.OrdinalIgnoreCase)
+                || item.Entity.Name.Equals(term, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 40;
+            }
+            else if (Contains(item.Entity.Name, term))
+            {
+                score += 28;
+            }
+            else if (Contains(item.Entity.Kind.Replace('_', ' '), term)
+                || Contains(item.ViaRelation.Kind.Replace('_', ' '), term))
+            {
+                score += 22;
+            }
+            else if (Contains(item.Entity.QualifiedName, term))
+            {
+                score += 20;
+            }
+            else if (Contains(item.Entity.Signature, term)
+                || Contains(item.ViaRelation.Evidence.RelativePath, term))
+            {
+                score += 18;
+            }
+        }
+        return Math.Min(score, 120);
+
+        static bool Contains(string? value, string term) =>
+            value?.Contains(term, StringComparison.OrdinalIgnoreCase) == true;
+    }
 
     private static void AddCandidate(
         IDictionary<string, PreparedChangeItem> candidates,
@@ -213,6 +274,39 @@ public sealed partial class AtlasRepository
                 continue;
             }
             selected.Add(candidate);
+            used += cost;
+        }
+        return selected;
+    }
+
+    private static List<PreparedChangeItem> SelectItemsWithinBudget(
+        IEnumerable<PreparedChangeItem> candidates,
+        int budget,
+        Func<PreparedChangeItem, int> estimate)
+    {
+        var selected = new List<PreparedChangeItem>();
+        var countsByKind = new Dictionary<string, int>(StringComparer.Ordinal);
+        var used = 0;
+        foreach (var candidate in candidates)
+        {
+            var kindLimit = candidate.Entity.Kind switch
+            {
+                "http_endpoint" => 6,
+                "class" => 6,
+                "constructor" => 4,
+                _ => int.MaxValue
+            };
+            if (countsByKind.GetValueOrDefault(candidate.Entity.Kind) >= kindLimit)
+            {
+                continue;
+            }
+            var cost = estimate(candidate);
+            if (selected.Count > 0 && used + cost > budget)
+            {
+                continue;
+            }
+            selected.Add(candidate);
+            countsByKind[candidate.Entity.Kind] = countsByKind.GetValueOrDefault(candidate.Entity.Kind) + 1;
             used += cost;
         }
         return selected;

@@ -267,8 +267,16 @@ internal sealed partial class CartographerSession
             workspaceKey, batch, forceDryRun, cancellationToken);
     }
 
-    public async Task<PreparedChangeResult> PrepareChangeAsync(
+    public Task<PreparedChangeResult> PrepareChangeAsync(
         PrepareChangeParams parameters,
+        CancellationToken cancellationToken) => PrepareChangeCoreAsync(
+            parameters,
+            ExtractTaskTerms(null, parameters.Task),
+            cancellationToken);
+
+    private async Task<PreparedChangeResult> PrepareChangeCoreAsync(
+        PrepareChangeParams parameters,
+        IReadOnlyList<string> focusTerms,
         CancellationToken cancellationToken)
     {
         var activeRepository = RequireRepository();
@@ -290,6 +298,7 @@ internal sealed partial class CartographerSession
             coreBudget,
             parameters.MaxDepth ?? 3,
             parameters.IncludeProposed ?? false,
+            focusTerms,
             cancellationToken);
         result = result with { TokenBudget = tokenBudget };
         return includeSource && result.AtlasState == "current"

@@ -1,6 +1,6 @@
 # Kraken Atlas
 
-Version `0.9.3`
+Version `0.9.4`
 
 Kraken Atlas is being rebuilt from scratch as a local semantic code map for AI
 coding agents. The published extension identity remains
@@ -17,7 +17,7 @@ The new product focuses on:
 
 ## Current Status
 
-The `0.9.3` Agent Connection Alpha builds on the Agent Discovery Alpha. It
+The `0.9.4` Tactical Retrieval Alpha builds on the Agent Connection Alpha. It
 contains:
 
 - A thin VS Code workspace extension, matching command-line surface, and a
@@ -47,7 +47,8 @@ contains:
   override relations with dispatch classification and source evidence.
 - Atlas summary, exact entity, bounded C# symbol search, and code-only usage
   queries through VS Code, JSON-RPC, and CLI.
-- Cross-domain entity search for symbols, service registrations, HTTP endpoints,
+- Multi-term, project-aware cross-domain entity search for symbols, startup
+  framework calls, service registrations, HTTP endpoints and attributes,
   outbound requests, database operations, and database objects.
 - Attribute-routed ASP.NET Core controller endpoints with HTTP method, effective
   route template, authorization classification, handler, and source evidence.
@@ -56,6 +57,9 @@ contains:
   response contracts, authorization policies, and source evidence.
 - Ordered ASP.NET Core middleware entities for common `Use*` calls and
   source-defined `UseMiddleware<T>` components.
+- Queryable ASP.NET Core startup entities for common `builder.Services.Add*`,
+  `app.Map*`, and `AddHostedService<T>` calls, connected to controller namespaces,
+  endpoint methods, and hosted worker implementations.
 - Common .NET dependency-injection registrations with lifetime, service,
   implementation, and exact interface-member dispatch edges.
 - Statically recoverable `HttpClient` requests matched to compatible controller
@@ -76,9 +80,13 @@ contains:
 - Canonical xUnit, NUnit, and MSTest `test_case` entities derived from test
   attributes, with exact source and owning-project evidence.
 - Task-first, token-budgeted Context Packs that resolve likely seed entities,
-  report ambiguity instead of guessing, rank direct and transitive change
-  candidates, include related tests and verification commands, reuse accepted
-  assessments, and optionally return bounded code excerpts.
+  use explicit project qualifiers and task concepts, report unresolved
+  ambiguity instead of guessing, rank a representative direct and transitive
+  change surface, include related tests and verification commands, reuse
+  accepted assessments, and optionally return bounded code excerpts.
+- Workspace discovery filters ordinary generated, package-cache, publish, test-
+  result, and build-output directories, including suffixed `bin_*` and `obj_*`
+  folders used by local development workflows.
 - Ten MCP tools for Atlas build, summary, orientation, entity search, relation
   queries, Route tracing, Git change projection, task Context Packs, assessment
   reads, and durable node decoration. Read-only tools are explicitly annotated.

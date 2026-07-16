@@ -1,4 +1,5 @@
 using KrakenAtlas.Core;
+using System.Text.RegularExpressions;
 
 namespace KrakenAtlas.Storage.Sqlite;
 
@@ -36,6 +37,14 @@ public sealed partial class AtlasRepository
         var filter = kindFilter.Length == 0
             ? string.Empty
             : $" AND e.kind IN ({string.Join(", ", kindFilter.Select((_, index) => $"$kind{index}"))})";
+        var terms = ExtractEntitySearchTerms(query);
+        var matchPredicate = string.Join(
+            " OR ",
+            terms.Select((_, index) => BuildEntitySearchMatch($"$term{index}")));
+        var scoreExpression = string.Join(
+            " + ",
+            terms.Select((_, index) => BuildEntitySearchScore(
+                $"$term{index}", index == 0 && terms.Length > 1 ? 2 : 1)));
         await using var command = connection.CreateCommand();
         command.CommandText =
             $$"""
@@ -43,7 +52,8 @@ public sealed partial class AtlasRepository
                    p.name, p.relative_path,
                    f.stable_key, f.relative_path, location.location_kind,
                    location.start_line, location.start_column, location.end_line, location.end_column,
-                   f.is_generated
+                   f.is_generated,
+                   ({{scoreExpression}}) AS search_score
             FROM entities e
             JOIN workspaces w ON w.id = e.workspace_id
             LEFT JOIN entity_locations location ON location.id = (
@@ -58,24 +68,21 @@ public sealed partial class AtlasRepository
             LEFT JOIN projects p ON p.id = f.project_id
             WHERE w.stable_key = $workspaceKey
               AND e.generation_id = $generation
-              AND (instr(lower(e.name), lower($query)) > 0
-                   OR instr(lower(e.qualified_name), lower($query)) > 0
-                   OR instr(lower(COALESCE(e.signature, '')), lower($query)) > 0)
+              AND ({{matchPredicate}})
               {{filter}}
             ORDER BY
-                CASE
-                    WHEN lower(e.name) = lower($query) THEN 0
-                    WHEN lower(e.qualified_name) = lower($query) THEN 1
-                    WHEN instr(lower(e.name), lower($query)) = 1 THEN 2
-                    ELSE 3
-                END,
+                search_score DESC,
+                COALESCE(f.is_generated, 0),
                 length(e.qualified_name), e.qualified_name, e.kind
             LIMIT $resultLimit;
             """;
         command.Parameters.AddWithValue("$workspaceKey", workspaceKey);
         command.Parameters.AddWithValue("$generation", generation.Value);
-        command.Parameters.AddWithValue("$query", query);
         command.Parameters.AddWithValue("$resultLimit", limit + 1);
+        for (var index = 0; index < terms.Length; index++)
+        {
+            command.Parameters.AddWithValue($"$term{index}", terms[index]);
+        }
         for (var index = 0; index < kindFilter.Length; index++)
         {
             command.Parameters.AddWithValue($"$kind{index}", kindFilter[index]);
@@ -114,4 +121,45 @@ public sealed partial class AtlasRepository
         return new AtlasEntitySearchResult(
             "current", generation, query, truncated, matches.Take(limit).ToArray());
     }
+
+    private static string[] ExtractEntitySearchTerms(string query)
+    {
+        var terms = new List<string> { query };
+        if (query.Any(char.IsWhiteSpace))
+        {
+            terms.AddRange(Regex.Matches(query, "[A-Za-z_][A-Za-z0-9_.:/-]*")
+                .Select(match => match.Value)
+                .Where(value => value.Length >= 2));
+        }
+        return terms
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(12)
+            .ToArray();
+    }
+
+    private static string BuildEntitySearchMatch(string parameter) =>
+        $"instr(lower(e.name), lower({parameter})) > 0"
+        + $" OR instr(lower(e.qualified_name), lower({parameter})) > 0"
+        + $" OR instr(lower(COALESCE(e.signature, '')), lower({parameter})) > 0"
+        + $" OR instr(lower(replace(e.kind, '_', ' ')), lower({parameter})) > 0"
+        + $" OR instr(lower(replace(e.kind, '_', ' ') || 's'), lower({parameter})) > 0"
+        + $" OR instr(lower(COALESCE(e.language, '')), lower({parameter})) > 0"
+        + $" OR instr(lower(COALESCE(p.name, '')), lower({parameter})) > 0"
+        + $" OR instr(lower(COALESCE(p.relative_path, '')), lower({parameter})) > 0"
+        + $" OR instr(lower(COALESCE(f.relative_path, '')), lower({parameter})) > 0";
+
+    private static string BuildEntitySearchScore(string parameter, int multiplier) =>
+        $"({multiplier} * ("
+        + $"CASE WHEN lower(e.name) = lower({parameter}) THEN 120 "
+        + $"WHEN lower(e.qualified_name) = lower({parameter}) THEN 110 "
+        + $"WHEN instr(lower(e.name), lower({parameter})) = 1 THEN 80 "
+        + $"WHEN instr(lower(e.name), lower({parameter})) > 0 THEN 65 "
+        + $"WHEN instr(lower(e.qualified_name), lower({parameter})) > 0 THEN 55 "
+        + $"WHEN instr(lower(COALESCE(e.signature, '')), lower({parameter})) > 0 THEN 45 "
+        + $"WHEN instr(lower(replace(e.kind, '_', ' ') || 's'), lower({parameter})) > 0 THEN 35 "
+        + $"WHEN instr(lower(COALESCE(e.language, '')), lower({parameter})) > 0 THEN 20 ELSE 0 END "
+        + $"+ CASE WHEN lower(COALESCE(p.name, '')) = lower({parameter}) THEN 70 "
+        + $"WHEN instr(lower(COALESCE(p.relative_path, '')), lower({parameter})) > 0 THEN 45 ELSE 0 END "
+        + $"+ CASE WHEN lower(COALESCE(f.relative_path, '')) = lower({parameter}) THEN 50 "
+        + $"WHEN instr(lower(COALESCE(f.relative_path, '')), lower({parameter})) > 0 THEN 30 ELSE 0 END))";
 }

@@ -1,6 +1,6 @@
 # Getting Started
 
-Kraken Atlas `0.9.3` is the Agent Connection Alpha of the complete rewrite. It
+Kraken Atlas `0.9.4` is the Agent Connection Alpha of the complete rewrite. It
 discovers .NET solutions, C# and
 package.json projects, project references, relevant files, project roles, build
 dimensions, commands, and governing rules, then stores and queries that

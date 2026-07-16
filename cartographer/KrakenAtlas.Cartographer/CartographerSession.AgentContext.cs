@@ -59,8 +59,9 @@ internal sealed partial class CartographerSession
 
         if (!string.IsNullOrWhiteSpace(parameters.StableKey) || parameters.Id is not null)
         {
-            var exactPack = await PrepareChangeAsync(
+            var exactPack = await PrepareChangeCoreAsync(
                 ToPrepareChangeParams(parameters, parameters.StableKey, parameters.Id),
+                ExtractTaskTerms(parameters.Query, task),
                 cancellationToken);
             return new TaskContextResult(
                 exactPack.AtlasState,
@@ -83,17 +84,32 @@ internal sealed partial class CartographerSession
 
         var top = ranked[0];
         var second = ranked.Count > 1 ? ranked[1] : null;
+        var projectQualifiedTie = second is not null
+            && top.ExactNameMatch
+            && top.Score >= 200
+            && top.Entity.ProjectName is { } projectName
+            && projectName.Equals(second.Entity.ProjectName, StringComparison.OrdinalIgnoreCase)
+            && top.MatchedTerms.Contains(projectName, StringComparer.OrdinalIgnoreCase);
+        var projectQualifiedLead = second is not null
+            && top.Score >= 250
+            && top.Score - second.Score >= 30
+            && top.Entity.ProjectName is { } leadingProjectName
+            && leadingProjectName.Equals(second.Entity.ProjectName, StringComparison.OrdinalIgnoreCase)
+            && top.MatchedTerms.Contains(leadingProjectName, StringComparer.OrdinalIgnoreCase);
         var canSelect = second is null
             || top.ExactNameMatch && top.Score - second.Score >= 30
-            || top.Score >= 100 && top.Score - second.Score >= 70;
+            || top.Score >= 100 && top.Score - second.Score >= 70
+            || projectQualifiedTie
+            || projectQualifiedLead;
         if (!canSelect)
         {
             return new TaskContextResult(
                 "current", generation, task, "needs_seed", terms, ranked, null);
         }
 
-        var pack = await PrepareChangeAsync(
+        var pack = await PrepareChangeCoreAsync(
             ToPrepareChangeParams(parameters, top.Entity.StableKey, null),
+            terms,
             cancellationToken);
         return new TaskContextResult(
             pack.AtlasState,
@@ -135,6 +151,16 @@ internal sealed partial class CartographerSession
                 candidate.Score += score;
                 candidate.ExactNameMatch |= exactName;
                 candidate.MatchedTerms.Add(term);
+            }
+        }
+
+        foreach (var candidate in candidates.Values)
+        {
+            foreach (var projectTerm in terms.Where(term =>
+                candidate.Entity.ProjectName?.Equals(term, StringComparison.OrdinalIgnoreCase) == true))
+            {
+                candidate.Score += 90;
+                candidate.MatchedTerms.Add(projectTerm);
             }
         }
 
@@ -262,14 +288,19 @@ internal sealed partial class CartographerSession
     private static IReadOnlyList<string> ExtractTaskTerms(string? query, string task)
     {
         var terms = new List<string>();
-        if (!string.IsNullOrWhiteSpace(query))
+        var source = string.IsNullOrWhiteSpace(query) ? task : query;
+        var matches = Regex.Matches(source, "[A-Za-z_][A-Za-z0-9_.]*")
+            .Select(match => match.Value)
+            .Where(value => value.Length >= 3 && !TaskStopWords.Contains(value))
+            .OrderByDescending(value => value.Length)
+            .ToArray();
+        if (!string.IsNullOrWhiteSpace(query)
+            && (matches.Length <= 2
+                || query.Contains('(') && query.Contains(')')))
         {
             terms.Add(query.Trim());
         }
-        terms.AddRange(Regex.Matches(string.IsNullOrWhiteSpace(query) ? task : query, "[A-Za-z_][A-Za-z0-9_.]*")
-            .Select(match => match.Value)
-            .Where(value => value.Length >= 3 && !TaskStopWords.Contains(value))
-            .OrderByDescending(value => value.Length));
+        terms.AddRange(matches);
         return terms
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(8)

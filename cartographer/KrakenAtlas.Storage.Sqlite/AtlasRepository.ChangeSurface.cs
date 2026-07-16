@@ -60,7 +60,23 @@ public sealed partial class AtlasRepository
         AddFilterParameters(relationCommand, "kind", kindFilter);
         var loaded = await ReadRelationsAsync(relationCommand, cancellationToken);
         var graphTruncated = loaded.Count > edgeLimit;
-        var adjacency = BuildChangeSurfaceAdjacency(loaded.Take(edgeLimit));
+        var boundedRelations = loaded.Take(edgeLimit).ToList();
+        if (useDefaultExpansionProfile)
+        {
+            var containmentLimit = Math.Max(100, maxEntities * 4);
+            var containment = await ReadContainmentSurfaceRelationsAsync(
+                connection,
+                workspaceKey,
+                generation.Value,
+                seed.Id,
+                maxDepth,
+                containmentLimit,
+                cancellationToken);
+            graphTruncated |= containment.Count > containmentLimit;
+            boundedRelations.AddRange(containment.Take(containmentLimit));
+        }
+        var adjacency = BuildChangeSurfaceAdjacency(
+            boundedRelations.DistinctBy(relation => relation.RelationId));
 
         var queue = new Queue<(long EntityId, int Depth)>();
         var visited = new HashSet<long> { seed.Id };
@@ -174,7 +190,8 @@ public sealed partial class AtlasRepository
         return adjacency.ToDictionary(
             pair => pair.Key,
             pair => pair.Value
-                .OrderBy(item => item.Relation.RelationId)
+                .OrderByDescending(GetTraversalPriority)
+                .ThenBy(item => item.Relation.RelationId)
                 .ToArray());
 
         void Add(long entityId, ChangeSurfaceNeighbor neighbor)
@@ -186,6 +203,54 @@ public sealed partial class AtlasRepository
             }
             values.Add(neighbor);
         }
+    }
+
+    private static int GetTraversalPriority(ChangeSurfaceNeighbor neighbor) =>
+        neighbor.Relation.Kind switch
+        {
+            "enables_endpoint_mapping" => 120,
+            "activates_controller_namespace" or "configures_services" or "maps_endpoints" => 110,
+            "activates_endpoint" => 100,
+            _ when neighbor.Relation.Domain == "framework" => 90,
+            _ when neighbor.Entity.Kind is "test_case" or "service_registration" => 80,
+            "contains" => 20,
+            _ => 50
+        };
+
+    private static async Task<List<AtlasRelationMatch>> ReadContainmentSurfaceRelationsAsync(
+        SqliteConnection connection,
+        string workspaceKey,
+        long generation,
+        long seedId,
+        int maxDepth,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText =
+            """
+            WITH RECURSIVE descendants(entity_id, depth) AS (
+                SELECT $seedId, 0
+                UNION ALL
+                SELECT relation.target_entity_id, descendants.depth + 1
+                FROM descendants
+                JOIN relations relation ON relation.source_entity_id = descendants.entity_id
+                WHERE relation.generation_id = $generation
+                  AND relation.relation_kind = 'contains'
+                  AND descendants.depth < $maxDepth
+            )
+            """
+            + BuildRelationSelect(
+                "r.relation_kind = 'contains' "
+                + "AND r.source_entity_id IN (SELECT entity_id FROM descendants WHERE depth < $maxDepth)",
+                "ORDER BY r.id",
+                "$containmentLimit");
+        command.Parameters.AddWithValue("$workspaceKey", workspaceKey);
+        command.Parameters.AddWithValue("$generation", generation);
+        command.Parameters.AddWithValue("$seedId", seedId);
+        command.Parameters.AddWithValue("$maxDepth", maxDepth);
+        command.Parameters.AddWithValue("$containmentLimit", limit + 1);
+        return await ReadRelationsAsync(command, cancellationToken);
     }
 
     private static bool IsHighFanoutCodeRelation(AtlasRelationMatch relation) =>

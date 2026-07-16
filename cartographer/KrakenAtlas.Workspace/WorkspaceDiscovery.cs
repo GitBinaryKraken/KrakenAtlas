@@ -12,7 +12,8 @@ public sealed class WorkspaceDiscovery
     private static readonly HashSet<string> ExcludedDirectories = new(StringComparer.OrdinalIgnoreCase)
     {
         ".git", ".hg", ".svn", ".vs", ".idea", ".kraken-atlas", "bin", "obj",
-        "node_modules", "packages", "vendor", "coverage", "dist", "dist-test"
+        "node_modules", "packages", "vendor", "coverage", "dist", "dist-test", ".next",
+        ".turbo", "artifacts", "publish", "TestResults"
     };
 
     public async Task<WorkspaceSnapshot> DiscoverAsync(
@@ -310,7 +311,7 @@ public sealed class WorkspaceDiscovery
             {
                 if (child is DirectoryInfo childDirectory)
                 {
-                    if (!ExcludedDirectories.Contains(childDirectory.Name)
+                    if (!IsExcludedDirectory(childDirectory.Name)
                         && !childDirectory.Attributes.HasFlag(FileAttributes.ReparsePoint))
                     {
                         pending.Push(childDirectory);
@@ -335,6 +336,11 @@ public sealed class WorkspaceDiscovery
             }
         }
     }
+
+    private static bool IsExcludedDirectory(string name) =>
+        ExcludedDirectories.Contains(name)
+        || name.StartsWith("bin_", StringComparison.OrdinalIgnoreCase)
+        || name.StartsWith("obj_", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsAtlasFile(FileCandidate candidate)
     {

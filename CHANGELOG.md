@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 0.9.4 - 2026-07-16
+
+- Make cross-domain search tokenize natural-language and multi-concept queries,
+  rank exact project/path matches, and expose ASP.NET Core invocation and
+  attribute terms such as `AddControllers`, `MapControllers`, `HttpGet`,
+  `Route`, and `ApiController`.
+- Map common ASP.NET Core `Add*`, `Map*`, and hosted-service startup calls as
+  queryable framework entities, including controller activation and endpoint
+  mapping relations with definition evidence.
+- Expand namespace-seeded change surfaces through bounded containment while
+  prioritizing framework wiring before high-fanout code children.
+- Make task-first Context Packs project-aware and task-ranked, retain the
+  canonical seed first, reclaim unused assessment budget, and cap repetitive
+  endpoint/class results to preserve a representative change surface.
+- Exclude generated and build-output directories including `bin_*`, `obj_*`,
+  `.next`, `publish`, `artifacts`, and `TestResults` from workspace discovery.
+- Add regressions for broad ASP.NET API discovery, controller source slices,
+  hosted-service registration, multi-term search, and output filtering.
+
 ## 0.9.3 - 2026-07-16
 
 - Accept the optional MCP `_meta` property on `tools/call` envelopes used by

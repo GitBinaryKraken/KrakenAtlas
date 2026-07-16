@@ -184,6 +184,41 @@ most 16 lines, 3 affected projects, and focused build commands. It used 2,945 of
 explicitly omitted, avoiding repeated local context while preserving their
 evidence locations.
 
+## Tactical Retrieval Baseline
+
+An external agent evaluated version 0.9.3 against the Kelp workspace on
+2026-07-16. Workspace orientation and build discovery were useful, but the
+normal task "find where KelpApi registers services and exposes HTTP endpoints"
+returned `needs_seed`. A controller-namespace retry produced only one short
+`AliveController.cs` slice. Searches for `AddControllers`, `MapControllers`,
+`AddHostedService`, `HttpGet`, `HttpPost`, `Route`, and `ApiController` returned
+no matches even though direct source search found each term immediately.
+
+Version 0.9.4 uses this workflow as a field acceptance case. A fresh build:
+
+- indexed 2 solutions, 11 projects, 664 files, 6,785 entities, 17,172 relations,
+  and 10 project dependencies in 38.2 seconds;
+- excluded nine suffixed build-output files that had diluted the prior
+  673-file result;
+- auto-resolved the unseeded task to `KelpApi.Controllers` while keeping all
+  selected results in `KelpApi`;
+- returned both `KelpApi startup AddControllers` and
+  `KelpApi startup MapControllers`;
+- returned six representative HTTP endpoint entities with six source slices
+  from their actual controller actions, plus three controller classes;
+- emitted 12 items and 10 nonoverlapping source slices in an estimated 4,570 of
+  the requested 5,000 tokens; and
+- retained the focused `dotnet build "KelpApi/KelpApi.csproj"` verification
+  command.
+
+This is a broad API-surface pack, not a claim that all 97 omitted neighbors are
+irrelevant. A route- or feature-qualified task should narrow the endpoint set;
+the broad result deliberately favors representative executable leaves and
+startup wiring over enumerating every sibling controller.
+
+The detailed field report and engineering response are recorded in
+`ALPHA_FEEDBACK_TACTICAL_RETRIEVAL.md`.
+
 ## Incremental Agent Loop Baseline
 
 On 2026-07-15, version 0.9.0 indexed the unchanged 11-project, 672-file Kelp

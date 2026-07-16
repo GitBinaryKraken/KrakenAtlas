@@ -7,6 +7,16 @@ namespace KrakenAtlas.Analyzers.Roslyn;
 
 internal static partial class CSharpFrameworkAnalyzer
 {
+    private static readonly HashSet<string> LifetimeRegistrationMethods = new(StringComparer.Ordinal)
+    {
+        "AddScoped", "AddSingleton", "AddTransient"
+    };
+
+    private static readonly HashSet<string> MinimalApiMappingMethods = new(StringComparer.Ordinal)
+    {
+        "MapDelete", "MapGet", "MapMethods", "MapPatch", "MapPost", "MapPut"
+    };
+
     private static readonly HashSet<string> MiddlewareMethods = new(StringComparer.Ordinal)
     {
         "UseAuthentication",
@@ -310,7 +320,9 @@ internal static partial class CSharpFrameworkAnalyzer
         var original = invocation.TargetMethod.ReducedFrom ?? invocation.TargetMethod;
         var methodName = original.Name;
         var isInline = methodName is "Use" or "Run";
-        if ((!MiddlewareMethods.Contains(methodName) && !isInline)
+        if ((!MiddlewareMethods.Contains(methodName)
+                && !isInline
+                && !methodName.StartsWith("Use", StringComparison.Ordinal))
             || !original.ContainingNamespace.ToDisplayString().StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal))
         {
             return;
@@ -358,6 +370,171 @@ internal static partial class CSharpFrameworkAnalyzer
                     evidence,
                     "framework",
                     "UseMiddleware"));
+            }
+        }
+    }
+
+    private static void CollectAspNetHostCall(
+        string workspaceKey,
+        DiscoveredProject project,
+        DiscoveredFile sourceFile,
+        SemanticModel semanticModel,
+        InvocationExpressionSyntax invocationSyntax,
+        IInvocationOperation invocation,
+        Dictionary<string, DiscoveredCodeSymbol> symbols,
+        IReadOnlyDictionary<string, string> projectKeysByAssembly,
+        ICollection<AspNetHostFact> hostSurface,
+        Action<DiscoveredCodeRelation> addRelation,
+        CancellationToken cancellationToken)
+    {
+        var original = invocation.TargetMethod.ReducedFrom ?? invocation.TargetMethod;
+        var methodName = original.Name;
+        var namespaceName = original.ContainingNamespace.ToDisplayString();
+        var isDependencyInjection = namespaceName == "Microsoft.Extensions.DependencyInjection";
+        var isAspNetCore = namespaceName.StartsWith("Microsoft.AspNetCore", StringComparison.Ordinal);
+        var isHostedService = isDependencyInjection && methodName == "AddHostedService";
+        var isServiceSetup = isDependencyInjection
+            && methodName.StartsWith("Add", StringComparison.Ordinal)
+            && !LifetimeRegistrationMethods.Contains(methodName)
+            && !isHostedService;
+        var isEndpointMapping = isAspNetCore
+            && methodName.StartsWith("Map", StringComparison.Ordinal)
+            && !MinimalApiMappingMethods.Contains(methodName)
+            && methodName != "MapGroup";
+        if (!isHostedService && !isServiceSetup && !isEndpointMapping)
+        {
+            return;
+        }
+
+        var evidence = CreateLocation(sourceFile, invocationSyntax);
+        var sourceKey = CSharpDeclarationAnalyzer.ResolveSourceKey(
+            workspaceKey,
+            project.StableKey,
+            semanticModel.GetEnclosingSymbol(invocationSyntax.SpanStart, cancellationToken),
+            symbols);
+        var typeArgument = invocation.TargetMethod.TypeArguments.FirstOrDefault() as INamedTypeSymbol;
+        var typeDisplay = typeArgument?.ToDisplayString();
+        var displayName = typeDisplay is null ? methodName : $"{methodName}<{typeArgument!.Name}>";
+        var category = isHostedService
+            ? "hosted_service"
+            : isEndpointMapping
+                ? "endpoint_mapping"
+                : "service_configuration";
+        var kind = isHostedService
+            ? "service_registration"
+            : isEndpointMapping
+                ? "endpoint_mapping"
+                : "framework_registration";
+        var entityKey = CreateSyntheticKey(
+            kind,
+            $"{workspaceKey}|{project.StableKey}|{sourceFile.RelativePath}|{invocationSyntax.SpanStart}|{displayName}");
+        symbols[entityKey] = new DiscoveredCodeSymbol(
+            entityKey,
+            project.StableKey,
+            kind,
+            displayName,
+            $"{project.Name} startup {displayName}",
+            isHostedService
+                ? $"hosted service registration | {methodName} | {typeDisplay}"
+                : isEndpointMapping
+                    ? $"ASP.NET Core endpoint mapping | {methodName}"
+                    : $"ASP.NET Core service configuration | {methodName}",
+            "not_applicable",
+            sourceKey,
+            [evidence],
+            "csharp");
+        hostSurface.Add(new AspNetHostFact(
+            entityKey, project.StableKey, category, methodName, evidence));
+        addRelation(new DiscoveredCodeRelation(
+            sourceKey,
+            entityKey,
+            isEndpointMapping ? "maps_endpoints" : "configures_services",
+            null,
+            evidence,
+            "framework",
+            methodName));
+
+        if (!isHostedService || typeArgument is null)
+        {
+            return;
+        }
+        var implementationKey = CSharpDeclarationAnalyzer.ResolveKnownKey(
+            workspaceKey, project.StableKey, typeArgument, symbols, projectKeysByAssembly);
+        if (implementationKey is not null)
+        {
+            addRelation(new DiscoveredCodeRelation(
+                entityKey,
+                implementationKey,
+                "registers_implementation",
+                "hosted",
+                evidence,
+                "framework",
+                "hosted_service"));
+        }
+    }
+
+    private static void ConnectAspNetHostSurface(
+        IReadOnlyList<AspNetHostFact> hostSurface,
+        IReadOnlyDictionary<string, DiscoveredCodeSymbol> symbols,
+        Action<DiscoveredCodeRelation> addRelation)
+    {
+        foreach (var projectSurface in hostSurface.GroupBy(fact => fact.ProjectKey))
+        {
+            var controllerMappings = projectSurface
+                .Where(fact => fact.Category == "endpoint_mapping"
+                    && fact.MethodName.Contains("Controller", StringComparison.Ordinal))
+                .ToArray();
+            var controllerConfigurations = projectSurface
+                .Where(fact => fact.Category == "service_configuration"
+                    && fact.MethodName.Contains("Controller", StringComparison.Ordinal))
+                .ToArray();
+            var controllerEndpoints = symbols.Values
+                .Where(symbol => symbol.ProjectKey == projectSurface.Key
+                    && symbol.Kind == "http_endpoint"
+                    && symbol.Signature?.Contains("minimal", StringComparison.Ordinal) != true)
+                .ToArray();
+            var controllerNamespaces = symbols.Values
+                .Where(symbol => symbol.ProjectKey == projectSurface.Key
+                    && symbol.Kind == "namespace"
+                    && (symbol.Name == "Controllers"
+                        || symbol.QualifiedName.EndsWith(".Controllers", StringComparison.Ordinal)))
+                .ToArray();
+
+            foreach (var mapping in controllerMappings)
+            {
+                foreach (var controllerNamespace in controllerNamespaces)
+                {
+                    addRelation(new DiscoveredCodeRelation(
+                        mapping.EntityKey,
+                        controllerNamespace.StableKey,
+                        "activates_controller_namespace",
+                        null,
+                        mapping.Evidence,
+                        "framework",
+                        mapping.MethodName));
+                }
+                foreach (var endpoint in controllerEndpoints)
+                {
+                    addRelation(new DiscoveredCodeRelation(
+                        mapping.EntityKey,
+                        endpoint.StableKey,
+                        "activates_endpoint",
+                        null,
+                        endpoint.Locations.FirstOrDefault() ?? mapping.Evidence,
+                        "framework",
+                        mapping.MethodName));
+                }
+                foreach (var configuration in controllerConfigurations)
+                {
+                    addRelation(new DiscoveredCodeRelation(
+                        configuration.EntityKey,
+                        mapping.EntityKey,
+                        "enables_endpoint_mapping",
+                        null,
+                        configuration.Evidence,
+                        "framework",
+                        configuration.MethodName));
+                }
             }
         }
     }
@@ -602,5 +779,12 @@ internal static partial class CSharpFrameworkAnalyzer
         string RootPath,
         string RelativePath,
         int SpanStart,
+        DiscoveredCodeLocation Evidence);
+
+    private sealed record AspNetHostFact(
+        string EntityKey,
+        string ProjectKey,
+        string Category,
+        string MethodName,
         DiscoveredCodeLocation Evidence);
 }
